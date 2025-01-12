@@ -4,6 +4,9 @@ This Python script automates the monitoring, and management of **DUSK blockchain
 
 ---
 
+
+Dusk wallet for Tips: `eox326D2m1ohpBUFVgiF885yV7aN4sg4caA6UkAg7UUhB6JWystDE7t2bdvstBHKTGYrF1oEhYZEd4Bqh4Uhoer`
+
 ## Features
 
 ### 🚀 Automated Actions
