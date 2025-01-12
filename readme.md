@@ -39,9 +39,8 @@ This Python script automates the monitoring and management of **DUSK blockchain 
 ### Steps
 
 1. **Clone the Repository**:
-   ```bash
-   git clone https://github.com/<your-username>/<your-repo-name>.git
-   cd <your-repo-name>
+```git clone https://github.com/<your-username>/<your-repo-name>.git
+   cd <your-repo-name>```
 
 2. Install Dependencies: Install the required Python libraries:
     ```pip install requests```
@@ -66,7 +65,7 @@ This Python script automates the monitoring and management of **DUSK blockchain 
 
     ## Notification Configuration
 
-6. To enable notifications for specific services, provide the required credentials in the `config` dictionary. Notifications will only be sent for properly configured services. Setting value to ```None``` disables that notification type.
+6. To enable notifications for specific services, provide the required credentials in the `config` dictionary. Notifications will only be sent for properly configured services. Setting value to `None` disables that notification.
 
 | **Service**  | **Required Configuration Fields**                     |
 |--------------|-------------------------------------------------------|
