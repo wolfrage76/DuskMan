@@ -59,6 +59,7 @@ class NotificationService:
                 'Access-Token': self.pushbullet_token,
                 'Content-Type': 'application/json'
             }
+            message = message.replace('Dusk (', 'Dusk\n\t(')
             payload = {"type": "note", "title": "Dusk Alert", "body": message}
             response = requests.post("https://api.pushbullet.com/v2/pushes", json=payload, headers=headers)
             response.raise_for_status()

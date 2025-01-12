@@ -46,14 +46,14 @@ Dusk wallet for Tips: `eox326D2m1ohpBUFVgiF885yV7aN4sg4caA6UkAg7UUhB6JWystDE7t2b
 1. **Clone the Repository**:
 
     ```bash
-    git clone https://github.com/<your-username>/<your-repo-name>.git
+    git clone https://github.com/wolfrage76/dusk-compounder.git
     cd <your-repo-name>
     ```
 
 2. **Install Dependencies**: Install the required Python libraries:
 
     ```bash
-    pip install requests
+    pip install requests pyyaml
     ```
 
 3. **Set Wallet Password**: Export your wallet password as an environment variable. For example:

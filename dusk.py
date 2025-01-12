@@ -5,6 +5,7 @@ import time
 import logging
 import sys
 import datetime
+import yaml
 
 from utilities.notifications import NotificationService
 
@@ -14,15 +15,6 @@ from utilities.notifications import NotificationService
 # ─────────────────────────────────────────────────────────────────────────────
 
 bufferblocks = 20 # 60 blocks == do actions 10 minutes before next epoch
-
-notification_config = {
-        "discord_webhook": None, # Replace Nonewith your webhook URL: "https://discord.com/api/webhooks/..." in quotes
-        "pushbullet_token": None,
-        "telegram_bot_token": None,
-        "telegram_chat_id": None,
-        "pushover_user_key": None,
-        "pushover_app_token": None
-    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -44,9 +36,6 @@ if len(sys.argv) > 1 and sys.argv[1].lower() == 'tmux':
 remainTime = 0  # This tracks how many seconds remain in the current sleep cycle
 last_no_action_block = None  # Tracks the last block where 'No Action' was taken
 
-# Initialize the notification service
-notifier = NotificationService(notification_config)
-
 # ─────────────────────────────────────────────────────────────────────────────
 # LOGGING CONFIG
 # ─────────────────────────────────────────────────────────────────────────────
@@ -66,6 +55,28 @@ logging.basicConfig(
 # HELPER FUNCTIONS
 # ─────────────────────────────────────────────────────────────────────────────
 
+
+def load_config(file_path="config.yaml"):
+    """Load configuration from a YAML file."""
+    try:
+        with open(file_path, "r") as file:
+            config = yaml.safe_load(file)
+            return config.get("notifications", {})
+    except FileNotFoundError:
+        logging.error(f"Configuration file {file_path} not found. Exiting.")
+        sys.exit(1)
+    except yaml.YAMLError as e:
+        logging.error(f"Error parsing YAML file {file_path}: {e}")
+        sys.exit(1)
+        
+
+# Load configuration
+notification_config = load_config()
+
+# Initialize the notification service
+notifier = NotificationService(notification_config)
+
+        
 def get_env_variable(var_name):
     """Retrieve an environment variable or exit if missing."""
     value = os.getenv(var_name)

@@ -1,0 +1,10 @@
+
+notifications:
+  discord_webhook: # Example: https://discord.com/api/webhooks/#############/xxxxxxxxxxxxxxxxxxxxxx 
+  pushbullet_token: # Leave Blank to Disable
+  telegram_bot_token: # Leave Blank to Disable
+  telegram_chat_id: # Leave Blank to Disable
+  pushover_user_key: # Leave Blank to Disable
+  pushover_app_token: # Leave Blank to Disable
+
+
