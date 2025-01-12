@@ -15,9 +15,9 @@ from utilities.notifications import NotificationService
 
 bufferblocks = 20 # 60 blocks == do actions 10 minutes before next epoch
 
-notification_config = {
-    "discord_webhook": "https://discord.com/api/webhooks/1327845290987884544/dh6NkBw8YzseTGY7FtDknspQjJ0OZEUfoisyVfT8i46xxPlTPl0WIF7ESgsBObif52lb",  # Replace with your webhook URL
-    "pushbullet_token": None,
+notification_config = {  # Set value to None to disable
+    "discord_webhook": None ,  # Replace with your webhook URL i.e.: "https://discord.com/api/webhooks/1327887884544/dh6NkBw8YzseTGY7FtDknspQjJ0O"
+    "pushbullet_token": None, # To set, replace none with token surrounded with quotes: "XXXXXXXXXxxxxxxxxxxxxX"
     "telegram_bot_token": None,
     "telegram_chat_id": None,
     "pushover_user_key": None,
