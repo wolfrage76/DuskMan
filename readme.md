@@ -33,7 +33,6 @@ This Python script automates the monitoring and management of **DUSK blockchain 
 
 ### Prerequisites
 - **Python**: Version 3.7 or higher
-- **`pip`**: Python package manager
 
 ---
 
@@ -59,18 +58,15 @@ This Python script automates the monitoring and management of **DUSK blockchain 
     "telegram_chat_id": "your_telegram_chat_id",
     "pushover_user_key": "your_pushover_user_key",
     "pushover_app_token": "your_pushover_app_token"
-}
-    ```
+    }
+```
 
 5. Run the Script: Start the monitoring script:
     ```python dusk_monitor.py```
 
-5.b Enable TMUX Status Bar (Optional): To update the TMUX status bar with real-time info, use the tmux argument:
-    ```python dusk_monitor.py tmux```
-
     ## Notification Configuration
 
-6. To enable notifications for specific services, provide the required credentials in the `config` dictionary. Notifications will only be sent for properly configured services.
+6. To enable notifications for specific services, provide the required credentials in the `config` dictionary. Notifications will only be sent for properly configured services. Setting value to ```None``` disables that notification type.
 
 | **Service**  | **Required Configuration Fields**                     |
 |--------------|-------------------------------------------------------|
