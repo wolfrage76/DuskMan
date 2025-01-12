@@ -58,7 +58,7 @@ This Python script automates the monitoring and management of **DUSK blockchain 
     "pushover_user_key": "your_pushover_user_key",
     "pushover_app_token": "your_pushover_app_token"
     }
-```
+
 
 5. Run the Script: Start the monitoring script:
     ```python dusk_monitor.py```
