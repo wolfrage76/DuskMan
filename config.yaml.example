@@ -1,7 +1,10 @@
+GENERAL:
+  buffer_blocks: 20 # How many blocks before Epoch to trigger (1 block = 10seconds)
+  enable_tmux: False # Experimental, not currently realtime
 
-notifications:
-  discord_webhook: # Example: https://discord.com/api/webhooks/#############/xxxxxxxxxxxxxxxxxxxxxx 
-  pushbullet_token: # Leave Blank to Disable
+NOTIFICATIONS:
+  discord_webhook:   # Insert webhook to activate. Example: https://discord.com/api/webhooks/xxxxxxxxxx/XXXXXXXXX
+  pushbullet_token: #  Leave Blank to Disable
   telegram_bot_token: # Leave Blank to Disable
   telegram_chat_id: # Leave Blank to Disable
   pushover_user_key: # Leave Blank to Disable

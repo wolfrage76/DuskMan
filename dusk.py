@@ -11,22 +11,33 @@ from utilities.notifications import NotificationService
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Options - The only stuff you should edit
+# LOAD CONFIGURATION
 # ─────────────────────────────────────────────────────────────────────────────
 
-bufferblocks = 20 # 60 blocks == do actions 10 minutes before next epoch
+def load_config(section="GENERAL",file_path="config.yaml"):
+    """Load configuration from a YAML file."""
+    try:
+        with open(file_path, "r") as file:
+            config = yaml.safe_load(file)
+            return config.get(section, {})
+    except FileNotFoundError:
+        logging.error(f"Configuration file {file_path} not found. Exiting.")
+        sys.exit(1)
+    except yaml.YAMLError as e:
+        logging.error(f"Error parsing YAML file {file_path}: {e}")
+        sys.exit(1)
+        
+
+# Load configuration
+notification_config = load_config('NOTIFICATIONS')
+config = load_config('GENERAL')
+
+bufferblocks = config.get('buffer_blocks',60)
+enable_tmux = config.get('enable_tmux',False)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# TMUX ENABLE TOGGLE
-# Either set this to True/False at the top or rely on CLI argument "tmux"
-# ─────────────────────────────────────────────────────────────────────────────
-
-ENABLE_TMUX = False  # Does not update realtime currently -- for development only
-
-# If the user passes "tmux" as the first argument, override ENABLE_TMUX
-if len(sys.argv) > 1 and sys.argv[1].lower() == 'tmux':
-    ENABLE_TMUX = True
+# Initialize the notification service
+notifier = NotificationService(notification_config)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -51,31 +62,10 @@ logging.basicConfig(
     ]
 )
 
+
 # ─────────────────────────────────────────────────────────────────────────────
 # HELPER FUNCTIONS
 # ─────────────────────────────────────────────────────────────────────────────
-
-
-def load_config(file_path="config.yaml"):
-    """Load configuration from a YAML file."""
-    try:
-        with open(file_path, "r") as file:
-            config = yaml.safe_load(file)
-            return config.get("notifications", {})
-    except FileNotFoundError:
-        logging.error(f"Configuration file {file_path} not found. Exiting.")
-        sys.exit(1)
-    except yaml.YAMLError as e:
-        logging.error(f"Error parsing YAML file {file_path}: {e}")
-        sys.exit(1)
-        
-
-# Load configuration
-notification_config = load_config()
-
-# Initialize the notification service
-notifier = NotificationService(notification_config)
-
         
 def get_env_variable(var_name):
     """Retrieve an environment variable or exit if missing."""
@@ -143,6 +133,18 @@ def format_hms(seconds):
         parts = ["0s"]
 
     return ' '.join(parts)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TMUX ENABLE TOGGLE
+# Either set this to True/False at the top or rely on CLI argument "tmux"
+# ─────────────────────────────────────────────────────────────────────────────
+
+# enable_tmux = False  # Does not update realtime currently -- for development only
+
+# If the user passes "tmux" as the first argument, override enable_tmux
+if len(sys.argv) > 1 and sys.argv[1].lower() == 'tmux':
+    enable_tmux = True
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PROFILE & BALANCE FUNCTIONS
@@ -369,7 +371,7 @@ def update_tmux_status_bar(
     minutes_wait
 ):
     """Update the Tmux status bar (right side) with the current info."""
-    if not ENABLE_TMUX:
+    if not enable_tmux:
         return  # If Tmux support is disabled, skip entirely.
 
     status_str = (
@@ -415,7 +417,7 @@ def main(): # TODO: separate display from calculations to  display realtime
             # Force a short sleep to let block height progress.
             
             # print(f"Already saw 'No Action' at block {block_height}. Sleeping 30s to avoid repeated loop...")
-            sleep_with_feedback(30,"Already saw 'No Action' at block {block_height}. Sleeping 30s to avoid repeated loop...")
+            sleep_with_feedback(60,"Already saw 'No Action' at block {block_height}. Sleeping 60s to avoid repeated loop...")
             continue
 
         # ─────────────────────────────────────────────────────────────────
