@@ -7,6 +7,7 @@ This Python script automates the monitoring and management of **DUSK blockchain 
 ## Features
 
 ### 🚀 Automated Actions
+
 - **Staking Management**:
   - Monitors staking rewards, reclaimable slashed stakes, and eligible stakes.
   - Automatically claims and stakes rewards when profitable.
@@ -32,6 +33,7 @@ This Python script automates the monitoring and management of **DUSK blockchain 
 ## Installation
 
 ### Prerequisites
+
 - **Python**: Version 3.7 or higher
 
 ---
@@ -39,33 +41,48 @@ This Python script automates the monitoring and management of **DUSK blockchain 
 ### Steps
 
 1. **Clone the Repository**:
-```git clone https://github.com/<your-username>/<your-repo-name>.git
-   cd <your-repo-name>```
 
-2. Install Dependencies: Install the required Python libraries:
-    ```pip install requests```
-
-3. Set Wallet Password: Export your wallet password as an environment variable. For example:
-    ```export MY_SUDO_PASSWORD="your_wallet_password"```
-
-4. Configure Notifications: Open the script and edit the config dictionary to enable and set up the notification services you want to use:
+    ```bash
+    git clone https://github.com/<your-username>/<your-repo-name>.git
+    cd <your-repo-name>
     ```
-    config = {
-    "discord_webhook": "https://discord.com/api/webhooks/...",  # Replace with your webhook URL
-    "pushbullet_token": "your_pushbullet_token",
-    "telegram_bot_token": "your_telegram_bot_token",
-    "telegram_chat_id": "your_telegram_chat_id",
-    "pushover_user_key": "your_pushover_user_key",
-    "pushover_app_token": "your_pushover_app_token"
+
+2. **Install Dependencies**: Install the required Python libraries:
+
+    ```bash
+    pip install requests
+    ```
+
+3. **Set Wallet Password**: Export your wallet password as an environment variable. For example:
+
+    ```bash
+    export MY_SUDO_PASSWORD="your_wallet_password"
+    ```
+
+4. **Configure Notifications**: Open the script and edit the config dictionary to enable and set up the notification services you want to use:
+
+    ```python
+    notification_config = {
+        "discord_webhook": None, # Replace Nonewith your webhook URL: "https://discord.com/api/webhooks/..." in quotes
+        "pushbullet_token": None,
+        "telegram_bot_token": None,
+        "telegram_chat_id": None
+        "pushover_user_key": None,
+        "pushover_app_token": None
     }
+    ```
 
+5. **Run the Script**: Start the monitoring script:
 
-5. Run the Script: Start the monitoring script:
-    ```python dusk_monitor.py```
+    ```bash
+    python dusk_monitor.py
+    ```
 
-    ## Notification Configuration
+---
 
-6. To enable notifications for specific services, provide the required credentials in the `config` dictionary. Notifications will only be sent for properly configured services. Setting value to `None` disables that notification.
+## Notification Configuration
+
+To enable notifications for specific services, provide the required credentials in the `config` dictionary. Notifications will only be sent for properly configured services. Setting a value to `None` disables that notification.
 
 | **Service**  | **Required Configuration Fields**                     |
 |--------------|-------------------------------------------------------|
