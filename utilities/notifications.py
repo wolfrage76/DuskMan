@@ -63,7 +63,7 @@ class NotificationService:
             payload = {"type": "note", "title": "Dusk Alert", "body": message}
             response = requests.post("https://api.pushbullet.com/v2/pushes", json=payload, headers=headers)
             response.raise_for_status()
-            logging.info("Pushbullet notification sent successfully.")
+            logging.debug("Pushbullet notification sent successfully.")
         except Exception as e:
             logging.error(f"Error sending Pushbullet notification: {e}")
 

@@ -107,7 +107,7 @@ def execute_command(command):
 def log_action(action, details):
     """Log actions to the file."""
     notifier.notify(f"{action}: {details}") # Send Notifications
-    logging.info(f"{action}: {details}") #Log to File and Screen
+    logging.info(f"{action}: {details}") # Log to File and Screen
 
 def format_hms(seconds):
     """
@@ -449,6 +449,7 @@ def main(): # TODO: separate display from calculations to  display realtime
         if should_unstake_and_restake(reclaimable_slashed_stake, downtime_loss):
             if total_restake < MIN_STAKE_AMOUNT:
                 last_action_taken = "Unstake/Restake Skipped (Below Min)"
+                log_action(f"Balance Info (#{block_height})", f"Rwd: {rewards_amount:.4f}, Stake: {stake_amount:.4f}, Rcl: {reclaimable_slashed_stake:.4f}")
                 log_action(f"Unstake/Restake Skipped (Block #{block_height})", 
                     f"Total restake ({total_restake:.4f} DUSK) < {MIN_STAKE_AMOUNT} DUSK.")
             else:
@@ -473,7 +474,7 @@ def main(): # TODO: separate display from calculations to  display realtime
             log_action("Claim and Stake", f"Rewards: {rewards_amount:.4f}")
             execute_command(f"sudo rusk-wallet --password {password} withdraw")
             execute_command(f"sudo rusk-wallet --password {password} stake --amt {rewards_amount}")
-            log_action("Stake Completed", f"Staked Rewards: {rewards_amount:.4f}")
+            log_action("Stake Completed", f"New Stake: {stake_amount + rewards_amount}")
             last_claim_block = block_height
 
         else:
