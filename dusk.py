@@ -136,10 +136,8 @@ def format_hms(seconds):
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TMUX ENABLE TOGGLE
-# Either set this to True/False at the top or rely on CLI argument "tmux"
+# Either set this to True/False in config or rely on CLI argument "tmux"
 # ─────────────────────────────────────────────────────────────────────────────
-
-# enable_tmux = False  # Does not update realtime currently -- for development only
 
 # If the user passes "tmux" as the first argument, override enable_tmux
 if len(sys.argv) > 1 and sys.argv[1].lower() == 'tmux':
