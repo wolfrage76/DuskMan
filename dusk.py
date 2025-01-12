@@ -6,25 +6,46 @@ import logging
 import sys
 import datetime
 
+from utilities.notifications import NotificationService
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Options - The only stuff you should edit
+# ─────────────────────────────────────────────────────────────────────────────
+
+bufferblocks = 20 # 60 blocks == do actions 10 minutes before next epoch
+
+notification_config = {
+    "discord_webhook": "https://discord.com/api/webhooks/1327845290987884544/dh6NkBw8YzseTGY7FtDknspQjJ0OZEUfoisyVfT8i46xxPlTPl0WIF7ESgsBObif52lb",  # Replace with your webhook URL
+    "pushbullet_token": None,
+    "telegram_bot_token": None,
+    "telegram_chat_id": None,
+    "pushover_user_key": None,
+    "pushover_app_token": None
+}
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # TMUX ENABLE TOGGLE
 # Either set this to True/False at the top or rely on CLI argument "tmux"
 # ─────────────────────────────────────────────────────────────────────────────
 
-ENABLE_TMUX = False  # Default
+ENABLE_TMUX = False  # Does not update realtime currently -- for development only
 
 # If the user passes "tmux" as the first argument, override ENABLE_TMUX
 if len(sys.argv) > 1 and sys.argv[1].lower() == 'tmux':
     ENABLE_TMUX = True
 
+
 # ─────────────────────────────────────────────────────────────────────────────
-# GLOBAL VARS
+# GLOBAL STUFF
 # ─────────────────────────────────────────────────────────────────────────────
 
-global remainTime
 remainTime = 0  # This tracks how many seconds remain in the current sleep cycle
-
 last_no_action_block = None  # Tracks the last block where 'No Action' was taken
+
+# Initialize the notification service
+notifier = NotificationService(notification_config)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # LOGGING CONFIG
@@ -57,6 +78,14 @@ def get_current_timestamp():
     """Return a timestamp string matching the logging date format: YYYY-mm-dd HH:MM"""
     return datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
 
+def format_float(value):
+    # Convert to string and split by '.'
+    parts = str(value).split('.')
+    if len(parts) == 2:  # There's a decimal part
+        # Slice the decimal part to up to 4 digits
+        return f"{parts[0]}.{parts[1][:4]}" if len(parts[1]) > 0 else parts[0]
+    return parts[0]  # No decimal part
+
 def execute_command(command):
     """
     Execute a shell command and return its *stdout* output only.
@@ -76,7 +105,8 @@ def execute_command(command):
 
 def log_action(action, details):
     """Log actions to the file."""
-    logging.info(f"{action}: {details}")
+    notifier.notify(f"{action}: {details}") # Send Notifications
+    logging.info(f"{action}: {details}") #Log to File and Screen
 
 def format_hms(seconds):
     """
@@ -94,8 +124,8 @@ def format_hms(seconds):
         parts.append(f"{h}h")
     if m > 0:
         parts.append(f"{m}m")
-    if s > 0:
-        parts.append(f"{s}s")
+    #if s > 0:
+    parts.append(f"{s}s") # Just add seconds anyway to avoid text jumping
 
     # if everything was 0, let's just say "0s"
     if not parts:
@@ -196,15 +226,24 @@ def parse_stake_info(output):
         for line in lines:
             line = line.strip()
             if "Eligible stake:" in line:
-                match = re.search(r"Eligible stake:\s*([0-9]+\.[0-9]+|\d+)\s*DUSK", line)
+                if '.' in line:
+                    match = re.search(r"Eligible stake:\s*([0-9]+\.[0-9]+)\s*DUSK", line)
+                else:
+                    match = re.search(r"Eligible stake:\s*([0-9]+)\s*DUSK", line)
                 if match:
                     eligible_stake = float(match.group(1))
             elif "Reclaimable slashed stake:" in line:
-                match = re.search(r"Reclaimable slashed stake:\s*([0-9]+\.[0-9]+|\d+)\s*DUSK", line)
+                if '.' in line:
+                    match = re.search(r"Reclaimable slashed stake:\s*([0-9]+\.[0-9]+)\s*DUSK", line)
+                else:
+                    match = re.search(r"Reclaimable slashed stake:\s*([0-9]+)\s*DUSK", line)
                 if match:
                     reclaimable_slashed_stake = float(match.group(1))
             elif "Accumulated rewards is:" in line:
-                match = re.search(r"Accumulated rewards is:\s*([0-9]+\.[0-9]+|\d+)\s*DUSK", line)
+                if '.' in line:
+                    match = re.search(r"Accumulated rewards is:\s*([0-9]+\.[0-9]+)\s*DUSK", line)
+                else:
+                    match = re.search(r"Accumulated rewards is:\s*([0-9]+)\s*DUSK", line)
                 if match:
                     accumulated_rewards = float(match.group(1))
 
@@ -250,7 +289,7 @@ def sleep_with_feedback(sleep_time, msg=None):
     Now displays hours/minutes/seconds as #h #m #s (skipping zeroes),
     and shows the time when the sleep will complete.
     """
-    interval = 1
+    interval = 1 
     total_remaining = sleep_time
 
     global remainTime
@@ -267,7 +306,7 @@ def sleep_with_feedback(sleep_time, msg=None):
         # Format the time as h/m/s, skipping any zero components
         display_time = format_hms(total_remaining)
         # Show something like: "Sleeping for 1h 4m 10s (completes at HH:MM:SS) <message>"
-        message = f"Sleeping for {display_time} ({completion_time_str}) {msg or ''}"
+        message = f"Sleeping {display_time} ({completion_time_str}) {msg or ''}"
 
         sys.stdout.write(f"\r{message}")
         sys.stdout.flush()
@@ -275,11 +314,11 @@ def sleep_with_feedback(sleep_time, msg=None):
         time.sleep(time_to_sleep)
         total_remaining -= time_to_sleep
 
-    sys.stdout.write("\rSleeping complete!                           \n")
+    sys.stdout.write("\r                                                                               \n")
     sys.stdout.flush()
 
 
-def sleep_until_next_epoch(block_height, buffer_blocks=120, msg=None):
+def sleep_until_next_epoch(block_height, buffer_blocks=bufferblocks, msg=None):
     """
     Calculate sleep time until closer to the end of the epoch.
     If calculated time <= 0, force a minimal sleep (e.g. 300s) 
@@ -294,11 +333,11 @@ def sleep_until_next_epoch(block_height, buffer_blocks=120, msg=None):
     # Force minimal sleep if 0 or negative
     if sleep_time <= 0:
         sleep_time = 300
-        msg = "as epoch boundary reached; forcing minimal sleep..."
+        msg = "as epoch boundary reached; forcing minimal sleep"
 
     sleep_with_feedback(sleep_time, msg)
 
-def minutes_until_next_epoch(block_height, buffer_blocks=120):
+def minutes_until_next_epoch(block_height, buffer_blocks=bufferblocks):
     """Return how many whole minutes remain until the next epoch minus buffer blocks."""
     blocks_left = 2160 - (block_height % 2160) - buffer_blocks
     total_seconds = max(blocks_left * 10, 0)
@@ -324,8 +363,8 @@ def update_tmux_status_bar(
 
     status_str = (
         f"Blk: #{block_height} | "
-        f"Pub: {pub_balance:.4g} Shd:{shld_balance:.4g} | "
-        f"Stk: {stake_amount:.4g} Rwd:{rewards_amount:.4g} Rcl:{reclaimable_slashed_stake:.4g} | "
+        f"Pub: {pub_balance:.4f} Shd:{shld_balance:.4f} | "
+        f"Stk: {stake_amount:.4f} Rwd:{rewards_amount:.4f} Rcl:{reclaimable_slashed_stake:.4f} | "
         f"{last_action} | Wait:{minutes_wait}s "
     )
     try:
@@ -344,6 +383,7 @@ def main(): # TODO: separate display from calculations to  display realtime
     MIN_STAKE_AMOUNT = 1000  
     last_claim_block = 0
     last_action_taken = "Starting Up"
+    first_run = True
 
     global last_no_action_block
 
@@ -388,7 +428,7 @@ def main(): # TODO: separate display from calculations to  display realtime
         rewards_per_epoch = calculate_rewards_per_epoch(rewards_amount, last_claim_block, block_height)
         downtime_loss = calculate_downtime_loss(rewards_per_epoch)
         incremental_threshold = rewards_per_epoch
-        total_restake = stake_amount + rewards_amount + reclaimable_slashed_stake
+        total_restake = format_float(stake_amount + rewards_amount + reclaimable_slashed_stake)
 
         pub_balance, shld_balance = get_wallet_balances(password)
 
@@ -399,30 +439,30 @@ def main(): # TODO: separate display from calculations to  display realtime
             if total_restake < MIN_STAKE_AMOUNT:
                 last_action_taken = "Unstake/Restake Skipped (Below Min)"
                 log_action(f"Unstake/Restake Skipped (Block #{block_height})", 
-                        f"Total restake ({total_restake:.4g} DUSK) < {MIN_STAKE_AMOUNT} DUSK.")
+                    f"Total restake ({total_restake:.4f} DUSK) < {MIN_STAKE_AMOUNT} DUSK.")
             else:
                 # Perform Unstake & Restake
                 last_action_taken = f"Unstake/Restake @ Block #{block_height}"
-                log_action(f"Balance Info (#{block_height})", f"Rwd: {rewards_amount:.4g}, Stake: {stake_amount:.4g}, Rcl: {reclaimable_slashed_stake:.4g}")
-                log_action(last_action_taken, f"Reclaimable: {reclaimable_slashed_stake:.4g}, Downtime Loss: {downtime_loss:.4g}")
+                log_action(f"Balance Info (#{block_height})", f"Rwd: {rewards_amount:.4f}, Stake: {stake_amount:.4f}, Rcl: {reclaimable_slashed_stake:.4f}")
+                log_action(last_action_taken, f"Reclaimable: {reclaimable_slashed_stake:.4f}, Downtime Loss: {downtime_loss:.4f}")
 
                 execute_command(f"sudo rusk-wallet --password {password} withdraw")
                 execute_command(f"sudo rusk-wallet --password {password} unstake")
                 execute_command(f"sudo rusk-wallet --password {password} stake --amt {total_restake}")
-                log_action("Restake Completed", f"New Stake: {float(total_restake):.4g}")
+                log_action("Restake Completed", f"New Stake: {float(total_restake):.4f}")
 
                 last_claim_block = block_height
                 # Optional: Sleep 2 epochs from now
-                sleep_until_next_epoch(block_height + 2160, msg='Due to restaking 2-epoch wait period...')
+                sleep_until_next_epoch(block_height + 2160, msg='due to restaking 2-epoch wait period...')
 
         elif should_claim_and_stake(rewards_amount, incremental_threshold):
             # Claim & Stake
             last_action_taken = f"Claim/Stake @ Block {block_height}"
-            log_action(f"Balance Info (#{block_height})", f"Rwd: {rewards_amount:.4g}, Stk: {stake_amount:.4g}, Rcl: {reclaimable_slashed_stake:.4g}")
-            log_action("Claim and Stake", f"Rewards: {rewards_amount:.4g}")
+            log_action(f"Balance Info (#{block_height})", f"Rwd: {rewards_amount:.4f}, Stk: {stake_amount:.4f}, Rcl: {reclaimable_slashed_stake:.4f}")
+            log_action("Claim and Stake", f"Rewards: {rewards_amount:.4f}")
             execute_command(f"sudo rusk-wallet --password {password} withdraw")
             execute_command(f"sudo rusk-wallet --password {password} stake --amt {rewards_amount}")
-            log_action("Stake Completed", f"Staked Rewards: {rewards_amount:.4g}")
+            log_action("Stake Completed", f"Staked Rewards: {rewards_amount:.4f}")
             last_claim_block = block_height
 
         else:
@@ -431,17 +471,24 @@ def main(): # TODO: separate display from calculations to  display realtime
             totBal = pub_balance + shld_balance
             last_action_taken = f"No Action @ Block {block_height}"
             last_no_action_block = block_height  # <=== Track the block for no action
-            print(f"{timenow}\n  No action (Block #{block_height})\n"
-                f"\tBalance: {totBal:.4g} Dusk (P:{pub_balance:.4g} | S:{shld_balance:.4g})\n"  
-                f"\tRewards: {rewards_amount:.4g}\n"
-                f"\tStaked: {stake_amount:.4g}\n"
-                f"\tReclaimable: {reclaimable_slashed_stake:.4g}")
+            
+            if first_run:
+                first_run = False
+                notifier.notify(f"Startup (Block #{block_height})\n"
+                f"\tBalance: {format_float(totBal)} Dusk (P:{format_float(pub_balance)} | S:{format_float(shld_balance)})\n"  
+                f"\tRewards: {format_float(rewards_amount)}\n"
+                f"\tStaked:  {format_float(stake_amount)}\n"
+                f"\tReclaimable: {format_float(reclaimable_slashed_stake)}")
 
+            print(f"{timenow}\n  No action (Block #{block_height})\n"
+                f"\tBalance: {format_float(totBal)} Dusk (P:{format_float(pub_balance)} | S:{format_float(shld_balance)})\n"  
+                f"\tRewards: {format_float(rewards_amount)}\n"
+                f"\tStaked:  {format_float(stake_amount)}\n"
+                f"\tReclaimable: {format_float(reclaimable_slashed_stake)}")
+            
         # ─────────────────────────────────────────────────────────────────
         # 4. Tmux status bar
         # ─────────────────────────────────────────────────────────────────
-        
-        
         
         update_tmux_status_bar(
             block_height=block_height,
