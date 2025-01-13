@@ -33,6 +33,9 @@ config = load_config('GENERAL')
 buffer_blocks = config.get('buffer_blocks', 60)
 min_stake_amount = config.get('min_stake_amount', 1000)
 min_peers = config.get('min_peers', 8)
+auto_stake_rewards = config.get('auto_stake_rewards', False)
+auto_reclaim_full_restakes = config.get('auto_reclaim_full_restakes', False)
+
 errored = False
 
 # If user passes "tmux" as first argument, override enable_tmux
@@ -237,11 +240,11 @@ def calculate_downtime_loss(rewards_per_epoch, downtime_epochs=1):
 
 def should_unstake_and_restake(reclaimable_slashed_stake, downtime_loss):
     """Determine if unstaking/restaking is worthwhile."""
-    return reclaimable_slashed_stake > 1 and reclaimable_slashed_stake >= downtime_loss
+    return auto_reclaim_full_restakes and (reclaimable_slashed_stake > 1 and reclaimable_slashed_stake >= downtime_loss)
 
 def should_claim_and_stake(rewards, incremental_threshold):
     """Determine if claiming and staking rewards is worthwhile."""
-    return rewards > 1 and rewards >= incremental_threshold
+    return auto_stake_rewards and (rewards > 1 and rewards >= incremental_threshold)
 
 def format_hms(seconds):
     """
@@ -567,9 +570,10 @@ async def stake_management_loop():
             now_ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
             
             if shared_state["first_run"]:
-                byline = "\nDusk Stake Management & Monitoring: By Wolfrage"
+                byline = "\nDusk Stake Management & Monitoring: By Wolfrage\n"
+                auto_status = f'\n\tAuto Staking Rewards: {auto_stake_rewards}\n\tAuto Restake to Reclaim: {auto_reclaim_full_restakes}\n\tEnable tmux Support: {enable_tmux}'
                # sepline = ("-" * (len(byline ) -2))
-                print(byline) # + sepline)
+                print(byline + auto_status) # + sepline)
                 
                 shared_state["first_run"] = False
                 shared_state["last_action_taken"] = f"Startup @ Block #{block_height}"
