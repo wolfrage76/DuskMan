@@ -26,17 +26,18 @@ class NotificationService:
         """
         Send notifications to all enabled services.
         """
+        separator = "=" * 44
         if self.discord_webhook:
             self.send_discord_notification(message)
             
         if self.pushbullet_token:
-            self.send_pushbullet_notification(message)
+            self.send_pushbullet_notification(message.replace(separator,'').replace(separator,'')  )
             
         if self.telegram_bot_token and self.telegram_chat_id:
-            self.send_telegram_notification(message)
+            self.send_telegram_notification(message.replace(separator,'').replace(separator,'')  )
             
         if self.pushover_user_key and self.pushover_app_token:
-            self.send_pushover_notification(message)
+            self.send_pushover_notification(message.replace(separator,'').replace(separator,'')  )
 
     def send_discord_notification(self, message):
         """

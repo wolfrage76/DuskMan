@@ -571,19 +571,38 @@ async def stake_management_loop():
             
             if shared_state["first_run"]:
                 byline = "\nDusk Stake Management & Monitoring: By Wolfrage\n"
-                auto_status = f'\n\tAuto Staking Rewards: {auto_stake_rewards}\n\tAuto Restake to Reclaim: {auto_reclaim_full_restakes}\n\tEnable tmux Support: {enable_tmux}'
-               # sepline = ("-" * (len(byline ) -2))
-                print(byline + auto_status) # + sepline)
+                
+                
+                notification_services = []
+                if notification_config.get('discord_webhook'):
+                    notification_services.append('Discord')
+                if notification_config.get('pushbullet_token'):
+                    notification_services.append('PushBullet')
+                if notification_config.get('telegram_bot_token') and notification_config.get('telegram_chat_id'):
+                    notification_services.append('Telegram')
+                if notification_config.get('pushover_user_key') and notification_config.get('pushover_app_token'):
+                    notification_services.append('Pushover')
+                    
+                if notification_services:   
+                    services = " ".join(notification_services)
+                else:
+                    services = "None"
+                    
+                
+                notification_status = f'Enabled Notifications:   {services}'
+                
+                auto_status = f'\n\tEnable tmux Support:     {enable_tmux}\n\tAuto Staking Rewards:    {auto_stake_rewards}\n\tAuto Restake to Reclaim: {auto_reclaim_full_restakes}\n\t{notification_status}'
+                
+                print(byline + auto_status)
                 
                 shared_state["first_run"] = False
                 shared_state["last_action_taken"] = f"Startup @ Block #{block_height}"
                 action = shared_state["last_action_taken"]
-                separator = "=" * 50
+                separator = "=" * 44
                 
                 stats = (
                 f"\n{separator}\n"
-                f"  Timestamp    : {now_ts}\n"
-                f"  Last Action  : {action}\n"
+                f"  Action       : {action}\n"
                 f"  Balance      : {format_float(totBal)} DUSK\n"
                 f"    ├─ Public  :  {format_float(b['public'])} DUSK\n"
                 f"    └─ Shielded:  {format_float(b['shielded'])} DUSK\n"

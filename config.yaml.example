@@ -1,6 +1,6 @@
 GENERAL:
   buffer_blocks: 21 # How many blocks before Epoch to trigger (1 block = 10seconds)
-  enable_tmux: False # Experimental, not currently realtime
+  enable_tmux: False # Enables tmux statusbar 
   min_peers: 8 # Minimum number of peers to be considered healthy
 
   auto_stake_rewards: True
