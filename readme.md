@@ -64,18 +64,8 @@ Dusk wallet for Tips: `eox326D2m1ohpBUFVgiF885yV7aN4sg4caA6UkAg7UUhB6JWystDE7t2b
     export MY_SUDO_PASSWORD="your_wallet_password"
     ```
 
-4. **Configure Notifications**: Open the script and edit the config dictionary to enable and set up the notification services you want to use:
+4. **Configure Settings**: Rename config.yaml.example to config.yaml then edit and save it.
 
-    ```python
-    notification_config = {
-        "discord_webhook": None, # Replace Nonewith your webhook URL: "https://discord.com/api/webhooks/..." in quotes
-        "pushbullet_token": None,
-        "telegram_bot_token": None,
-        "telegram_chat_id": None
-        "pushover_user_key": None,
-        "pushover_app_token": None
-    }
-    ```
 
 5. **Run the Script**: Start the monitoring script:
 
