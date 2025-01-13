@@ -10,9 +10,8 @@ import asyncio
 
 from utilities.notifications import NotificationService
 
-
 # ─────────────────────────────────────────────────────────────────────────────
-# CONFIGURATION
+# CONFIGURATION AND INITIALIZING
 # ─────────────────────────────────────────────────────────────────────────────
 
 def load_config(section="GENERAL", file_path="config.yaml"):
@@ -32,30 +31,16 @@ def load_config(section="GENERAL", file_path="config.yaml"):
 notification_config = load_config('NOTIFICATIONS')
 config = load_config('GENERAL')
 buffer_blocks = config.get('buffer_blocks', 60)
-enable_tmux = config.get('enable_tmux', False)
 min_stake_amount = config.get('min_stake_amount', 1000)
 
 # If user passes "tmux" as first argument, override enable_tmux
-if len(sys.argv) > 1 and sys.argv[1].lower() == 'tmux':
+if config.get('enable_tmux', False) or (len(sys.argv) > 1 and sys.argv[1].lower() == 'tmux'):
     enable_tmux = True
+else:
+    enable_tmux = False
 
 # Initialize the notification service
 notifier = NotificationService(notification_config)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# LOGGING CONFIG
-# ─────────────────────────────────────────────────────────────────────────────
-
-LOG_FILE = "actions.log"
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M',
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler(LOG_FILE)
-    ]
-)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SHARED STATE
@@ -78,6 +63,21 @@ shared_state = {
     "last_action_taken": "Starting Up",
     "first_run": True
 }
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LOGGING CONFIG
+# ─────────────────────────────────────────────────────────────────────────────
+
+LOG_FILE = "actions.log"
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M',
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler(LOG_FILE)
+    ]
+)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -532,7 +532,7 @@ async def stake_management_loop():
             totBal = b["public"] + b["shielded"]
             
             if shared_state["first_run"]:
-                byline = "\nDusk Stake Management and Monitoring: By Wolfrage\n"
+                byline = "\nDusk Stake Management & Monitoring: By Wolfrage\n"
                 sepline = ("-" * (len(byline ) -2))
                 print(byline + sepline)
                 
@@ -563,12 +563,17 @@ async def stake_management_loop():
 # REAL-TIME DISPLAY
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def realtime_display():
+async def realtime_display(config=False):
     """
     Continuously display real-time info in the console (updates every 1 second).
     Reflects frequent updates from 'frequent_update_loop' + stake_info, etc.
     """
     first_run = True
+    
+    if config:
+        enable_tmux = True
+    else:
+        enable_tmux = False
     
     while True:
         try:
@@ -584,18 +589,22 @@ async def realtime_display():
             remain_seconds = shared_state["remain_time"]
             disp_time = format_hms(remain_seconds) if remain_seconds > 0 else "0s"
             
-            status_txt = f"\r> Blk: #{blk} | Stk: {format_float(st_info['stake_amount'])} | Rcl: {format_float(st_info['reclaimable_slashed_stake'])} | Rwd: {format_float(st_info['rewards_amount'])} | Bal: P:{format_float(b['public'])} S:{format_float(b['shielded'])} | Act: {last_act} | Next Check: {disp_time}      \r"
+            status_txt = f"\r> Blk: #{blk} | Stk: {format_float(st_info['stake_amount'])} | Rcl: {format_float(st_info['reclaimable_slashed_stake'])} | Rwd: {format_float(st_info['rewards_amount'])} | Bal: P:{format_float(b['public'])} S:{format_float(b['shielded'])} | Last: {last_act} | Next Check: {disp_time}      \r"
             
             sys.stdout.write(status_txt)
             sys.stdout.flush()
         except Exception as e:
             logging.error(f"Error in real-time display: {e}")
         
+        
         if enable_tmux:
             try:
                 subprocess.check_call(["tmux", "set-option", "-g", "status-left", status_txt])
             except subprocess.CalledProcessError:
-                logging.error("Failed to update tmux status bar. Are you running inside tmux?")
+                config.enable_tmux = False
+                enable_tmux = False
+                logging.error("Failed to update tmux status bar. Are you running inside tmux? Disabling tmux.")
+                notifier.notify('Disabling tmux due to status bar update failure')
             except Exception as e:
                 logging.error(f"Error updating Tmux status bar: {e}")
 
@@ -619,7 +628,7 @@ async def main():
     
     await asyncio.gather(
         stake_management_loop(),
-        realtime_display(),
+        realtime_display(enable_tmux),
         #update_tmux_status_bar(),
         frequent_update_loop(),
         
