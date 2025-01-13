@@ -446,11 +446,12 @@ async def stake_management_loop():
                 shared_state["last_action_taken"] = "Unstake/Restake Skipped (Below Min)"
                 log_action(
                     f"Balance Info (#{block_height})", 
-                    f"Rwd: {rewards_amount:.4f}, Stk: {stake_amount:.4f}, Rcl: {reclaimable_slashed_stake:.4f}"
+                    f"Rwd: {format_float(rewards_amount)}, Stk: {format_float(stake_amount)}, Rcl: {format_float(reclaimable_slashed_stake)}"
                 )
+                
                 log_action(
                     f"Unstake/Restake Skipped (Block #{block_height})",
-                    f"Total restake ({total_restake:.4f} DUSK) < {min_stake_amount} DUSK."
+                    f"Total restake ({format_float(total_restake)} DUSK) < {min_stake_amount} DUSK."
                 )
             else:
                 # Unstake & Restake
@@ -459,11 +460,11 @@ async def stake_management_loop():
 
                 log_action(
                     f"Balance Info (#{block_height})",
-                    f"Rwd: {rewards_amount:.4f}, Stake: {stake_amount:.4f}, Rcl: {reclaimable_slashed_stake:.4f}"
+                    f"Rwd: {format_float(rewards_amount)}, Stake: {format_float(stake_amount)}, Rcl: {format_float(reclaimable_slashed_stake)}"
                 )
                 log_action(
                     act_msg,
-                    f"Reclaimable: {reclaimable_slashed_stake:.4f}, Downtime Loss: {downtime_loss:.4f}"
+                    f"Reclaimable: {format_float(reclaimable_slashed_stake)}, Downtime Loss: {format_float(downtime_loss)}"
                 )
 
                 # 1) Withdraw
@@ -471,14 +472,14 @@ async def stake_management_loop():
                 cmd_success = await execute_command_async(curr_cmd)
                 if not cmd_success:
                     log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
-                    raise Exception("CMD execution failed") #return False
+                    raise Exception("CMD execution failed")
                 
                 # 2) Unstake
                 curr_cmd = await execute_command_async(f"sudo rusk-wallet --password {password} unstake")
                 cmd_success = await execute_command_async(curr_cmd)
                 if not cmd_success:
                     log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
-                    raise Exception("CMD execution failed") #return False
+                    raise Exception("CMD execution failed")
                 
                 # 3) Stake
                 curr_cmd = await execute_command_async(
@@ -487,9 +488,9 @@ async def stake_management_loop():
                 cmd_success = await execute_command_async(curr_cmd)
                 if not cmd_success:
                     log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
-                    raise Exception("CMD execution failed") #return False
+                    raise Exception("CMD execution failed")
 
-                log_action("Restake Completed", f"New Stake: {float(total_restake):.4f}")
+                log_action("Restake Completed", f"New Stake: {format_float(float(total_restake))}")
                 shared_state["last_claim_block"] = block_height
 
                 # Sleep 2 epochs
@@ -501,25 +502,25 @@ async def stake_management_loop():
             shared_state["last_action_taken"] = f"Claim/Stake @ Block {block_height}"
             log_action(
                 f"Balance Info (#{block_height})",
-                f"Rwd: {rewards_amount:.4f}, Stk: {stake_amount:.4f}, Rcl: {reclaimable_slashed_stake:.4f}"
+                f"Rwd: {format_float(rewards_amount)}, Stk: {format_float(stake_amount)}, Rcl: {format_float(reclaimable_slashed_stake)}"
             )
-            log_action("Claim and Stake", f"Rewards: {rewards_amount:.4f}")
+            log_action("Claim and Stake", f"Rewards: {format_float(rewards_amount)}")
 
             # 1) Withdraw
             curr_cmd = await execute_command_async(f"sudo rusk-wallet --password {password} withdraw")
             cmd_success = await execute_command_async(curr_cmd)
             if not cmd_success:
                     log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
-                    raise Exception("CMD execution failed") #return False
+                    raise Exception("CMD execution failed")
             # 2) Stake
             curr_cmd = await execute_command_async(f"sudo rusk-wallet --password {password} stake --amt {rewards_amount}")
             cmd_success = await execute_command_async(curr_cmd)
             if not cmd_success:
                     log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
-                    raise Exception("CMD execution failed") #return False
+                    raise Exception("CMD execution failed")
                 
             new_stake = stake_amount + rewards_amount
-            log_action("Stake Completed", f"New Stake: {new_stake:.4f}")
+            log_action("Stake Completed", f"New Stake: {format_float(new_stake)}")
             shared_state["last_claim_block"] = block_height
 
         else:
@@ -531,7 +532,9 @@ async def stake_management_loop():
             totBal = b["public"] + b["shielded"]
             
             if shared_state["first_run"]:
-                print('\nDusk Stake Management and Monitoring: By Wolfrage')
+                byline = "\nDusk Stake Management and Monitoring: By Wolfrage\n"
+                sepline = ("-" * (len(byline ) -2))
+                print(byline + sepline)
                 
                 shared_state["first_run"] = False
                 shared_state["last_action_taken"] = f"Startup @ Block #{block_height}"
