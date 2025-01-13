@@ -2,7 +2,6 @@ import os
 import sys
 import subprocess
 import re
-import time
 import logging
 import datetime
 import yaml
