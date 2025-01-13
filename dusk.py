@@ -271,7 +271,7 @@ async def sleep_with_feedback(seconds_to_sleep, msg=None):
         shared_state["remain_time"] -= interval
 
     # Optionally clear or log
-    sys.stdout.write("\rSleeping complete!                               \n")
+    sys.stdout.write("\r" + (" " * 80) + "\r")
     sys.stdout.flush()
 
 async def sleep_until_next_epoch(block_height, buffer_blocks=60, msg=None):
@@ -531,27 +531,45 @@ async def stake_management_loop():
             b = shared_state["balances"]
             totBal = b["public"] + b["shielded"]
             
+            now_ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
+            
             if shared_state["first_run"]:
-                byline = "\nDusk Stake Management & Monitoring: By Wolfrage\n"
-                sepline = ("-" * (len(byline ) -2))
-                print(byline + sepline)
+                byline = "\nDusk Stake Management & Monitoring: By Wolfrage"
+               # sepline = ("-" * (len(byline ) -2))
+                print(byline) # + sepline)
                 
                 shared_state["first_run"] = False
                 shared_state["last_action_taken"] = f"Startup @ Block #{block_height}"
                 action = shared_state["last_action_taken"]
+                separator = "=" * 50
                 
-                notifier.notify(
-                    f"{action}\n"
-                    f"\tBalance: {format_float(totBal)} Dusk (P:{format_float(b['public'])} | S:{format_float(b['shielded'])})\n"
-                    f"\tRewards: {format_float(rewards_amount)}\n"
-                    f"\tStaked:  {format_float(stake_amount)}\n"
-                    f"\tReclaimable: {format_float(reclaimable_slashed_stake)}"
-                )
+                stats = (
+                f"\n{separator}\n"
+                f"  Timestamp    : {now_ts}\n"
+                f"  Last Action  : {action}\n"
+                f"  Balance      : {format_float(totBal)} DUSK\n"
+                f"    ├─ Public  :  {format_float(b['public'])} DUSK\n"
+                f"    └─ Shielded:  {format_float(b['shielded'])} DUSK\n"
+                f"  Staked       : {format_float(stake_amount)} DUSK\n"
+                f"  Rewards      : {format_float(rewards_amount)} DUSK\n"
+                f"  Reclaimable  : {format_float(reclaimable_slashed_stake)} DUSK\n"
+            )
+                notifier.notify(stats)
 
             action = shared_state["last_action_taken"]
             
-            now_ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
-            stats = f"\n{now_ts}  {action} \n\tBalance: {format_float(totBal)} Dusk (P:{format_float(b['public'])} | S:{format_float(b['shielded'])})\n\tRewards: {format_float(rewards_amount)}\n\tStaked:  {format_float(stake_amount)}\n\tReclaimable: {format_float(reclaimable_slashed_stake)}\n"
+            stats = (
+                f"\n{separator}\n"
+                f"  Timestamp    : {now_ts}\n"
+                f"  Last Action  : {action}\n"
+                f"  Balance      : {format_float(totBal)} DUSK\n"
+                f"    ├─ Public  :  {format_float(b['public'])} DUSK\n"
+                f"    └─ Shielded:  {format_float(b['shielded'])} DUSK\n"
+                f"  Staked       : {format_float(stake_amount)} DUSK\n"
+                f"  Rewards      : {format_float(rewards_amount)} DUSK\n"
+                f"  Reclaimable  : {format_float(reclaimable_slashed_stake)} DUSK\n"
+                f"{separator}\n"
+            )
             
             print(stats)
 
@@ -589,7 +607,9 @@ async def realtime_display(config=False):
             remain_seconds = shared_state["remain_time"]
             disp_time = format_hms(remain_seconds) if remain_seconds > 0 else "0s"
             
-            status_txt = f"\r> Blk: #{blk} | Stk: {format_float(st_info['stake_amount'])} | Rcl: {format_float(st_info['reclaimable_slashed_stake'])} | Rwd: {format_float(st_info['rewards_amount'])} | Bal: P:{format_float(b['public'])} S:{format_float(b['shielded'])} | Last: {last_act} | Next Check: {disp_time}      \r"
+            last_txt = str()
+            
+            status_txt = f"\r> Blk: #{blk} | Stk: {format_float(st_info['stake_amount'])} | Rcl: {format_float(st_info['reclaimable_slashed_stake'])} | Rwd: {format_float(st_info['rewards_amount'])} | Bal: P:{format_float(b['public'])} S:{format_float(b['shielded'])} |{last_txt} Next Check: {disp_time}      \r"
             
             sys.stdout.write(status_txt)
             sys.stdout.flush()
@@ -599,6 +619,10 @@ async def realtime_display(config=False):
         
         if enable_tmux:
             try:
+                last_txt = f" Last: {last_act} |"
+            
+                status_txt = f"\r> Blk: #{blk} | Stk: {format_float(st_info['stake_amount'])} | Rcl: {format_float(st_info['reclaimable_slashed_stake'])} | Rwd: {format_float(st_info['rewards_amount'])} | Bal: P:{format_float(b['public'])} S:{format_float(b['shielded'])} |{last_txt} Next Check: {disp_time}      \r"
+
                 subprocess.check_call(["tmux", "set-option", "-g", "status-left", status_txt])
             except subprocess.CalledProcessError:
                 config.enable_tmux = False
