@@ -32,6 +32,8 @@ notification_config = load_config('NOTIFICATIONS')
 config = load_config('GENERAL')
 buffer_blocks = config.get('buffer_blocks', 60)
 min_stake_amount = config.get('min_stake_amount', 1000)
+min_peers = config.get('min_peers', 8)
+errored = False
 
 # If user passes "tmux" as first argument, override enable_tmux
 if config.get('enable_tmux', False) or (len(sys.argv) > 1 and sys.argv[1].lower() == 'tmux'):
@@ -61,7 +63,9 @@ shared_state = {
         "shielded": 0.0
     },
     "last_action_taken": "Starting Up",
-    "first_run": True
+    "first_run": True,
+    "completion_time": "--:--",
+    "peer_count": 0,
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -262,11 +266,14 @@ async def sleep_with_feedback(seconds_to_sleep, msg=None):
     Asynchronous version of sleep with visual feedback.
     Updates shared_state['remain_time'] for real-time display.
     """
-    completion_time = datetime.datetime.now() + datetime.timedelta(seconds=seconds_to_sleep)
-    shared_state["remain_time"] = seconds_to_sleep
+    completion_time = (datetime.datetime.now() + datetime.timedelta(seconds=seconds_to_sleep)).strftime('%H:%M')
 
+    shared_state["remain_time"] = seconds_to_sleep
+    shared_state["completion_time"] = "@" + completion_time
+    
     while shared_state["remain_time"] > 0:
         interval = min(1, shared_state["remain_time"])
+        
         await asyncio.sleep(interval)
         shared_state["remain_time"] -= interval
 
@@ -314,6 +321,7 @@ async def frequent_update_loop():
     loopcnt = 0
     consecutive_no_change = 0  # Counter for consecutive no-change in block height
     last_known_block_height = None  # Track the last block height
+    consecutive_low_peers = 0 # Track loops of low peer counts
     
     while True:
         # 1) Fetch block height
@@ -345,7 +353,7 @@ async def frequent_update_loop():
         last_known_block_height = current_block_height
         shared_state["block_height"] = current_block_height
         
-        # (Optional) Perform balance and stake-info updates every 30 loops (e.g., 5 minutes)
+        # Perform balance and stake-info updates every 30 loops (e.g., 5 minutes)
         if loopcnt >= 30:
             pub_bal, shld_bal = await get_wallet_balances(password)
             shared_state["balances"]["public"] = pub_bal
@@ -360,6 +368,31 @@ async def frequent_update_loop():
             
             loopcnt = 0  # Reset loop count after update
         
+        
+        shared_state["peer_count"] = await execute_command_async("sudo ruskquery peers")
+        peer_count = int(shared_state["peer_count"])
+        
+        if not peer_count:
+            logging.error("Failed to fetch peers. Retrying in 10s...")
+            await asyncio.sleep(10)
+            continue
+        
+        # check peer count
+        if peer_count is not None:
+            if peer_count < min_peers or peer_count <=0:
+                consecutive_low_peers += 1
+            else:
+                consecutive_low_peers = 0  # Reset counter if block height changes
+        else:
+            consecutive_low_peers = 0  # Reset counter on first valid block height
+        
+        # Log and notify if low count for too long
+        if consecutive_low_peers >= 240:
+            message = f"WARNING! Low peer count for {consecutive_low_peers * 10} seconds.\nCurrent Count: {peer_count}"
+            logging.error(message)
+            notifier.notify(message)
+            consecutive_low_peers = 0  # Reset after notifying to avoid spamming
+
         loopcnt += 1
         await asyncio.sleep(10)  # Wait 10 seconds before the next loop
 
@@ -606,10 +639,15 @@ async def realtime_display(config=False):
             last_act = shared_state["last_action_taken"]
             remain_seconds = shared_state["remain_time"]
             disp_time = format_hms(remain_seconds) if remain_seconds > 0 else "0s"
-            
+            peers = shared_state["peer_count"] or 0
             last_txt = str()
             
-            status_txt = f"\r> Blk: #{blk} | Stk: {format_float(st_info['stake_amount'])} | Rcl: {format_float(st_info['reclaimable_slashed_stake'])} | Rwd: {format_float(st_info['rewards_amount'])} | Bal: P:{format_float(b['public'])} S:{format_float(b['shielded'])} |{last_txt} Next Check: {disp_time}      \r"
+            if errored:  # TODO: add visual alerts
+                error_txt = "- !ERROR DETECTED!"
+            else:
+                error_txt = str()
+            
+            status_txt = f"\r> Blk: #{blk} | Stk: {format_float(st_info['stake_amount'])} | Rcl: {format_float(st_info['reclaimable_slashed_stake'])} | Rwd: {format_float(st_info['rewards_amount'])} | Bal: P:{format_float(b['public'])} S:{format_float(b['shielded'])} | Peers: {peers} |{last_txt} Next: {disp_time} ({shared_state["completion_time"]}) {error_txt}      \r"
             
             sys.stdout.write(status_txt)
             sys.stdout.flush()
@@ -621,7 +659,7 @@ async def realtime_display(config=False):
             try:
                 last_txt = f" Last: {last_act} |"
             
-                status_txt = f"\r> Blk: #{blk} | Stk: {format_float(st_info['stake_amount'])} | Rcl: {format_float(st_info['reclaimable_slashed_stake'])} | Rwd: {format_float(st_info['rewards_amount'])} | Bal: P:{format_float(b['public'])} S:{format_float(b['shielded'])} |{last_txt} Next Check: {disp_time}      \r"
+                status_txt = f"\r> Blk: #{blk} | Stk: {format_float(st_info['stake_amount'])} | Rcl: {format_float(st_info['reclaimable_slashed_stake'])} | Rwd: {format_float(st_info['rewards_amount'])} | Bal: P:{format_float(b['public'])} S:{format_float(b['shielded'])} | Peers: {peers} |{last_txt} Next Check: {disp_time}      \r"
 
                 subprocess.check_call(["tmux", "set-option", "-g", "status-left", status_txt])
             except subprocess.CalledProcessError:
