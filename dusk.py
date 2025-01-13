@@ -343,7 +343,7 @@ def sleep_until_next_epoch(block_height, buffer_blocks=bufferblocks, msg=None):
 
     # Force minimal sleep if 0 or negative
     if sleep_time <= 0:
-        sleep_time = 300
+        sleep_time = 120
         msg = "as epoch boundary reached; forcing minimal sleep"
 
     sleep_with_feedback(sleep_time, msg)
@@ -449,7 +449,6 @@ def main(): # TODO: separate display from calculations to  display realtime
         if should_unstake_and_restake(reclaimable_slashed_stake, downtime_loss):
             if total_restake < MIN_STAKE_AMOUNT:
                 last_action_taken = "Unstake/Restake Skipped (Below Min)"
-                log_action(f"Balance Info (#{block_height})", f"Rwd: {rewards_amount:.4f}, Stake: {stake_amount:.4f}, Rcl: {reclaimable_slashed_stake:.4f}")
                 log_action(f"Unstake/Restake Skipped (Block #{block_height})", 
                     f"Total restake ({total_restake:.4f} DUSK) < {MIN_STAKE_AMOUNT} DUSK.")
             else:
@@ -474,7 +473,7 @@ def main(): # TODO: separate display from calculations to  display realtime
             log_action("Claim and Stake", f"Rewards: {rewards_amount:.4f}")
             execute_command(f"sudo rusk-wallet --password {password} withdraw")
             execute_command(f"sudo rusk-wallet --password {password} stake --amt {rewards_amount}")
-            log_action("Stake Completed", f"New Stake: {stake_amount + rewards_amount}")
+            log_action("Stake Completed", f"New Staked: {stake_amount + (rewards_amount * .9)} New Reclaimable: {rewards_amount * .1}")
             last_claim_block = block_height
 
         else:
@@ -502,16 +501,17 @@ def main(): # TODO: separate display from calculations to  display realtime
         # 4. Tmux status bar
         # ─────────────────────────────────────────────────────────────────
         
-        update_tmux_status_bar(
-            block_height=block_height,
-            pub_balance=pub_balance,
-            shld_balance=shld_balance,
-            stake_amount=stake_amount,
-            rewards_amount=rewards_amount,
-            reclaimable_slashed_stake=reclaimable_slashed_stake,
-            last_action=last_action_taken,
-            minutes_wait=remainTime  # how many seconds remain in the last sleep
-        )
+        if config.get('enable_tmux', False):
+            update_tmux_status_bar(
+                block_height=block_height,
+                pub_balance=pub_balance,
+                shld_balance=shld_balance,
+                stake_amount=stake_amount,
+                rewards_amount=rewards_amount,
+                reclaimable_slashed_stake=reclaimable_slashed_stake,
+                last_action=last_action_taken,
+                minutes_wait=remainTime  # how many seconds remain in the last sleep
+            )
 
         # ─────────────────────────────────────────────────────────────────
         # 5. Update last_claim_block & sleep
