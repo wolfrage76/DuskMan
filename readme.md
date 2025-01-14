@@ -1,5 +1,6 @@
 # DUSK Monitoring and Notification Script
-![image](https://github.com/user-attachments/assets/140aed73-4493-4bde-bb80-a9e50b7bbaf3)
+![image](https://github.com/user-attachments/assets/48de7b01-b320-4602-84e4-32146081dd02)
+
 This Python script automates the monitoring, and management of **DUSK blockchain staking**, balances, compounding, epochs and system health. It efficiently handles claiming and restaking rewards, sends notifications via multiple services, and optionally updates the TMUX status bar with real-time information.
 
 NOTE: The Auto Staking of rewards and/or Auto Restakes for reclaiming slashes CAN be disabled via the config. 
