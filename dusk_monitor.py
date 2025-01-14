@@ -8,6 +8,13 @@ import yaml
 import asyncio
 import aiohttp
 
+from rich.console import Console
+from rich.table import Table
+from rich.text import Text
+from rich import print
+from rich.style import Style
+
+console = Console()
 
 from utilities.notifications import NotificationService
 
@@ -159,11 +166,11 @@ async def fetch_dusk_data():
         return None
 
 
-def format_float(value):
+def format_float(value, places=4):
     """Convert float to a string with max 4 decimal digits."""
     parts = str(value).split('.')
     if len(parts) == 2:
-        return f"{parts[0]}.{parts[1][:4]}" if len(parts[1]) > 0 else parts[0]
+        return f"{parts[0]}.{parts[1][:places]}" if len(parts[1]) > 0 else parts[0]
     return parts[0]
 
 def log_action(action, details, type='info'):
@@ -298,6 +305,9 @@ def format_hms(seconds):
         parts.append(f"{m}m")
     parts.append(f"{s}s")  # always include seconds
     return ' '.join(parts)
+
+
+    
 
 async def sleep_with_feedback(seconds_to_sleep, msg=None):
     """
@@ -621,8 +631,13 @@ async def stake_management_loop():
             now_ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
             
             if shared_state["first_run"]:
-                byline = "\nDusk Stake Management & Monitoring: By Wolfrage\n"
-                
+                byline = Text("\nDusk Stake Management & Monitoring: By Wolfrage", style="bold cyan")
+                #subline = Text("By Wolfrage", style="italic magenta")
+                #console.rule(byline, style="cyan")
+                #console.print(subline)
+                #console.rule(style="cyan")
+                # byline = "\nDusk Stake Management & Monitoring: By Wolfrage\n"
+                        
                 
                 notification_services = []
                 if notification_config.get('discord_webhook'):
@@ -643,13 +658,15 @@ async def stake_management_loop():
                 notification_status = f'Enabled Notifications:   {services}'
                 
                 auto_status = f'\n\tEnable tmux Support:     {enable_tmux}\n\tAuto Staking Rewards:    {auto_stake_rewards}\n\tAuto Restake to Reclaim: {auto_reclaim_full_restakes}\n\t{notification_status}'
+                separator = "=" * 44
                 
-                print(byline + auto_status)
+                console.print(byline)
+                print(separator + auto_status)
                 
                 shared_state["first_run"] = False
                 shared_state["last_action_taken"] = f"Startup @ Block #{block_height}"
                 action = shared_state["last_action_taken"]
-                separator = "=" * 44
+                
                 
                 stats = (
                 f"\n{separator}\n"
@@ -665,20 +682,49 @@ async def stake_management_loop():
 
             action = shared_state["last_action_taken"]
             
-            stats = (
+            """             stats = (
                 f"\n{separator}\n"
                 f"  Timestamp    : {now_ts}\n"
                 f"  Last Action  : {action}\n"
-                f"  Balance      : {format_float(totBal)} (${format_float(totBal * float(shared_state["price"]))})\n"
-                f"    ├─ Public  :   {format_float(b['public'])}  (${format_float(b['public'] * float(shared_state["price"]))})\n"
-                f"    └─ Shielded:   {format_float(b['shielded'])}  (${format_float(b['shielded'] * float(shared_state["price"]))})\n"
-                f"  Staked       : {format_float(stake_amount)}  (${format_float(stake_amount * float(shared_state["price"]))})\n"
-                f"  Rewards      : {format_float(rewards_amount)}  (${format_float(rewards_amount * float(shared_state["price"]))})\n"
-                f"  Reclaimable  : {format_float(reclaimable_slashed_stake)} (${format_float(reclaimable_slashed_stake * float(shared_state["price"]))})\n"
+                f"  Balance      : {format_float(totBal)} (${format_float(totBal * float(shared_state["price"]),2)})\n"
+                f"    ├─ Public  :   {format_float(b['public'])}  (${format_float(b['public'] * float(shared_state["price"]),2)})\n"
+                f"    └─ Shielded:   {format_float(b['shielded'])}  (${format_float(b['shielded'] * float(shared_state["price"]),2)})\n\n"
+                f"  Staked       : {format_float(stake_amount)}  (${format_float(stake_amount * float(shared_state["price"]),2)})\n"
+                f"  Rewards      : {format_float(rewards_amount)}  (${format_float(rewards_amount * float(shared_state["price"]),2)})\n"
+                f"  Reclaimable  : {format_float(reclaimable_slashed_stake)} (${format_float(reclaimable_slashed_stake * float(shared_state["price"]),2)})\n"
                 f"{separator}\n"
-            )
+            ) """
             
-            print(stats)
+            separator = "=" * 44  # Optional separator for aesthetic purposes
+            now_ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
+
+            # Create a table for the data
+            table = Table(title_style="bold magenta", border_style=None, show_header=False,show_lines=False, show_edge=False)
+
+            # Add rows for each section
+            table.add_row("Timestamp", Text(now_ts, style="bold cyan"))
+            table.add_row("Last Action", Text(action, style="bold green"))
+
+            # Add balance rows
+            balance_section = Text("Balance", style="bold white")
+            table.add_row(balance_section, f"\t@ ${format_float(shared_state['price'],3)} USD")
+            table.add_row("    ├─ Public", f"{format_float(b['public'])} (${format_float(b['public'] * float(shared_state['price']), 2)})")
+            table.add_row("    └─ Shielded", f"{format_float(b['shielded'])} (${format_float(b['shielded'] * float(shared_state['price']), 2)})")
+            table.add_row("    Total", f"{format_float(totBal)} (${format_float(totBal * float(shared_state['price']), 2)})", end_section=False)
+            table.add_row()
+
+            # Add staked rows
+            table.add_row("Staked", f"{format_float(stake_amount)} (${format_float(stake_amount * float(shared_state['price']), 2)})")
+            table.add_row("Rewards", f"{format_float(rewards_amount)} (${format_float(rewards_amount * float(shared_state['price']), 2)})")
+            table.add_row("Reclaimable", f"{format_float(reclaimable_slashed_stake)} (${format_float(reclaimable_slashed_stake * float(shared_state['price']), 2)})", end_section=True)
+
+            # Print the table
+            console.print(separator)
+            console.print(table)
+            console.print(separator)
+
+
+           # print(stats)
 
         # Sleep until near the next epoch
         await sleep_until_next_epoch(block_height, buffer_blocks=buffer_blocks)

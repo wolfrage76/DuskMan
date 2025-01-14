@@ -57,7 +57,7 @@ Dusk wallet for Tips: `eox326D2m1ohpBUFVgiF885yV7aN4sg4caA6UkAg7UUhB6JWystDE7t2b
 2. **Install Dependencies**: Install the required Python libraries:
 
     ```bash
-    pip install requests pyyaml
+    pip install requests pyyaml rich
     ```
 
 3. **Set Wallet Password**: Export your wallet password as an environment variable (due to dusk permissions). For example:
