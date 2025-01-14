@@ -5,7 +5,6 @@
 This Python script automates the monitoring, and management of **DUSK blockchain staking**, balances, compounding, epochs and system health. It efficiently handles claiming and restaking rewards, sends notifications via multiple services, and optionally updates the TMUX status bar with real-time information.
 
 NOTE: The Auto Staking of rewards and/or Auto Restakes for reclaiming slashes CAN be disabled via the config. 
-NOTE: Only reason it uses SUDO is due to how Dusk node instructions work
 
 ---
 
@@ -61,7 +60,7 @@ Dusk wallet for Tips: `eox326D2m1ohpBUFVgiF885yV7aN4sg4caA6UkAg7UUhB6JWystDE7t2b
     pip install requests pyyaml
     ```
 
-3. **Set Wallet Password**: Export your wallet password as an environment variable. For example:
+3. **Set Wallet Password**: Export your wallet password as an environment variable (due to dusk permissions). For example:
 
     ```bash
     export MY_SUDO_PASSWORD="your_wallet_password"
