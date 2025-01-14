@@ -37,14 +37,17 @@ def load_config(section="GENERAL", file_path="config.yaml"):
         sys.exit(1)
 
 # Load configuration
-notification_config = load_config('NOTIFICATIONS')
 config = load_config('GENERAL')
+notification_config = load_config('NOTIFICATIONS')
+status_bar = load_config('STATUSBAR')
+
+
 buffer_blocks = config.get('buffer_blocks', 60)
 min_stake_amount = config.get('min_stake_amount', 1000)
-min_peers = config.get('min_peers', 8)
+min_peers = config.get('min_peers', 10)
 auto_stake_rewards = config.get('auto_stake_rewards', False)
 auto_reclaim_full_restakes = config.get('auto_reclaim_full_restakes', False)
-pwd_var = config.get('pwd_var_name', 'MY_SUDO_PASSWORD')
+pwd_var = config.get('pwd_var_name', 'MY_WALLET_VARIABLE')
 
 if config.get('use_sudo', False):
     use_sudo = 'sudo'
@@ -372,7 +375,7 @@ async def frequent_update_loop():
     Update the block height and balances every 20 seconds.
     Checks if the block height changes to ensure node responsiveness.
     """
-    password = get_env_variable("MY_SUDO_PASSWORD")
+    password = get_env_variable("MY_WALLET_VARIABLE")
     loopcnt = 0
     consecutive_no_change = 0  # Counter for consecutive no-change in block height
     last_known_block_height = None  # Track the last block height
@@ -468,7 +471,7 @@ async def init_balance():
     This is for display purposes to keep data fresh, 
     even while the main staking logic might be sleeping until the next epoch.
     """
-    password = get_env_variable("MY_SUDO_PASSWORD")
+    password = get_env_variable("MY_WALLET_VARIABLE")
 
     # 1) Fetch block height
     block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height")
@@ -492,18 +495,21 @@ async def stake_management_loop():
     Main staking logic. Sleeps until the next epoch after each action/no-action.
     Meanwhile, frequent_update_loop updates block height & balances for display.
     """
-    password = get_env_variable("MY_SUDO_PASSWORD")
+    password = get_env_variable("MY_WALLET_VARIABLE")
 
     while True:
         
-        dusk_info= await fetch_dusk_data()
-        shared_state["price"] = dusk_info.get('usd',0)
-        
+        try:
+            dusk_info= await fetch_dusk_data()
+            shared_state["price"] = dusk_info.get('usd',0)
+        except Exception as e:
+            logging.error(f"Error in real-time display: {e}")
+            
         # For logic, we may want a fresh block height right before we do anything:
         block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height")
         if not block_height_str:
             logging.error("Failed to fetch block height. Retrying in 60s...")
-            await sleep_with_feedback(60, "retry block height fetch")
+            await sleep_with_feedback(30, "retry block height fetch")
             continue
 
         block_height = int(block_height_str)
@@ -519,13 +525,13 @@ async def stake_management_loop():
         stake_output = await execute_command_async(f"{use_sudo} rusk-wallet --password {password} stake-info")
         if not stake_output:
             logging.error("Failed to fetch stake-info. Retrying in 60s...")
-            await sleep_with_feedback(60, "retry stake-info fetch")
+            await sleep_with_feedback(30, "retry stake-info fetch")
             continue
 
         e_stake, r_slashed, a_rewards = parse_stake_info(stake_output)
         if e_stake is None or r_slashed is None or a_rewards is None:
             logging.warning("Parsing stake info failed or incomplete. Skipping cycle...")
-            await sleep_with_feedback(60, "skipping cycle")
+            await sleep_with_feedback(30, "skipping cycle")
             continue
 
         # Update in shared state
@@ -741,14 +747,14 @@ async def stake_management_loop():
 # REAL-TIME DISPLAY
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def realtime_display(config=False):
+async def realtime_display(isTmux=False):
     """
     Continuously display real-time info in the console (updates every 1 second).
     Reflects frequent updates from 'frequent_update_loop' + stake_info, etc.
     """
     first_run = True
     
-    if config:
+    if isTmux:
         enable_tmux = True
     else:
         enable_tmux = False
@@ -766,27 +772,68 @@ async def realtime_display(config=False):
             last_act = shared_state["last_action_taken"]
             remain_seconds = shared_state["remain_time"]
             disp_time = format_hms(remain_seconds) if remain_seconds > 0 else "0s"
-            peers = shared_state["peer_count"] or 0
-            last_txt = str()
+            
+            # last_txt = str()
             
             if errored:  # TODO: add visual alerts
                 error_txt = "- !ERROR DETECTED!"
             else:
                 error_txt = str()
+            last_txt = str()
+            blk = f"\r> Blk: #{blk} | "
+            stk = f"Stk: {format_float(st_info['stake_amount'])} | "
+            rcl = f"Rcl: {format_float(st_info['reclaimable_slashed_stake'])} | "
+            rwd = f"Rwd: {format_float(st_info['rewards_amount'])} | "
+            bal = "Bal: "
+            p = f"P:{format_float(b['public'])}"
+            s = f"S:{format_float(b['shielded'])}"
+            usd = f"$USD: {format_float(shared_state["price"],3) } | "
+            timer = f"Next: {disp_time} "
+            donetime = f"({shared_state["completion_time"]}) "
+            peercnt = f"Peers: {shared_state["peer_count"]}"
+            splitter= " | "
             
-            status_txt = f"\r> Blk: #{blk} | Stk: {format_float(st_info['stake_amount'])} | Rcl: {format_float(st_info['reclaimable_slashed_stake'])} | Rwd: {format_float(st_info['rewards_amount'])} | Bal: P:{format_float(b['public'])} S:{format_float(b['shielded'])} | Peers: {peers} |{last_txt} Next: {disp_time} ({shared_state["completion_time"]}) {error_txt}      \r"
+            if not status_bar.get('show_current_block', True):
+                blk = str()
+            if not status_bar.get('show_staked', True):
+                stk = str()
+            if not status_bar.get('show_public', True):
+                p = str()
+            if not status_bar.get('show_shielded', True):
+                s = str()
+            if not status_bar.get('show_total', True):
+                bal = str()
+            if not status_bar.get('show_rewards', True):
+                rwd = str()
+            if not status_bar.get('show_reclaimable', True):
+                rcl = str()
+            if not status_bar.get('show_price', True):
+                usd = str()
+            if not status_bar.get('show_timer', True):
+                timer = str()
+            if not status_bar.get('show_trigger_time', True):
+                donetime = str()
+            if not status_bar.get('show_peer_count', True):
+                peercnt = str()
+            if not status_bar.get('show_public', True) and not status_bar.get('show_shielded', True):
+                bal = str()
+                splitter = str()
+            if status_bar.get('show_public', True) and status_bar.get('show_shielded', True):
+                spacer = "  "
+            
+                
+            status_txt = f"\r> {blk}{stk}{rcl}{rwd}{bal}{p}{spacer}{s}{splitter}{usd}{last_txt}{timer}{donetime}{peercnt} {error_txt}      \r"
             
             sys.stdout.write(status_txt)
             sys.stdout.flush()
         except Exception as e:
             logging.error(f"Error in real-time display: {e}")
         
-        
         if enable_tmux:
             try:
-                last_txt = f" Last: {last_act} |"
+                last_txt = f" Last: {shared_state["last_action_taken"]} |"
             
-                status_txt = f"\r> Blk: #{blk} | Stk: {format_float(st_info['stake_amount'])} | Rcl: {format_float(st_info['reclaimable_slashed_stake'])} | Rwd: {format_float(st_info['rewards_amount'])} | Bal: P:{format_float(b['public'])} S:{format_float(b['shielded'])} | Peers: {peers} |{last_txt} Next Check: {disp_time}      \r"
+                status_txt = f"\r> {blk}{stk}{rcl}{rwd}{bal}{p}{spacer}{s}{splitter}{usd}{last_txt}{timer}{donetime}{peercnt} {error_txt}      \r"
 
                 subprocess.check_call(["tmux", "set-option", "-g", "status-left", status_txt])
             except subprocess.CalledProcessError:

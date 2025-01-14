@@ -1,14 +1,15 @@
 GENERAL:
   buffer_blocks: 21 # How many blocks before Epoch to trigger (1 block = 10seconds)
   enable_tmux: False # Enables tmux statusbar 
-  min_peers: 8 # Minimum number of peers to be considered healthy
-
+  
   auto_stake_rewards: True
   auto_reclaim_full_restakes: True
 
-  pwd_var_name: "MY_WALLET_PASSWORD"  # NAME OF THE ENVIRONMENT VARIABLE WITH THE PASSWORD! DO_NOT_ PUT IN YOUR DAMN PASSWORD HERE, FFS!
-                                    # Make sure you read the instructions on exporting the environment variable
-  use_sudo: True # Only needs to be set true if you need to use sudo to run your ruskquery and rusk-wallet commands.
+  min_peers: 8 # Minimum number of peers to be considered healthy
+
+  pwd_var_name: "MY_WALLET_VARIABLE"  # NAME OF THE ENVIRONMENT VARIABLE WITH THE PASSWORD! DO_NOT_ PUT IN YOUR DAMN PASSWORD HERE, FFS!
+                                      # Make sure you read the instructions on exporting the environment variable
+  use_sudo: True # ONLY needs to be set True if you NEED to use sudo to run your ruskquery and rusk-wallet commands.
 
 NOTIFICATIONS:
   discord_webhook:     # Insert webhook to activate. Example: https://discord.com/api/webhooks/xxxxxxxxxx/XXXXXXXXX
@@ -18,4 +19,16 @@ NOTIFICATIONS:
   pushover_user_key:   # Leave Blank to Disable
   pushover_app_token:  # Leave Blank to Disable
 
-
+STATUSBAR: # Determines what to show in bottom statusbar and tmux statusbar
+  show_current_block: True
+  show_balance: True
+  show_public: True
+  show_shielded: True
+  show_total: True
+  show_staked: True
+  show_rewards: True
+  show_reclaimable: True
+  show_price: True
+  show_timer: True
+  show_trigger_time: True
+  show_peer_count: False
