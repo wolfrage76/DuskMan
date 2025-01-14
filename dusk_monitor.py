@@ -46,6 +46,11 @@ auto_stake_rewards = config.get('auto_stake_rewards', False)
 auto_reclaim_full_restakes = config.get('auto_reclaim_full_restakes', False)
 pwd_var = config.get('pwd_var_name', 'MY_SUDO_PASSWORD')
 
+if config.get('use_sudo', False):
+    use_sudo = 'sudo'
+else:
+    use_sudo = ''
+
 errored = False
 
 # If user passes "tmux" as first argument, override enable_tmux
@@ -234,7 +239,7 @@ async def get_wallet_balances(password):
         "shielded": []
     }
 
-    cmd_profiles = f"sudo rusk-wallet --password {password} profiles"
+    cmd_profiles = f"{use_sudo} rusk-wallet --password {password} profiles"
     output_profiles = await execute_command_async(cmd_profiles)
     if not output_profiles:
         return 0.0, 0.0
@@ -252,7 +257,7 @@ async def get_wallet_balances(password):
                 addresses["public"].append(match.group(1))
 
     async def get_spendable_for_address(addr):
-        cmd_balance = f"sudo rusk-wallet --password {password} balance --spendable --address {addr}"
+        cmd_balance = f"{use_sudo} rusk-wallet --password {password} balance --spendable --address {addr}"
         out = await execute_command_async(cmd_balance)
         if out:
             total_str = out.replace("Total: ", "")
@@ -375,7 +380,7 @@ async def frequent_update_loop():
     
     while True:
         # 1) Fetch block height
-        block_height_str = await execute_command_async("sudo ruskquery block-height")
+        block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height")
         if not block_height_str:
             logging.error("Failed to fetch block height. Retrying in 10s...")
             await asyncio.sleep(10)
@@ -411,7 +416,7 @@ async def frequent_update_loop():
             shared_state["balances"]["public"] = pub_bal
             shared_state["balances"]["shielded"] = shld_bal
             
-            stake_output = await execute_command_async(f"sudo rusk-wallet --password {password} stake-info")
+            stake_output = await execute_command_async(f"{use_sudo} rusk-wallet --password {password} stake-info")
             if stake_output:
                 e_stake, r_slashed, a_rewards = parse_stake_info(stake_output)
                 shared_state["stake_info"]["stake_amount"] = e_stake or 0.0
@@ -429,7 +434,7 @@ async def frequent_update_loop():
             loopcnt = 0  # Reset loop count after update
         
         
-        shared_state["peer_count"] = await execute_command_async("sudo ruskquery peers")
+        shared_state["peer_count"] = await execute_command_async(f"{use_sudo} ruskquery peers")
         peer_count = int(shared_state["peer_count"])
         
         if not peer_count:
@@ -466,7 +471,7 @@ async def init_balance():
     password = get_env_variable("MY_SUDO_PASSWORD")
 
     # 1) Fetch block height
-    block_height_str = await execute_command_async("sudo ruskquery block-height")
+    block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height")
     if block_height_str:
         shared_state["block_height"] = int(block_height_str)
 
@@ -495,7 +500,7 @@ async def stake_management_loop():
         shared_state["price"] = dusk_info.get('usd',0)
         
         # For logic, we may want a fresh block height right before we do anything:
-        block_height_str = await execute_command_async("sudo ruskquery block-height")
+        block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height")
         if not block_height_str:
             logging.error("Failed to fetch block height. Retrying in 60s...")
             await sleep_with_feedback(60, "retry block height fetch")
@@ -511,7 +516,7 @@ async def stake_management_loop():
             continue
 
         # Fetch stake-info
-        stake_output = await execute_command_async(f"sudo rusk-wallet --password {password} stake-info")
+        stake_output = await execute_command_async(f"{use_sudo} rusk-wallet --password {password} stake-info")
         if not stake_output:
             logging.error("Failed to fetch stake-info. Retrying in 60s...")
             await sleep_with_feedback(60, "retry stake-info fetch")
@@ -567,14 +572,14 @@ async def stake_management_loop():
                 )
 
                 # 1) Withdraw
-                curr_cmd = await execute_command_async(f"sudo rusk-wallet --password {password} withdraw")
+                curr_cmd = await execute_command_async(f"{use_sudo} rusk-wallet --password {password} withdraw")
                 cmd_success = await execute_command_async(curr_cmd)
                 if not cmd_success:
                     log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
                     raise Exception("CMD execution failed")
                 
                 # 2) Unstake
-                curr_cmd = await execute_command_async(f"sudo rusk-wallet --password {password} unstake")
+                curr_cmd = await execute_command_async(f"{use_sudo} rusk-wallet --password {password} unstake")
                 cmd_success = await execute_command_async(curr_cmd)
                 if not cmd_success:
                     log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
@@ -582,7 +587,7 @@ async def stake_management_loop():
                 
                 # 3) Stake
                 curr_cmd = await execute_command_async(
-                    f"sudo rusk-wallet --password {password} stake --amt {total_restake}"
+                    f"{use_sudo} rusk-wallet --password {password} stake --amt {total_restake}"
                 )
                 cmd_success = await execute_command_async(curr_cmd)
                 if not cmd_success:
@@ -606,13 +611,13 @@ async def stake_management_loop():
             log_action("Claim and Stake", f"Rewards: {format_float(rewards_amount)}")
 
             # 1) Withdraw
-            curr_cmd = await execute_command_async(f"sudo rusk-wallet --password {password} withdraw")
+            curr_cmd = await execute_command_async(f"{use_sudo} rusk-wallet --password {password} withdraw")
             cmd_success = await execute_command_async(curr_cmd)
             if not cmd_success:
                     log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
                     raise Exception("CMD execution failed")
             # 2) Stake
-            curr_cmd = await execute_command_async(f"sudo rusk-wallet --password {password} stake --amt {rewards_amount}")
+            curr_cmd = await execute_command_async(f"{use_sudo} rusk-wallet --password {password} stake --amt {rewards_amount}")
             cmd_success = await execute_command_async(curr_cmd)
             if not cmd_success:
                     log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')

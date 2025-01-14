@@ -8,6 +8,7 @@ GENERAL:
 
   pwd_var_name: "MY_WALLET_PASSWORD"  # NAME OF THE ENVIRONMENT VARIABLE WITH THE PASSWORD! DO_NOT_ PUT IN YOUR DAMN PASSWORD HERE, FFS!
                                     # Make sure you read the instructions on exporting the environment variable
+  use_sudo: True # Only needs to be set true if you need to use sudo to run your ruskquery and rusk-wallet commands.
 
 NOTIFICATIONS:
   discord_webhook:     # Insert webhook to activate. Example: https://discord.com/api/webhooks/xxxxxxxxxx/XXXXXXXXX
