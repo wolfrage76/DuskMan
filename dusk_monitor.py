@@ -22,6 +22,7 @@ from utilities.notifications import NotificationService
 # CONFIGURATION AND INITIALIZING
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def load_config(section="GENERAL", file_path="config.yaml"):
     """Load configuration from a YAML file."""
     try:
@@ -43,6 +44,7 @@ min_stake_amount = config.get('min_stake_amount', 1000)
 min_peers = config.get('min_peers', 8)
 auto_stake_rewards = config.get('auto_stake_rewards', False)
 auto_reclaim_full_restakes = config.get('auto_reclaim_full_restakes', False)
+pwd_var = config.get('pwd_var_name', 'MY_SUDO_PASSWORD')
 
 errored = False
 
@@ -105,9 +107,9 @@ logging.basicConfig(
 
 def get_env_variable(var_name):
     """Retrieve an environment variable or exit if missing."""
-    value = os.getenv(var_name)
+    value = os.getenv(pwd_var)
     if not value:
-        logging.error(f"Error: The environment variable {var_name} is not set.")
+        logging.error(f"Error: The environment variable {pwd_var} is not set.")
         sys.exit(1)
     return value
 
