@@ -63,7 +63,7 @@ Dusk wallet for Tips: `eox326D2m1ohpBUFVgiF885yV7aN4sg4caA6UkAg7UUhB6JWystDE7t2b
 3. **Set Wallet Password**: Export your wallet password as an environment variable (due to dusk permissions). For example:
 
     ```bash
-    export MY_SUDO_PASSWORD="your_wallet_password"
+    export MY_WALLET_PASSWORD="your_wallet_password"
     ```
 
 4. **Configure Settings**: Rename config.yaml.example to config.yaml then edit and save it.

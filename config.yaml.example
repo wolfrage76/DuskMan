@@ -6,7 +6,7 @@ GENERAL:
   auto_stake_rewards: True
   auto_reclaim_full_restakes: True
 
-  pwd_var_name: "MY_SUDO_PASSWORD"  # NAME OF THE ENVIRONMENT VARIABLE WITH THE PASSWORD! DO_NOT_ PUT IN YOUR DAMN PASSWORD HERE, FFS!
+  pwd_var_name: "MY_WALLET_PASSWORD"  # NAME OF THE ENVIRONMENT VARIABLE WITH THE PASSWORD! DO_NOT_ PUT IN YOUR DAMN PASSWORD HERE, FFS!
                                     # Make sure you read the instructions on exporting the environment variable
 
 NOTIFICATIONS:
