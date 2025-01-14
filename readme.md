@@ -6,6 +6,7 @@ This Python script automates the monitoring, and management of **DUSK blockchain
 
 NOTE: The Auto Staking of rewards and/or Auto Restakes for reclaiming slashes CAN be disabled via the config. 
 NOTE: Only reason it uses SUDO is due to how Dusk node instructions work
+
 ---
 
 
