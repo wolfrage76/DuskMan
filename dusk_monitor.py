@@ -280,7 +280,7 @@ async def sleep_with_feedback(seconds_to_sleep, msg=None):
         shared_state["remain_time"] -= interval
 
     # Optionally clear or log
-    sys.stdout.write("\r" + (" " * 80) + "\r")
+    sys.stdout.write("\r" + (" " * 100) + "\r")
     sys.stdout.flush()
 
 async def sleep_until_next_epoch(block_height, buffer_blocks=60, msg=None):
