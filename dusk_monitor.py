@@ -6,6 +6,8 @@ import logging
 import datetime
 import yaml
 import asyncio
+import aiohttp
+
 
 from utilities.notifications import NotificationService
 
@@ -68,6 +70,10 @@ shared_state = {
     "first_run": True,
     "completion_time": "--:--",
     "peer_count": 0,
+    "price":0.0,
+    "market": 0,
+    "volume": 0,
+    "change_24h": 0,
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -122,6 +128,36 @@ async def execute_command_async(command, log_output=True):
     except Exception as e:
         logging.error(f"Error executing command: {command}\n{e}")
         return None
+
+
+async def fetch_dusk_data():
+    """
+    Fetch DUSK token data from CoinGecko API.
+    Returns a dictionary with relevant data or logs an error if the request fails.
+    """
+    url = "https://api.coingecko.com/api/v3/simple/price"
+    params = {
+        "ids": "dusk-network",  # CoinGecko's ID for DUSK
+        "vs_currencies": "usd",  # Fetch price in USD
+        "include_market_cap": "true",
+        "include_24hr_vol": "true",
+        "include_24hr_change": "true",
+    }
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, params=params) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    dusk_data = data.get("dusk-network", {})
+                    return dusk_data
+                else:
+                    logging.error(f"Failed to fetch DUSK data. HTTP Status: {response.status}")
+                    return None
+    except Exception as e:
+        logging.error(f"Error while fetching DUSK data: {e}")
+        return None
+
 
 def format_float(value):
     """Convert float to a string with max 4 decimal digits."""
@@ -350,6 +386,8 @@ async def frequent_update_loop():
             logging.error(message)
             notifier.notify(message)
             consecutive_no_change = 0  # Reset after notifying to avoid spamming
+            await asyncio.sleep(1)
+            continue # Need to double check this
 
         # Update last known block height and shared state
         last_known_block_height = current_block_height
@@ -368,6 +406,14 @@ async def frequent_update_loop():
                 shared_state["stake_info"]["reclaimable_slashed_stake"] = r_slashed or 0.0
                 shared_state["stake_info"]["rewards_amount"] = a_rewards or 0.0
             
+            dusk_data = await fetch_dusk_data()
+            if dusk_data:
+                shared_state["price"] = dusk_data.get("usd", "N/A")
+                shared_state["market_cap"]  = dusk_data.get("usd_market_cap", "N/A")
+                shared_state["volume"]  = dusk_data.get("usd_24h_vol", "N/A")
+                shared_state["change_24h"]  = dusk_data.get("usd_24h_change", "N/A")
+                
+                
             loopcnt = 0  # Reset loop count after update
         
         
@@ -416,6 +462,8 @@ async def init_balance():
     pub_bal, shld_bal = await get_wallet_balances(password)
     shared_state["balances"]["public"] = pub_bal
     shared_state["balances"]["shielded"] = shld_bal
+    
+    await fetch_dusk_data()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -430,6 +478,10 @@ async def stake_management_loop():
     password = get_env_variable("MY_SUDO_PASSWORD")
 
     while True:
+        
+        dusk_info= await fetch_dusk_data()
+        shared_state["price"] = dusk_info.get('usd',0)
+        
         # For logic, we may want a fresh block height right before we do anything:
         block_height_str = await execute_command_async("sudo ruskquery block-height")
         if not block_height_str:
@@ -603,11 +655,11 @@ async def stake_management_loop():
                 f"\n{separator}\n"
                 f"  Action       : {action}\n"
                 f"  Balance      : {format_float(totBal)} DUSK\n"
-                f"    ├─ Public  :  {format_float(b['public'])} DUSK\n"
-                f"    └─ Shielded:  {format_float(b['shielded'])} DUSK\n"
-                f"  Staked       : {format_float(stake_amount)} DUSK\n"
-                f"  Rewards      : {format_float(rewards_amount)} DUSK\n"
-                f"  Reclaimable  : {format_float(reclaimable_slashed_stake)} DUSK\n"
+                f"    ├─ Public  :   {format_float(b['public'])} DUSK (${format_float(b['public'] * float(shared_state["price"]))})\n"
+                f"    └─ Shielded:   {format_float(b['shielded'])} DUSK (${format_float(b['shielded'] * float(shared_state["price"]))})\n"
+                f"  Staked       : {format_float(stake_amount)} DUSK (${format_float(stake_amount * float(shared_state["price"]))})\n"
+                f"  Rewards      : {format_float(rewards_amount)} DUSK (${format_float(rewards_amount * float(shared_state["price"]))})\n"
+                f"  Reclaimable  : {format_float(reclaimable_slashed_stake)} DUSK (${format_float(reclaimable_slashed_stake * float(shared_state["price"]))})\n"
             )
                 notifier.notify(stats)
 
@@ -617,12 +669,12 @@ async def stake_management_loop():
                 f"\n{separator}\n"
                 f"  Timestamp    : {now_ts}\n"
                 f"  Last Action  : {action}\n"
-                f"  Balance      : {format_float(totBal)} DUSK\n"
-                f"    ├─ Public  :  {format_float(b['public'])} DUSK\n"
-                f"    └─ Shielded:  {format_float(b['shielded'])} DUSK\n"
-                f"  Staked       : {format_float(stake_amount)} DUSK\n"
-                f"  Rewards      : {format_float(rewards_amount)} DUSK\n"
-                f"  Reclaimable  : {format_float(reclaimable_slashed_stake)} DUSK\n"
+                f"  Balance      : {format_float(totBal)} (${format_float(totBal * float(shared_state["price"]))})\n"
+                f"    ├─ Public  :   {format_float(b['public'])}  (${format_float(b['public'] * float(shared_state["price"]))})\n"
+                f"    └─ Shielded:   {format_float(b['shielded'])}  (${format_float(b['shielded'] * float(shared_state["price"]))})\n"
+                f"  Staked       : {format_float(stake_amount)}  (${format_float(stake_amount * float(shared_state["price"]))})\n"
+                f"  Rewards      : {format_float(rewards_amount)}  (${format_float(rewards_amount * float(shared_state["price"]))})\n"
+                f"  Reclaimable  : {format_float(reclaimable_slashed_stake)} (${format_float(reclaimable_slashed_stake * float(shared_state["price"]))})\n"
                 f"{separator}\n"
             )
             
