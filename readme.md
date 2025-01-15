@@ -111,7 +111,7 @@ To enable notifications for specific services, provide the required credentials 
 | Pushbullet   | `pushbullet_token`                                    |
 | Telegram     | `telegram_bot_token`, `telegram_chat_id`              |
 | Pushover     | `pushover_user_key`, `pushover_app_token`             |
-| Webhook      | `webhook_url`            |
+| Webhook      | `webhook_url`                                         |
 
 ---
 
