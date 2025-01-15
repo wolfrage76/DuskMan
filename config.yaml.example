@@ -7,7 +7,7 @@ GENERAL:
 
   min_peers: 8 # Minimum number of peers to be considered healthy
 
-  pwd_var_name: "MY_WALLET_VARIABLE"  # NAME OF THE ENVIRONMENT VARIABLE WITH THE PASSWORD! DO_NOT_ PUT IN YOUR DAMN PASSWORD HERE, FFS!
+  pwd_var_name: MY_WALLET_VARIABLE  # NAME OF THE ENVIRONMENT VARIABLE WITH THE PASSWORD! DO_NOT_ PUT IN YOUR DAMN PASSWORD HERE, FFS!
                                       # Make sure you read the instructions on exporting the environment variable
   use_sudo: True # ONLY needs to be set True if you NEED to use sudo to run your ruskquery and rusk-wallet commands.
 
@@ -18,7 +18,7 @@ NOTIFICATIONS:
   telegram_chat_id:    # Leave Blank to Disable
   pushover_user_key:   # Leave Blank to Disable
   pushover_app_token:  # Leave Blank to Disable
-  webhook_url:         #"https://your-webhook-url.com/endpoint"
+  webhook_url:         # https://your-webhook-url.com/endpoint
 
 STATUSBAR: # Determines what to show in bottom statusbar and tmux statusbar
   show_current_block: True
