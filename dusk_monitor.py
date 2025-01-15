@@ -90,7 +90,7 @@ shared_state = {
     "price":0.0,
     "market": 0,
     "volume": 0,
-    "change_24h": 0,
+    "usd_24h_change": 0,
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -431,8 +431,7 @@ async def frequent_update_loop():
                 shared_state["price"] = dusk_data.get("usd", "N/A")
                 shared_state["market_cap"]  = dusk_data.get("usd_market_cap", "N/A")
                 shared_state["volume"]  = dusk_data.get("usd_24h_vol", "N/A")
-                shared_state["change_24h"]  = dusk_data.get("usd_24h_change", "N/A")
-                
+                shared_state["usd_24h_change"]  = dusk_data.get("usd_24h_change", "N/A")
                 
             loopcnt = 0  # Reset loop count after update
         
@@ -483,7 +482,12 @@ async def init_balance():
     shared_state["balances"]["public"] = pub_bal
     shared_state["balances"]["shielded"] = shld_bal
     
-    await fetch_dusk_data()
+    dusk_data = await fetch_dusk_data()
+    if dusk_data:
+        shared_state["price"] = dusk_data.get("usd", "N/A")
+        shared_state["market_cap"]  = dusk_data.get("usd_market_cap", "N/A")
+        shared_state["volume"]  = dusk_data.get("usd_24h_vol", "N/A")
+        shared_state["usd_24h_change"]  = dusk_data.get("usd_24h_change", "N/A")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -719,8 +723,9 @@ async def stake_management_loop():
             table.add_row("Last Action", Text(action, style="bold green"))
 
             # Add balance rows
+                
             balance_section = Text("Balance", style="bold white")
-            table.add_row(balance_section, f"\t@ ${format_float(shared_state['price'],3)} USD")
+            table.add_row(balance_section, f"  @ ${format_float(shared_state['price'],3)} USD")
             table.add_row("    ├─ Public", f"{format_float(b['public'])} (${format_float(b['public'] * float(shared_state['price']), 2)})")
             table.add_row("    └─ Shielded", f"{format_float(b['shielded'])} (${format_float(b['shielded'] * float(shared_state['price']), 2)})")
             table.add_row("    Total", f"{format_float(totBal)} (${format_float(totBal * float(shared_state['price']), 2)})", end_section=False)
@@ -787,7 +792,13 @@ async def realtime_display(isTmux=False):
             bal = "Bal: "
             p = f"P:{format_float(b['public'])}"
             s = f"S:{format_float(b['shielded'])}"
-            usd = f"$USD: {format_float(shared_state["price"],3) } | "
+            
+            chg24=""
+            if shared_state["usd_24h_change"] > 0:
+                chg24 = f"(+{shared_state["usd_24h_change"]:.2f}%)"
+            elif shared_state["usd_24h_change"] < 0:
+                chg24= f"(-{shared_state["usd_24h_change"]:.2f}%)"
+            usd = f"$USD: {format_float(shared_state["price"],3)} {chg24} | "
             timer = f"Next: {disp_time} "
             donetime = f"({shared_state["completion_time"]}) "
             peercnt = f"Peers: {shared_state["peer_count"]}"
@@ -820,7 +831,7 @@ async def realtime_display(isTmux=False):
                 splitter = str()
             if status_bar.get('show_public', True) and status_bar.get('show_shielded', True):
                 spacer = "  "
-            
+
                 
             status_txt = f"\r> {blk}{stk}{rcl}{rwd}{bal}{p}{spacer}{s}{splitter}{usd}{last_txt}{timer}{donetime}{peercnt} {error_txt}      \r"
             
