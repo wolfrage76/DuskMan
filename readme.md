@@ -25,7 +25,7 @@ Dusk wallet for Tips: `eox326D2m1ohpBUFVgiF885yV7aN4sg4caA6UkAg7UUhB6JWystDE7t2b
     - **Pushbullet**
     - **Telegram**
     - **Pushover**
-  - Configurable per service using environment variables or script settings.
+    - **Webhook**
 
 - **Efficient Execution**:
   - Calculates sleep times based on epochs to minimize unnecessary processing.
@@ -56,7 +56,7 @@ Dusk wallet for Tips: `eox326D2m1ohpBUFVgiF885yV7aN4sg4caA6UkAg7UUhB6JWystDE7t2b
 2. **Install Dependencies**: Install the required Python libraries:
 
     ```bash
-    pip install requests pyyaml rich
+    pip install requests pyyaml rich asyncio aiohttp 
     ```
 
 3. **Set Wallet Password**: Export your wallet password as an environment variable (due to dusk permissions). For example:
