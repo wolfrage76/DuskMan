@@ -56,14 +56,15 @@ Dusk wallet for Tips: `eox326D2m1ohpBUFVgiF885yV7aN4sg4caA6UkAg7UUhB6JWystDE7t2b
 2. **Install Dependencies**: Install the required Python libraries:
 
     ```bash
-    pip install requests pyyaml rich asyncio aiohttp 
+    pip install requests pyyaml rich asyncio aiohttp python-dotenv
     ```
 
-3. **Set Wallet Password**: Export your wallet password as an environment variable (due to dusk permissions). For example:
+3. **Set Wallet Password Preferred**: Edit a .env file in the same directory as the script and add:
 
-    ```bash
-    export MY_WALLET_PASSWORD="your_wallet_password"
+
     ```
+    WALLET_PASSWORD=REPLACE_WITH_PASSWORD
+    ``` 
 
 4. **Configure Settings**: Rename config.yaml.example to config.yaml then edit and save it.
 

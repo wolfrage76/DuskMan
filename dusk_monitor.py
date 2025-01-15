@@ -8,15 +8,16 @@ import yaml
 import asyncio
 import aiohttp
 
+from dotenv import load_dotenv
 from rich.console import Console
 from rich.table import Table
 from rich.text import Text
 from rich import print
 # from rich.style import Style
-
-console = Console()
-
 from utilities.notifications import NotificationService
+
+load_dotenv()
+console = Console()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CONFIGURATION AND INITIALIZING
@@ -37,6 +38,8 @@ def load_config(section="GENERAL", file_path="config.yaml"):
         sys.exit(1)
 
 # Load configuration
+
+
 config = load_config('GENERAL')
 notification_config = load_config('NOTIFICATIONS')
 status_bar = load_config('STATUSBAR')
@@ -112,14 +115,28 @@ logging.basicConfig(
 # ─────────────────────────────────────────────────────────────────────────────
 # HELPER FUNCTIONS
 # ─────────────────────────────────────────────────────────────────────────────
+def get_env_variable(var_name, dotenv_key=None):
+    """
+    Retrieve an environment variable or a fallback value from .env file.
 
-def get_env_variable(var_name):
-    """Retrieve an environment variable or exit if missing."""
-    value = os.getenv(pwd_var)
+    Args:
+        var_name (str): Name of the environment variable to retrieve.
+        dotenv_key (str, optional): Key in .env file to use if var_name is not set.
+
+    Returns:
+        str: Value of the environment variable or the fallback value.
+    """
+    value = os.getenv(var_name)
     if not value:
-        logging.error(f"Error: The environment variable {pwd_var} is not set.")
-        sys.exit(1)
+        # logging.warning(f"Environment variable '{var_name}' not found. Checking .env file...")
+        value = os.getenv(dotenv_key)
+
+        if not value:
+            logging.error(f"Neither environment variable '{var_name}' nor .env key '{dotenv_key}' found.")
+            sys.exit(1)
+
     return value
+
 
 async def execute_command_async(command, log_output=True):
     """Execute a shell command asynchronously and return its output (stdout)."""
@@ -375,7 +392,8 @@ async def frequent_update_loop():
     Update the block height and balances every 20 seconds.
     Checks if the block height changes to ensure node responsiveness.
     """
-    password = get_env_variable("MY_WALLET_VARIABLE")
+    password = get_env_variable("MY_WALLET_VARIABLE", dotenv_key="WALLET_PASSWORD")
+
     loopcnt = 0
     consecutive_no_change = 0  # Counter for consecutive no-change in block height
     last_known_block_height = None  # Track the last block height
@@ -470,7 +488,7 @@ async def init_balance():
     This is for display purposes to keep data fresh, 
     even while the main staking logic might be sleeping until the next epoch.
     """
-    password = get_env_variable("MY_WALLET_VARIABLE")
+    password = get_env_variable("MY_WALLET_VARIABLE", dotenv_key="WALLET_PASSWORD")
 
     # 1) Fetch block height
     block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height")
@@ -499,7 +517,8 @@ async def stake_management_loop():
     Main staking logic. Sleeps until the next epoch after each action/no-action.
     Meanwhile, frequent_update_loop updates block height & balances for display.
     """
-    password = get_env_variable("MY_WALLET_VARIABLE")
+    password = get_env_variable("MY_WALLET_VARIABLE", dotenv_key="WALLET_PASSWORD")
+
 
     while True:
         
