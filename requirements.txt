@@ -1,0 +1,6 @@
+requests 
+pyyaml 
+rich 
+asyncio 
+aiohttp 
+python-dotenv

@@ -56,7 +56,7 @@ Dusk wallet for Tips: `eox326D2m1ohpBUFVgiF885yV7aN4sg4caA6UkAg7UUhB6JWystDE7t2b
 2. **Install Dependencies**: Install the required Python libraries:
 
     ```bash
-    pip install requests pyyaml rich asyncio aiohttp python-dotenv
+    pip install -r requirements.txts
     ```
 
 3. **Set Wallet Password Preferred**: Edit a .env file in the same directory as the script and add:
