@@ -638,10 +638,10 @@ async def stake_management_loop():
             # 1) Withdraw
             curr_cmd =f"{use_sudo} rusk-wallet --password {password} withdraw"
             curr_cmd2 =f"{use_sudo} rusk-wallet --password ###### withdraw"
-            cmd_success = await execute_command_async(curr_cmd)
+            cmd_success = await execute_command_async(curr_cmd) # TODO: have it use curr_cmd.replace('######',f"{password}"))
             if not cmd_success:
                     log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd2}", 'error')
-                    #raise Exception("CMD execution failed")
+                    raise Exception("CMD execution failed")
                 
             # 2) Stake
             curr_cmd = f"{use_sudo} rusk-wallet --password {password} stake --amt {rewards_amount}"
@@ -649,7 +649,7 @@ async def stake_management_loop():
             cmd_success = await execute_command_async(curr_cmd)
             if not cmd_success:
                     log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd2}", 'error')
-                    #raise Exception("CMD execution failed")
+                    raise Exception("CMD execution failed")
                 
             new_stake = stake_amount + rewards_amount
             log_action("Stake Completed", f"New Stake: {format_float(new_stake)}")
@@ -666,15 +666,11 @@ async def stake_management_loop():
             now_ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
             
             if shared_state["first_run"]:
-                byline = Text("\nDusk Stake Management & Monitoring: By Wolfrage", style="bold cyan")
-                #subline = Text("By Wolfrage", style="italic magenta")
-                #console.rule(byline, style="cyan")
-                #console.print(subline)
-                #console.rule(style="cyan")
-                # byline = "\nDusk Stake Management & Monitoring: By Wolfrage\n"
+                byline = Text("\nDusk Stake Management & Monitoring: By Wolfrage", style="bold blue")
+
                         
                 
-                notification_services = ["[b]"]
+                notification_services = ["[white]"]
                 if notification_config.get('discord_webhook'):
                     notification_services.append('Discord')
                 if notification_config.get('pushbullet_token'):
@@ -692,10 +688,10 @@ async def stake_management_loop():
                     services = "None"
                     
                 
-                notification_status = f'Enabled Notifications:  {services}'
+                notification_status = f'[b]Enabled Notifications:[yellow]  {services}'
                 
-                auto_status = f'\n\tEnable tmux Support:     {enable_tmux}\n\tAuto Staking Rewards:    {auto_stake_rewards}\n\tAuto Restake to Reclaim: {auto_reclaim_full_restakes}\n\t{notification_status}'
-                separator = "=" * 44
+                auto_status = f'\n\t[b]Enable tmux Support:    [/b] {enable_tmux}\n\t[b]Auto Staking Rewards:[/b]    {auto_stake_rewards}\n\t[b]Auto Restake to Reclaim: [/b]{auto_reclaim_full_restakes}\n\t{notification_status}'
+                separator = "[bold white]" + ("=" * 47) + "[/bold white]"
                 
                 console.print(byline)
                 print(separator + auto_status)
@@ -704,9 +700,8 @@ async def stake_management_loop():
                 shared_state["last_action_taken"] = f"Startup @ Block #{block_height}"
                 action = shared_state["last_action_taken"]
                 
-                
                 stats = (
-                f"\n{separator}\n"
+                f"\n{"=" * 44}\n"
                 f"  Action       : {action}\n"
                 f"  Balance      : {format_float(totBal)} DUSK\n"
                 f"    ├─ Public  :   {format_float(b['public'])} DUSK (${format_float(b['public'] * float(shared_state["price"]))})\n"
@@ -719,14 +714,14 @@ async def stake_management_loop():
 
             action = shared_state["last_action_taken"]
             
-            separator = "=" * 44  # Optional separator for aesthetic purposes
+            
             now_ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
 
             # Create a table for the data
             table = Table(title_style="bold magenta", border_style=None, show_header=False,show_lines=False, show_edge=False)
 
             # Add rows for each section
-            table.add_row("[bold cyan]Timestamp", Text(now_ts, style="bold cyan"))
+            table.add_row("[bold blue]Timestamp", Text(now_ts, style="bold blue"))
             table.add_row("[bold green]Last Action", Text(action, style="bold green"))
 
             # Add balance rows
@@ -739,9 +734,9 @@ async def stake_management_loop():
             table.add_row()
 
             # Add staked rows
-            table.add_row("Staked", f"{format_float(stake_amount)} (${format_float(stake_amount * float(shared_state['price']), 2)})")
-            table.add_row("Rewards", f"{format_float(rewards_amount)} (${format_float(rewards_amount * float(shared_state['price']), 2)})")
-            table.add_row("Reclaimable", f"{format_float(reclaimable_slashed_stake)} (${format_float(reclaimable_slashed_stake * float(shared_state['price']), 2)})", end_section=True)
+            table.add_row("[b]Staked", f"[b]{format_float(stake_amount)} (${format_float(stake_amount * float(shared_state['price']), 2)})")
+            table.add_row("[green]Rewards", f"[green]{format_float(rewards_amount)} (${format_float(rewards_amount * float(shared_state['price']), 2)})")
+            table.add_row("[orange1]Reclaimable", f"[orange1]{format_float(reclaimable_slashed_stake)} (${format_float(reclaimable_slashed_stake * float(shared_state['price']), 2)})", end_section=True)
 
             # Print the table
             console.print(separator)
