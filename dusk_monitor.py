@@ -24,6 +24,7 @@ console = Console()
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+
 def load_config(section="GENERAL", file_path="config.yaml"):
     """Load configuration from a YAML file."""
     try:
@@ -115,27 +116,21 @@ logging.basicConfig(
 # ─────────────────────────────────────────────────────────────────────────────
 # HELPER FUNCTIONS
 # ─────────────────────────────────────────────────────────────────────────────
-def get_env_variable(var_name, dotenv_key=None):
+def get_env_variable(var_name='WALLET_PASSWORD', dotenv_key='WALLET_PASSWORD'):
     """
     Retrieve an environment variable or a fallback value from .env file.
-
-    Args:
-        var_name (str): Name of the environment variable to retrieve.
-        dotenv_key (str, optional): Key in .env file to use if var_name is not set.
-
-    Returns:
-        str: Value of the environment variable or the fallback value.
     """
     value = os.getenv(var_name)
     if not value:
         # logging.warning(f"Environment variable '{var_name}' not found. Checking .env file...")
         value = os.getenv(dotenv_key)
-
         if not value:
-            logging.error(f"Neither environment variable '{var_name}' nor .env key '{dotenv_key}' found.")
+            logging.error(f"Neither environment variable '{var_name}' nor .env key '{dotenv_key}' found for wallet password.")
             sys.exit(1)
-
+            
     return value
+
+password = get_env_variable(config.get('pwd_var_name', 'WALLET_PASSWORD'), dotenv_key="WALLET_PASSWORD")
 
 
 async def execute_command_async(command, log_output=True):
@@ -392,7 +387,7 @@ async def frequent_update_loop():
     Update the block height and balances every 20 seconds.
     Checks if the block height changes to ensure node responsiveness.
     """
-    password = get_env_variable("MY_WALLET_VARIABLE", dotenv_key="WALLET_PASSWORD")
+    # password = get_env_variable("MY_WALLET_VARIABLE", dotenv_key="WALLET_PASSWORD")
 
     loopcnt = 0
     consecutive_no_change = 0  # Counter for consecutive no-change in block height
@@ -488,7 +483,7 @@ async def init_balance():
     This is for display purposes to keep data fresh, 
     even while the main staking logic might be sleeping until the next epoch.
     """
-    password = get_env_variable("MY_WALLET_VARIABLE", dotenv_key="WALLET_PASSWORD")
+    
 
     # 1) Fetch block height
     block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height")
@@ -517,7 +512,7 @@ async def stake_management_loop():
     Main staking logic. Sleeps until the next epoch after each action/no-action.
     Meanwhile, frequent_update_loop updates block height & balances for display.
     """
-    password = get_env_variable("MY_WALLET_VARIABLE", dotenv_key="WALLET_PASSWORD")
+    # password = get_env_variable("MY_WALLET_VARIABLE", dotenv_key="WALLET_PASSWORD")
 
 
     while True:
@@ -601,26 +596,27 @@ async def stake_management_loop():
                 )
 
                 # 1) Withdraw
-                curr_cmd = await execute_command_async(f"{use_sudo} rusk-wallet --password {password} withdraw")
+                curr_cmd = f"{use_sudo} rusk-wallet --password {password} withdraw"
+                curr_cmd2 = f"{use_sudo} rusk-wallet --password ####### withdraw"
                 cmd_success = await execute_command_async(curr_cmd)
                 if not cmd_success:
-                    log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
+                    log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd2}", 'error')
                     raise Exception("CMD execution failed")
                 
                 # 2) Unstake
-                curr_cmd = await execute_command_async(f"{use_sudo} rusk-wallet --password {password} unstake")
+                curr_cmd =f"{use_sudo} rusk-wallet --password {password} unstake"
+                curr_cmd2 =f"{use_sudo} rusk-wallet --password ####### unstake"
                 cmd_success = await execute_command_async(curr_cmd)
                 if not cmd_success:
-                    log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
+                    log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd2}", 'error')
                     raise Exception("CMD execution failed")
                 
                 # 3) Stake
-                curr_cmd = await execute_command_async(
-                    f"{use_sudo} rusk-wallet --password {password} stake --amt {total_restake}"
-                )
+                curr_cmd = f"{use_sudo} rusk-wallet --password {password} stake --amt {total_restake}"
+                curr_cmd2 = f"{use_sudo} rusk-wallet --password ####### stake --amt {total_restake}"
                 cmd_success = await execute_command_async(curr_cmd)
                 if not cmd_success:
-                    log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
+                    log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd2}", 'error')
                     raise Exception("CMD execution failed")
 
                 log_action("Restake Completed", f"New Stake: {format_float(float(total_restake))}")
@@ -640,17 +636,20 @@ async def stake_management_loop():
             log_action("Claim and Stake", f"Rewards: {format_float(rewards_amount)}")
 
             # 1) Withdraw
-            curr_cmd = await execute_command_async(f"{use_sudo} rusk-wallet --password {password} withdraw")
+            curr_cmd =f"{use_sudo} rusk-wallet --password {password} withdraw"
+            curr_cmd2 =f"{use_sudo} rusk-wallet --password ###### withdraw"
             cmd_success = await execute_command_async(curr_cmd)
             if not cmd_success:
-                    log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
-                    raise Exception("CMD execution failed")
+                    log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd2}", 'error')
+                    #raise Exception("CMD execution failed")
+                
             # 2) Stake
-            curr_cmd = await execute_command_async(f"{use_sudo} rusk-wallet --password {password} stake --amt {rewards_amount}")
+            curr_cmd = f"{use_sudo} rusk-wallet --password {password} stake --amt {rewards_amount}"
+            curr_cmd2 = f"{use_sudo} rusk-wallet --password ###### stake --amt {rewards_amount}"
             cmd_success = await execute_command_async(curr_cmd)
             if not cmd_success:
-                    log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
-                    raise Exception("CMD execution failed")
+                    log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd2}", 'error')
+                    #raise Exception("CMD execution failed")
                 
             new_stake = stake_amount + rewards_amount
             log_action("Stake Completed", f"New Stake: {format_float(new_stake)}")
@@ -693,7 +692,7 @@ async def stake_management_loop():
                     services = "None"
                     
                 
-                notification_status = f'Enabled Notifications:   {services}'
+                notification_status = f'Enabled Notifications:  {services}'
                 
                 auto_status = f'\n\tEnable tmux Support:     {enable_tmux}\n\tAuto Staking Rewards:    {auto_stake_rewards}\n\tAuto Restake to Reclaim: {auto_reclaim_full_restakes}\n\t{notification_status}'
                 separator = "=" * 44
@@ -715,7 +714,7 @@ async def stake_management_loop():
                 f"  Staked       : {format_float(stake_amount)} DUSK (${format_float(stake_amount * float(shared_state["price"]))})\n"
                 f"  Rewards      : {format_float(rewards_amount)} DUSK (${format_float(rewards_amount * float(shared_state["price"]))})\n"
                 f"  Reclaimable  : {format_float(reclaimable_slashed_stake)} DUSK (${format_float(reclaimable_slashed_stake * float(shared_state["price"]))})\n"
-            )
+                    )
                 notifier.notify(stats, shared_state)
 
             action = shared_state["last_action_taken"]
