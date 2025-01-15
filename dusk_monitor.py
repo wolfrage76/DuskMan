@@ -668,8 +668,6 @@ async def stake_management_loop():
             if shared_state["first_run"]:
                 byline = Text("\nDusk Stake Management & Monitoring: By Wolfrage", style="bold blue")
 
-                        
-                
                 notification_services = ["[white]"]
                 if notification_config.get('discord_webhook'):
                     notification_services.append('Discord')

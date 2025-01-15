@@ -44,13 +44,13 @@ Dusk wallet for Tips: `eox326D2m1ohpBUFVgiF885yV7aN4sg4caA6UkAg7UUhB6JWystDE7t2b
 
 ---
 
-### Steps
+### Steps (For Linux but Windows is similar)
 
 1. **Clone the Repository**:
 
     ```bash
     git clone https://github.com/wolfrage76/dusk-manager.git
-    cd <your-repo-name>
+    cd dusk-manager
     ```
 
 2. **Install Dependencies**: Install the required Python libraries:
@@ -59,22 +59,46 @@ Dusk wallet for Tips: `eox326D2m1ohpBUFVgiF885yV7aN4sg4caA6UkAg7UUhB6JWystDE7t2b
     pip install -r requirements.txt
     ```
 
-3. **Set Wallet Password Preferred**: Edit a .env file in the same directory as the script and add:
-
-
-    ```
-    WALLET_PASSWORD=REPLACE_WITH_PASSWORD
-    ``` 
-
-4. **Configure Settings**: Rename config.yaml.example to config.yaml then edit and save it.
-
-
-5. **Run the Script**: Start the monitoring script:
+3. **Set Wallet Password**: 
+In the same directory as the script:
 
     ```bash
-    python dusk_monitor.py
+    touch .env
+    chmod 600 .env
+    ```
+  This will allow only the file owner to view the file.
+
+4. **Edit the file with your editor of choice**:
+  For example using nano:
+    ```bash
+    nano .env
     ```
 
+5. **Add the following line**: Replace WALLETPASSWORD with your password:
+
+    ```WALLET_PASSWORD=WALLETPASSWORD```
+
+6. **Configure Settings**: Rename config.yaml.example to config.yaml
+    ```bash
+    mv config.yaml.example config.yaml
+    ```
+
+7. **Edit config.yaml**: Using nano as an example, edit then save your changes:
+    ```bash
+    nano config.yaml
+    ```
+
+8. **Run the Script in Foreground**:
+
+    ```bash
+    python dusk_manager.py
+    ```  
+9. **Or Run script in the background**:
+    ```bash
+    screen -dmS dusk_monitor python dusk_manager.py
+    ```
+10. **Or run as a service**:
+    Instructions coming later
 ---
 
 ## Notification Configuration
@@ -87,6 +111,7 @@ To enable notifications for specific services, provide the required credentials 
 | Pushbullet   | `pushbullet_token`                                    |
 | Telegram     | `telegram_bot_token`, `telegram_chat_id`              |
 | Pushover     | `pushover_user_key`, `pushover_app_token`             |
+| Webhook      | `webhook_url`            |
 
 ---
 
