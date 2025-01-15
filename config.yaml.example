@@ -18,6 +18,7 @@ NOTIFICATIONS:
   telegram_chat_id:    # Leave Blank to Disable
   pushover_user_key:   # Leave Blank to Disable
   pushover_app_token:  # Leave Blank to Disable
+  webhook_url:         #"https://your-webhook-url.com/endpoint"
 
 STATUSBAR: # Determines what to show in bottom statusbar and tmux statusbar
   show_current_block: True

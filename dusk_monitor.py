@@ -185,7 +185,7 @@ def format_float(value, places=4):
 
 def log_action(action, details, type='info'):
     """Log actions to file/console and send notifications."""
-    notifier.notify(f"{action}: {details}")
+    notifier.notify(f"{action}: {details}", shared_state)
     
     if type == 'debug':
         logging.debug(f"\n{action}: {details}")
@@ -404,7 +404,7 @@ async def frequent_update_loop():
         if consecutive_no_change >= 10:
             message = f"WARNING! Block height has not changed for {consecutive_no_change * 10} seconds.\nLast height: {last_known_block_height}"
             logging.error(message)
-            notifier.notify(message)
+            notifier.notify(message, shared_state)
             consecutive_no_change = 0  # Reset after notifying to avoid spamming
             await asyncio.sleep(1)
             continue # Need to double check this
@@ -457,7 +457,7 @@ async def frequent_update_loop():
         if consecutive_low_peers >= 240:
             message = f"WARNING! Low peer count for {consecutive_low_peers * 10} seconds.\nCurrent Count: {peer_count}"
             logging.error(message)
-            notifier.notify(message)
+            notifier.notify(message, shared_state)
             consecutive_low_peers = 0  # Reset after notifying to avoid spamming
 
         loopcnt += 1
@@ -665,6 +665,8 @@ async def stake_management_loop():
                     notification_services.append('Telegram')
                 if notification_config.get('pushover_user_key') and notification_config.get('pushover_app_token'):
                     notification_services.append('Pushover')
+                if notification_config.get('webhook_url'):
+                    notification_services.append('Webhook')
                     
                 if notification_services:   
                     services = " ".join(notification_services)
@@ -695,7 +697,7 @@ async def stake_management_loop():
                 f"  Rewards      : {format_float(rewards_amount)} DUSK (${format_float(rewards_amount * float(shared_state["price"]))})\n"
                 f"  Reclaimable  : {format_float(reclaimable_slashed_stake)} DUSK (${format_float(reclaimable_slashed_stake * float(shared_state["price"]))})\n"
             )
-                notifier.notify(stats)
+                notifier.notify(stats, shared_state)
 
             action = shared_state["last_action_taken"]
             

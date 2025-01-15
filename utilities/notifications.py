@@ -1,8 +1,9 @@
 import requests
 import logging
+import json
 
 class NotificationService:
-    def __init__(self, config):
+    def __init__(self, config, sharedinfo=None):
         """
         Initialize the notification service with configuration.
 
@@ -21,8 +22,9 @@ class NotificationService:
         self.telegram_chat_id = config.get('telegram_chat_id')
         self.pushover_user_key = config.get('pushover_user_key')
         self.pushover_app_token = config.get('pushover_app_token')
+        self.webhook_url = config.get('webhook_url')
 
-    def notify(self, message):
+    def notify(self, message, shared_state=None):
         """
         Send notifications to all enabled services.
         """
@@ -38,7 +40,40 @@ class NotificationService:
             
         if self.pushover_user_key and self.pushover_app_token:
             self.send_pushover_notification(message.replace(separator,'').replace(separator,'')  )
+        if self.webhook_url:
+            self.send_shared_state_webhook(shared_state )
 
+
+    def send_shared_state_webhook(self,shared_state):
+        """
+        Sends the shared_state object as a JSON payload to the specified webhook URL.
+
+        Args:
+            shared_state (dict): The shared state object to send.
+            webhook_url (str): The destination webhook URL.
+
+        Returns:
+            bool: True if the webhook was sent successfully, False otherwise.
+        """
+        webhook_url = self.webhook_url
+        try:
+            headers = {'Content-Type': 'application/json'}
+            payload = json.dumps(shared_state, indent=2)
+            
+            logging.debug(f"Sending shared state to webhook URL: {webhook_url}")
+            response = requests.post(webhook_url, headers=headers, data=payload)
+            
+            if response.status_code == 200:
+                logging.debug("Webhook sent successfully.")
+                return True
+            else:
+                logging.error(f"Failed to send webhook. Status Code: {response.status_code}, Response: {response.text}")
+                return False
+        except Exception as e:
+            logging.error(f"Error sending webhook: {e}")
+            return False
+
+        
     def send_discord_notification(self, message):
         """
         Send a notification to Discord using a webhook.
@@ -96,3 +131,5 @@ class NotificationService:
             logging.debug("Pushover notification sent successfully.")
         except Exception as e:
             logging.error(f"Error sending Pushover notification: {e}")
+    
+    
