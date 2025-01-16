@@ -705,8 +705,10 @@ async def stake_management_loop():
                     notification_services.append('Pushover')
                 if notification_config.get('webhook_url'):
                     notification_services.append('Webhook')
-                    
-                if notification_services:   
+                
+                if len(notification_services) > 2 and notification_services:
+                    services = "\n\t  " + " ".join(notification_services)
+                elif len(notification_services) <= 2 and notification_services:   
                     services = " ".join(notification_services)
                 else:
                     services = "None"
