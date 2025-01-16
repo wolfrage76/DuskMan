@@ -1,6 +1,9 @@
 # DUSK Monitoring and Notification Script
+![image](https://github.com/user-attachments/assets/48de7b01-b320-4602-84e4-32146081dd02)
 
-This Python script automates the monitoring, and management of **DUSK blockchain staking**, balances, compounding and epochs. It efficiently handles claiming and restaking rewards, sends notifications via multiple services, and optionally (still in development) updates the TMUX status bar with real-time information.
+This Python script automates the monitoring, and management of **DUSK blockchain staking**, balances, compounding, epochs and system health. It efficiently handles claiming and restaking rewards, sends notifications via multiple services, and optionally updates the TMUX status bar with real-time information.
+
+NOTE: The Auto Staking of rewards and/or Auto Restakes for reclaiming slashes CAN be disabled via the config. 
 
 ---
 
@@ -22,7 +25,7 @@ Dusk wallet for Tips: `eox326D2m1ohpBUFVgiF885yV7aN4sg4caA6UkAg7UUhB6JWystDE7t2b
     - **Pushbullet**
     - **Telegram**
     - **Pushover**
-  - Configurable per service using environment variables or script settings.
+    - **Webhook**
 
 - **Efficient Execution**:
   - Calculates sleep times based on epochs to minimize unnecessary processing.
@@ -41,46 +44,61 @@ Dusk wallet for Tips: `eox326D2m1ohpBUFVgiF885yV7aN4sg4caA6UkAg7UUhB6JWystDE7t2b
 
 ---
 
-### Steps
+### Steps (For Linux but Windows is similar)
 
 1. **Clone the Repository**:
 
     ```bash
-    git clone https://github.com/wolfrage76/dusk-compounder.git
-    cd <your-repo-name>
+    git clone https://github.com/wolfrage76/dusk-manager.git
+    cd dusk-manager
     ```
 
 2. **Install Dependencies**: Install the required Python libraries:
 
     ```bash
-    pip install requests pyyaml
+    pip install -r requirements.txt
     ```
 
-3. **Set Wallet Password**: Export your wallet password as an environment variable. For example:
+3. **Set Wallet Password**: 
+In the same directory as the script:
 
     ```bash
-    export MY_SUDO_PASSWORD="your_wallet_password"
+    touch .env
+    chmod 600 .env
+    ```
+  This will allow only the file owner to view the file.
+
+4. **Edit the file with your editor of choice**:
+  For example using nano:
+    ```bash
+    nano .env
     ```
 
-4. **Configure Notifications**: Open the script and edit the config dictionary to enable and set up the notification services you want to use:
+5. **Add the following line**: Replace WALLETPASSWORD with your password:
 
-    ```python
-    notification_config = {
-        "discord_webhook": None, # Replace Nonewith your webhook URL: "https://discord.com/api/webhooks/..." in quotes
-        "pushbullet_token": None,
-        "telegram_bot_token": None,
-        "telegram_chat_id": None
-        "pushover_user_key": None,
-        "pushover_app_token": None
-    }
+    ```WALLET_PASSWORD=WALLETPASSWORD```
+
+6. **Configure Settings**: Rename config.yaml.example to config.yaml
+    ```bash
+    mv config.yaml.example config.yaml
     ```
 
-5. **Run the Script**: Start the monitoring script:
+7. **Edit config.yaml**: Using nano as an example, edit then save your changes:
+    ```bash
+    nano config.yaml
+    ```
+
+8. **Run the Script in Foreground**:
 
     ```bash
-    python dusk_monitor.py
+    python dusk_manager.py
+    ```  
+9. **Or Run script in the background**:
+    ```bash
+    screen -dmS dusk_monitor python dusk_manager.py
     ```
-
+10. **Or run as a service**:
+    Instructions coming later
 ---
 
 ## Notification Configuration
@@ -93,6 +111,7 @@ To enable notifications for specific services, provide the required credentials 
 | Pushbullet   | `pushbullet_token`                                    |
 | Telegram     | `telegram_bot_token`, `telegram_chat_id`              |
 | Pushover     | `pushover_user_key`, `pushover_app_token`             |
+| Webhook      | `webhook_url`                                         |
 
 ---
 
