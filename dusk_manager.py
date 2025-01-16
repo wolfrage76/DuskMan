@@ -809,7 +809,26 @@ async def realtime_display(enable_tmux=False):
                     first_run = False
                     await asyncio.sleep(3)  # Pause briefly before switching to real-time display
                     continue 
+                charclr =str()
                 
+                if remain_seconds <= 3600: # red <1hr
+                    charclr = RED
+                elif remain_seconds <= 7200: # yellow <2hr
+                    charclr = YELLOW
+                elif remain_seconds <= 10800: # green <3hr
+                    charclr = GREEN
+                else:
+                    charclr = LIGHT_WHITE
+                    
+                timer = f"Next:{charclr} {disp_time} "
+                chg24=""
+                if shared_state["usd_24h_change"] > 0:
+                    chg24 = f"({GREEN}+{shared_state["usd_24h_change"]:.2f}%{DEFAULT})"
+                elif shared_state["usd_24h_change"] < 0:
+                    chg24= f"({RED}{shared_state["usd_24h_change"]:.2f}%{DEFAULT})"
+                else:
+                    chg24= f"({DEFAULT}{shared_state["usd_24h_change"]:.2f}%)"
+                usd = f"$USD: {format_float(shared_state["price"],3)} {chg24} 24h | "
                 
                 peercolor = RED
                 if int(shared_state['peer_count']) > 40:
@@ -823,9 +842,9 @@ async def realtime_display(enable_tmux=False):
                 realtime_content = (
                     f"{LIGHT_WHITE}======{DEFAULT} {currenttime} Block: {LIGHT_BLUE}#{blk} {DEFAULT}Peers: {peercolor}{shared_state['peer_count']}{DEFAULT} {LIGHT_WHITE}=======\n"
                     f"{CYAN}Last Action{DEFAULT}   | {CYAN}{last_act}{DEFAULT}\n"
-                    f"{LIGHT_GREEN}Next Check    {DEFAULT}| {disp_time} ({donetime}){DEFAULT}\n"
+                    f"{LIGHT_GREEN}Next Check    {DEFAULT}| {charclr}{disp_time}{DEFAULT} ({donetime}){DEFAULT}\n"
                     f"              |\n"
-                    f"{LIGHT_WHITE}Balance{DEFAULT}       | {LIGHT_WHITE}  @ ${format_float(price,3)} USD{DEFAULT}\n"
+                    f"{LIGHT_WHITE}Balance{DEFAULT}       | {LIGHT_WHITE}  @ ${format_float(price,3)} USD{DEFAULT} {chg24}\n"
                     f"  {LIGHT_WHITE}├─ {YELLOW}Public   {DEFAULT}| {YELLOW}{format_float(b['public'])} (${format_float(b['public'] * price, 2)}){DEFAULT}\n"
                     f"  {LIGHT_WHITE}└─ {BLUE}Shielded {DEFAULT}| {BLUE}{format_float(b['shielded'])} (${format_float(b['shielded'] * price, 2)}){DEFAULT}\n"
                     f"     {LIGHT_WHITE}   Total {DEFAULT}| {LIGHT_WHITE}{format_float(tot_bal)} DUSK (${format_float((tot_bal) * price, 2)}){DEFAULT}\n"
@@ -847,28 +866,11 @@ async def realtime_display(enable_tmux=False):
                     error_txt = str()
                 last_txt = str()
                 
-                chg24=""
-                if shared_state["usd_24h_change"] > 0:
-                    chg24 = f"({GREEN}+{shared_state["usd_24h_change"]:.2f}%{DEFAULT})"
-                elif shared_state["usd_24h_change"] < 0:
-                    chg24= f"({RED}{shared_state["usd_24h_change"]:.2f}%{DEFAULT})"
-                else:
-                    chg24= f"({DEFAULT}{shared_state["usd_24h_change"]:.2f}%)"
-                usd = f"$USD: {format_float(shared_state["price"],3)} {chg24} | "
+                
                 
                 donetime = f"{DEFAULT}({shared_state["completion_time"]}) "
                 
-                charclr =str()
                 
-                if remain_seconds <= 3600: # red <1hr
-                    charclr = RED
-                elif remain_seconds <= 7200: # yellow <2hr
-                    charclr = YELLOW
-                elif remain_seconds <= 10800: # green <3hr
-                    charclr = GREEN
-                else:
-                    charclr = LIGHT_WHITE
-                timer = f"Next:{charclr} {disp_time} "
 
                 peercnt = f"Peers: {shared_state["peer_count"]}"
                 splitter= " | "
