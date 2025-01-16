@@ -741,7 +741,7 @@ async def stake_management_loop():
             action = shared_state["last_action_taken"]
             
             
-            now_ts = str(datetime.datetime.now().strftime('%Y-%m-%d %H:%M'))
+            now_ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
 
             # Fetch required data
             block_height = shared_state["block_height"]
@@ -751,7 +751,7 @@ async def stake_management_loop():
             if not first_run:
                 # Generate log entry
                 log_entry = (
-                    f"=============== Log Entry @ {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')} ===============\n"
+                    f"=============== Log Entry @ {now_ts} ===============\n"
                     f"Block Height  : #{block_height}\n"
                     f"Last Action   : {action}\n"
                     f"Staked        : {format_float(st_info['stake_amount'])} (${format_float(st_info['stake_amount'] * shared_state['price'], 2)})\n"
@@ -760,14 +760,14 @@ async def stake_management_loop():
                     f"\n"
                     #f"==========================================================================="
                 )
-                log_entries.append(log_entry)
-
+                log_entries.append(log_entry)  # TODO: Maybe limit how many log entries are stored for displaying
+                
                 # Display logs above the real-time display
                 console.clear()
                 for entry in log_entries:
                     console.print(entry)
 
-            # Mark first run as completed after the first iteration
+            # Mark first run as completed after the first iteration 
             first_run = False
 
         # Sleep until near the next epoch
@@ -823,12 +823,12 @@ async def realtime_display(enable_tmux=False):
                 timer = f"Next:{charclr} {disp_time} "
                 chg24=""
                 if shared_state["usd_24h_change"] > 0:
-                    chg24 = f"({GREEN}+{shared_state["usd_24h_change"]:.2f}%{DEFAULT})"
+                    chg24 = f"({GREEN}+{shared_state["usd_24h_change"]:.2f}%{DEFAULT} 24h)"
                 elif shared_state["usd_24h_change"] < 0:
-                    chg24= f"({RED}{shared_state["usd_24h_change"]:.2f}%{DEFAULT})"
+                    chg24= f"({RED}{shared_state["usd_24h_change"]:.2f}%{DEFAULT} 24h)"
                 else:
-                    chg24= f"({DEFAULT}{shared_state["usd_24h_change"]:.2f}%)"
-                usd = f"$USD: {format_float(shared_state["price"],3)} {chg24} 24h | "
+                    chg24= f"({DEFAULT}{shared_state["usd_24h_change"]:.2f}% 24h)"
+                usd = f"$USD: {format_float(shared_state["price"],3)} {chg24} | "
                 
                 peercolor = RED
                 if int(shared_state['peer_count']) > 40:
