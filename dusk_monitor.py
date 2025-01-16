@@ -132,6 +132,10 @@ def get_env_variable(var_name='WALLET_PASSWORD', dotenv_key='WALLET_PASSWORD'):
 
 password = get_env_variable(config.get('pwd_var_name', 'WALLET_PASSWORD'), dotenv_key="WALLET_PASSWORD")
 
+def remove_ansi(text):
+    # Regular expression to match ANSI escape sequences
+    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+    return ansi_escape.sub('', text)
 
 async def execute_command_async(command, log_output=True):
     """Execute a shell command asynchronously and return its output (stdout)."""
@@ -339,7 +343,7 @@ async def sleep_with_feedback(seconds_to_sleep, msg=None):
     completion_time = (datetime.datetime.now() + datetime.timedelta(seconds=seconds_to_sleep)).strftime('%H:%M')
 
     shared_state["remain_time"] = seconds_to_sleep
-    shared_state["completion_time"] = "@" + completion_time
+    shared_state["completion_time"] = "@ " + completion_time
     
     while shared_state["remain_time"] > 0:
         interval = min(1, shared_state["remain_time"])
@@ -348,7 +352,7 @@ async def sleep_with_feedback(seconds_to_sleep, msg=None):
         shared_state["remain_time"] -= interval
 
     # Optionally clear or log
-    sys.stdout.write("\r" + (" " * 100) + "\r")
+    sys.stdout.write("\r" + (" " * 120) + "\r")
     sys.stdout.flush()
 
 async def sleep_until_next_epoch(block_height, buffer_blocks=60, msg=None):
@@ -426,8 +430,8 @@ async def frequent_update_loop():
         last_known_block_height = current_block_height
         shared_state["block_height"] = current_block_height
         
-        # Perform balance and stake-info updates every 30 loops (e.g., 5 minutes)
-        if loopcnt >= 30:
+        # Perform balance and stake-info updates every X  loops (e.g., 30 is 5 minutes)
+        if loopcnt >= 33:
             pub_bal, shld_bal = await get_wallet_balances(password)
             shared_state["balances"]["public"] = pub_bal
             shared_state["balances"]["shielded"] = shld_bal
@@ -668,7 +672,7 @@ async def stake_management_loop():
             if shared_state["first_run"]:
                 byline = Text("\nDusk Stake Management & Monitoring: By Wolfrage", style="bold blue")
 
-                notification_services = ["[white]"]
+                notification_services = []
                 if notification_config.get('discord_webhook'):
                     notification_services.append('Discord')
                 if notification_config.get('pushbullet_token'):
@@ -686,9 +690,9 @@ async def stake_management_loop():
                     services = "None"
                     
                 
-                notification_status = f'[b]Enabled Notifications:[yellow]  {services}'
+                notification_status = f'Enabled Notifications:[yellow]   {services}\n'
                 
-                auto_status = f'\n\t[b]Enable tmux Support:    [/b] {enable_tmux}\n\t[b]Auto Staking Rewards:[/b]    {auto_stake_rewards}\n\t[b]Auto Restake to Reclaim: [/b]{auto_reclaim_full_restakes}\n\t{notification_status}'
+                auto_status = f'\n\tEnable tmux Support:     {enable_tmux}\n\tAuto Staking Rewards:    {auto_stake_rewards}\n\tAuto Restake to Reclaim: {auto_reclaim_full_restakes}\n\t{notification_status}'
                 separator = "[bold white]" + ("=" * 47) + "[/bold white]"
                 
                 console.print(byline)
@@ -713,14 +717,13 @@ async def stake_management_loop():
             action = shared_state["last_action_taken"]
             
             
-            now_ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
+            now_ts = str(datetime.datetime.now().strftime('%Y-%m-%d %H:%M'))
 
             # Create a table for the data
             table = Table(title_style="bold magenta", border_style=None, show_header=False,show_lines=False, show_edge=False)
 
             # Add rows for each section
-            table.add_row("[bold blue]Timestamp", Text(now_ts, style="bold blue"))
-            table.add_row("[bold green]Last Action", Text(action, style="bold green"))
+            table.add_row(Text(now_ts, style="green"),Text(action, style="green"),end_section=True)
 
             # Add balance rows
                 
@@ -734,12 +737,14 @@ async def stake_management_loop():
             # Add staked rows
             table.add_row("[b]Staked", f"[b]{format_float(stake_amount)} (${format_float(stake_amount * float(shared_state['price']), 2)})")
             table.add_row("[green]Rewards", f"[green]{format_float(rewards_amount)} (${format_float(rewards_amount * float(shared_state['price']), 2)})")
-            table.add_row("[orange1]Reclaimable", f"[orange1]{format_float(reclaimable_slashed_stake)} (${format_float(reclaimable_slashed_stake * float(shared_state['price']), 2)})", end_section=True)
+            table.add_row("[magenta]Reclaimable", f"[magenta]{format_float(reclaimable_slashed_stake)} (${format_float(reclaimable_slashed_stake * float(shared_state['price']), 2)})", end_section=True)
 
             # Print the table
+            sys.stdout.write("\r" + (" " * 120) + "\r")
+            sys.stdout.flush()
             console.print(separator)
             console.print(table)
-            console.print(separator)
+            console.print(separator  + "\n")
 
 
         # Sleep until near the next epoch
@@ -783,22 +788,38 @@ async def realtime_display(isTmux=False):
             else:
                 error_txt = str()
             last_txt = str()
-            blk = f"\r> Blk: #{blk} | "
-            stk = f"Stk: {format_float(st_info['stake_amount'])} | "
-            rcl = f"Rcl: {format_float(st_info['reclaimable_slashed_stake'])} | "
-            rwd = f"Rwd: {format_float(st_info['rewards_amount'])} | "
-            bal = "Bal: "
-            p = f"P:{format_float(b['public'])}"
-            s = f"S:{format_float(b['shielded'])}"
+            blk = f"\r Blk: \033[32m#{blk} \033[0m| "
+            stk = f"Stk: \033[37m{format_float(st_info['stake_amount'])} \033[0m| "
+            rcl = f"Rcl: \033[35m{format_float(st_info['reclaimable_slashed_stake'])} \033[0m| "
+            rwd = f"Rwd: \033[32m{format_float(st_info['rewards_amount'])} \033[0m| "
+            bal = "Bal: \033[32m"
+            p = f"P:\033[34m{format_float(b['public'])}\033[0m"
+            s = f"S:\033[33m{format_float(b['shielded'])}\033[0m"
             
             chg24=""
             if shared_state["usd_24h_change"] > 0:
-                chg24 = f"(+{shared_state["usd_24h_change"]:.2f}%)"
+                chg24 = f"(\033[32m+{shared_state["usd_24h_change"]:.2f}%\033[0m)"
             elif shared_state["usd_24h_change"] < 0:
+                chg24= f"(\033[31m{shared_state["usd_24h_change"]:.2f}%\033[0m)"
+            else:
                 chg24= f"({shared_state["usd_24h_change"]:.2f}%)"
             usd = f"$USD: {format_float(shared_state["price"],3)} {chg24} | "
             timer = f"Next: {disp_time} "
-            donetime = f"({shared_state["completion_time"]}) "
+            
+            donetime = f"\033[0m({shared_state["completion_time"]}) "
+            
+            charclr =str()
+            if remain_seconds <= 3600: # red <1hr
+                charclr =f"\033[31m"
+            elif remain_seconds <= 7200: # yellow <2hr
+                charclr =f"\033[33m"
+            elif remain_seconds <= 10800: # green <3hr
+                charclr =f"\033[32m"
+            else:
+                charclr =f"\033[37m"
+            timer = timer.replace('Next:', f'Next:{charclr}')
+            
+
             peercnt = f"Peers: {shared_state["peer_count"]}"
             splitter= " | "
             
@@ -832,7 +853,16 @@ async def realtime_display(isTmux=False):
 
                 
             status_txt = f"\r> {blk}{stk}{rcl}{rwd}{bal}{p}{spacer}{s}{splitter}{usd}{last_txt}{timer}{donetime}{peercnt} {error_txt}      \r"
-            
+            status_txt = (
+                f"\r\033[32m>\033[0m {blk}\033[0m"  # Green
+                f"{stk}\033[0m"      # White
+                f"{rcl}\033[0m"      # Magenta
+                f"{rwd}\033[0m"      # Green
+                f"{bal}\033[0m"      # White
+                f"{p}\033[0m"        # Blue
+                f"{spacer}{s}\033[0m"  # Yellow
+                f"{splitter}{usd}{last_txt}{timer}{donetime}{peercnt} {error_txt}      \r"
+            )
             sys.stdout.write(status_txt)
             sys.stdout.flush()
         except Exception as e:
@@ -840,11 +870,11 @@ async def realtime_display(isTmux=False):
         
         if enable_tmux:
             try:
-                last_txt = f" Last: {shared_state["last_action_taken"]} |"
+                last_txt = f" Last: {shared_state["last_action_taken"]} | "
             
-                status_txt = f"\r> {blk}{stk}{rcl}{rwd}{bal}{p}{spacer}{s}{splitter}{usd}{last_txt}{timer}{donetime}{peercnt} {error_txt}      \r"
+                status_txt = f"\r> [{blk}{stk}{rcl}{rwd}{bal}{p}{spacer}{s}{splitter}{usd}{last_txt}{timer}{donetime}{peercnt} {error_txt}      \r"
 
-                subprocess.check_call(["tmux", "set-option", "-g", "status-left", status_txt])
+                subprocess.check_call(["tmux", "set-option", "-g", "status-left", remove_ansi(status_txt)])
             except subprocess.CalledProcessError:
                 config.enable_tmux = False
                 enable_tmux = False
