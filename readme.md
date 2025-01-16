@@ -95,7 +95,7 @@ In the same directory as the script:
     ```  
 9. **Or Run script in the background**:
     ```bash
-    screen -dmS dusk_monitor python dusk_manager.py
+    screen -dmS dusk_manager python dusk_manager.py
     ```
 10. **Or run as a service**:
     Instructions coming later
