@@ -9,7 +9,7 @@ GENERAL:
   use_sudo: True # ONLY needs to be set True if you NEED to use sudo to run your ruskquery and rusk-wallet commands.
   
   min_rewards: 1 # Minimum amount of rewards to consider claiming rewards to stake
-  mind_slash: 1 # Minimum amount of slashed rewards from topoffs before considering restaking to reclaim
+  min_slash: 1 # Minimum amount of slashed rewards from topoffs before considering restaking to reclaim
   
   # Replaced with using .env file, but still works as an alternative:
   # pwd_var_name: MY_WALLET_VARIABLE  # NAME OF THE ENVIRONMENT VARIABLE WITH THE PASSWORD! DO_NOT_ PUT IN YOUR DAMN PASSWORD HERE, FFS!
