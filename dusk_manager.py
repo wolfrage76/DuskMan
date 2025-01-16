@@ -46,7 +46,7 @@ notification_config = load_config('NOTIFICATIONS')
 status_bar = load_config('STATUSBAR')
 
 min_rewards = config.get('min_rewards', 1)
-min_slash = config.get('min_slash', 1)
+min_slashed = config.get('min_slash', 1)
 buffer_blocks = config.get('buffer_blocks', 60)
 min_stake_amount = config.get('min_stake_amount', 1000)
 min_peers = config.get('min_peers', 10)
