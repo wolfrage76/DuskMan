@@ -45,7 +45,8 @@ config = load_config('GENERAL')
 notification_config = load_config('NOTIFICATIONS')
 status_bar = load_config('STATUSBAR')
 
-
+min_rewards = config.get('min_rewards', 1)
+min_slash = config.get('min_slash', 1)
 buffer_blocks = config.get('buffer_blocks', 60)
 min_stake_amount = config.get('min_stake_amount', 1000)
 min_peers = config.get('min_peers', 10)
@@ -327,11 +328,11 @@ def calculate_downtime_loss(rewards_per_epoch, downtime_epochs=1):
 
 def should_unstake_and_restake(reclaimable_slashed_stake, downtime_loss):
     """Determine if unstaking/restaking is worthwhile."""
-    return auto_reclaim_full_restakes and (reclaimable_slashed_stake > 1 and reclaimable_slashed_stake >= downtime_loss)
+    return auto_reclaim_full_restakes and (reclaimable_slashed_stake > config.get('min_slashed',1) and reclaimable_slashed_stake >= downtime_loss)
 
 def should_claim_and_stake(rewards, incremental_threshold):
     """Determine if claiming and staking rewards is worthwhile."""
-    return auto_stake_rewards and (rewards > 1 and rewards >= incremental_threshold)
+    return auto_stake_rewards and (rewards > config.get('min_rewards',1) and rewards >= incremental_threshold)
 
 def format_hms(seconds):
     """
