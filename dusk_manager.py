@@ -473,6 +473,7 @@ async def frequent_update_loop():
                 shared_state["volume"]  = dusk_data.get("usd_24h_vol", "N/A")
                 shared_state["usd_24h_change"]  = dusk_data.get("usd_24h_change", "N/A")
                 
+                
             loopcnt = 0  # Reset loop count after update
         
         
@@ -509,6 +510,8 @@ async def init_balance():
         Init display values
     """
     dusk_data = await fetch_dusk_data()
+    if not dusk_data:
+        dusk_data = {}
     shared_state["price"] = dusk_data.get("usd", "N/A")
     shared_state["market_cap"]  = dusk_data.get("usd_market_cap", "N/A")
     shared_state["volume"]  = dusk_data.get("usd_24h_vol", "N/A")
@@ -523,13 +526,7 @@ async def init_balance():
     pub_bal, shld_bal = await get_wallet_balances(password)
     shared_state["balances"]["public"] = pub_bal
     shared_state["balances"]["shielded"] = shld_bal
-    
-    dusk_data = await fetch_dusk_data()
-    if dusk_data:
-        shared_state["price"] = dusk_data.get("usd", "N/A")
-        shared_state["market_cap"]  = dusk_data.get("usd_market_cap", "N/A")
-        shared_state["volume"]  = dusk_data.get("usd_24h_vol", "N/A")
-        shared_state["usd_24h_change"]  = dusk_data.get("usd_24h_change", "N/A")
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -545,7 +542,7 @@ async def stake_management_loop():
 
     first_run = True
 
-    log_entries = []
+    c.log_entries = []
     while True:
         
         try:
@@ -757,25 +754,23 @@ async def stake_management_loop():
             if not first_run:
                 # Generate log entry
                 log_entry = (
-                    f"\n\t=============== Log Entry @ {now_ts} ===============\n"
-                    f"\tBlock Height  : #{block_height}\n"
-                    f"\tLast Action   : {action}\n"
-                    f"\tStaked        : {format_float(st_info['stake_amount'])} (${format_float(st_info['stake_amount'] * shared_state['price'], 2)})\n"
-                    f"\tRewards       : {format_float(st_info['rewards_amount'])} (${format_float(st_info['rewards_amount'] * shared_state['price'], 2)})\n"
-                    f"\tReclaimable   : {format_float(st_info['reclaimable_slashed_stake'])} (${format_float(st_info['reclaimable_slashed_stake'] * shared_state['price'], 2)})\n"
-                    f"\t\n"
-                    #f"==========================================================================="
+                    f"\n\t==== Activity @{now_ts}====\n"
+                    f"\n"
+                    f"\t Current Block : #{block_height}\n"
+                    f"\t Last Action   : {action}\n"
+                    f"\t Staked        : {format_float(st_info['stake_amount'])} (${format_float(st_info['stake_amount'] * shared_state['price'], 2)})\n"
+                    f"\t Rewards       : {format_float(st_info['rewards_amount'])} (${format_float(st_info['rewards_amount'] * shared_state['price'], 2)})\n"
+                    f"\t Reclaimable   : {format_float(st_info['reclaimable_slashed_stake'])} (${format_float(st_info['reclaimable_slashed_stake'] * shared_state['price'], 2)})\n"
+                    f"\t \n"
                 )
                 
-                if len(log_entries) > 20:
-                    log_entries.pop(0)
-                log_entries.append(log_entry)  # TODO: Maybe limit how many log entries are stored for displaying
-                
-                c.log_entries = log_entries
+                if len(c.log_entries) > 20:
+                    c.log_entries.pop(0)
+                c.log_entries.append(log_entry)
                 
                 # Display logs above the real-time display
                 console.clear()
-                for entry in log_entries:
+                for entry in c.log_entries:
                     console.print(entry)
 
             # Mark first run as completed after the first iteration 
@@ -800,7 +795,7 @@ async def realtime_display(enable_tmux=False):
     """
     first_run = True
 
-    with Live(console=console, refresh_per_second=1, auto_refresh=False) as live:
+    with Live(console=console, refresh_per_second=10, auto_refresh=False) as live:
         while True:
             try:
                 blk = shared_state["block_height"]
