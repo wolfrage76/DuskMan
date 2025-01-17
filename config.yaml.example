@@ -16,6 +16,10 @@ GENERAL:
   #                                    # Make sure you read the instructions on exporting the environment variable.
   #                                    # OPTIONAL.  See instructions for .env file instead
   
+WEB_DASHBOARD:
+  enable_dashboard: True
+  dash_port: 5000
+  dash_ip: 0.0.0.0 # Defaults to 0.0.0.0 for any IP
 
 NOTIFICATIONS:
   discord_webhook:     # Insert webhook to activate. Example: https://discord.com/api/webhooks/xxxxxxxxxx/XXXXXXXXX
