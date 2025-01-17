@@ -1,5 +1,6 @@
 # DuskMan: The Dusk Network stake management system
 ![image](https://github.com/user-attachments/assets/b56a80ec-122d-440a-a8d8-0c1fcaeee3bc)
+![image](https://github.com/user-attachments/assets/a780feed-e0fe-46f2-9713-44bcbed0eb5c)
 
 
 DuskMan automates the monitoring, and management, of **DUSK Network** staking, balances, compounding, and monitoring system health. It efficiently handles claiming and restaking rewards, notifications via multiple services, and optionally updates the TMUX status bar with real-time information.
