@@ -10,17 +10,12 @@ NOTE: The Auto Staking of rewards and/or Auto Restakes for reclaiming slashes CA
 
 Dusk wallet for Tips: `eox326D2m1ohpBUFVgiF885yV7aN4sg4caA6UkAg7UUhB6JWystDE7t2bdvstBHKTGYrF1oEhYZEd4Bqh4Uhoer`
 
-## Features
-
-### 🚀 Automated Actions
+## 🚀 Features
 
 - **Staking Management**:
   - Monitors staking rewards, reclaimable slashed stakes, and eligible stakes.
   - Automatically claims and stakes rewards when profitable.
   - Unstakes and restakes reclaimable slashed amounts when optimal.
-
-- **Web Dashboard**:
-  -   Access the Web Dashboard using port 5000 by default (configurable in config.yaml)
     
 - **Notification Support**:
   - Sends alerts via:
