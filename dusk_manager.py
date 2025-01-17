@@ -13,8 +13,9 @@ from rich.console import Console
 from rich.table import Table
 from rich.text import Text
 from rich import print
-# from rich.style import Style
 from utilities.notifications import NotificationService
+
+import utilities.conf as c
 
 load_dotenv()
 console = Console()
@@ -44,6 +45,7 @@ def load_config(section="GENERAL", file_path="config.yaml"):
 config = load_config('GENERAL')
 notification_config = load_config('NOTIFICATIONS')
 status_bar = load_config('STATUSBAR')
+web_dashboard = load_config('WEB_DASHBOARD')
 
 min_rewards = config.get('min_rewards', 1)
 min_slashed = config.get('min_slashed', 1)
@@ -53,6 +55,9 @@ min_peers = config.get('min_peers', 10)
 auto_stake_rewards = config.get('auto_stake_rewards', False)
 auto_reclaim_full_restakes = config.get('auto_reclaim_full_restakes', False)
 pwd_var = config.get('pwd_var_name', 'MY_WALLET_VARIABLE')
+enable_dashboard = web_dashboard.get('enable_dashboard', True)
+dash_port = web_dashboard.get('dash_port')
+dash_ip = web_dashboard.get('dash_ip', '0.0.0.0')
 
 if config.get('use_sudo', False):
     use_sudo = 'sudo'
@@ -503,11 +508,13 @@ async def frequent_update_loop():
 
 async def init_balance():
     """
-    Update the block height and balances every 20 seconds.
-    This is for display purposes to keep data fresh, 
-    even while the main staking logic might be sleeping until the next epoch.
+        Init display values
     """
-    
+    dusk_data = await fetch_dusk_data()
+    shared_state["price"] = dusk_data.get("usd", "N/A")
+    shared_state["market_cap"]  = dusk_data.get("usd_market_cap", "N/A")
+    shared_state["volume"]  = dusk_data.get("usd_24h_vol", "N/A")
+    shared_state["usd_24h_change"]  = dusk_data.get("usd_24h_change", "N/A")
 
     # 1) Fetch block height
     block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height")
@@ -693,7 +700,7 @@ async def stake_management_loop():
             
             if shared_state["first_run"]:
                 
-                byline = Text("\n\tDusk Stake Management & Monitoring: By Wolfrage", style="bold blue")
+                byline = Text("\n  Dusk Stake Management & Monitoring: By Wolfrage", style="bold blue")
 
                 notification_services = []
                 if notification_config.get('discord_webhook'):
@@ -717,8 +724,8 @@ async def stake_management_loop():
                 
                 notification_status = f'Enabled Notifications:[yellow]   {services}\n'
                 
-                auto_status = f'\n\t\tEnable tmux Support:     {enable_tmux}\n\t\tAuto Staking Rewards:    {auto_stake_rewards}\n\t\tAuto Restake to Reclaim: {auto_reclaim_full_restakes}\n\t\t{notification_status}'
-                separator = "\t[bold white]" + ("=" * 47) + "[/bold white]"
+                auto_status = f'\n\tEnable tmux Support:     {enable_tmux}\n\tAuto Staking Rewards:    {auto_stake_rewards}\n\tAuto Restake to Reclaim: {auto_reclaim_full_restakes}\n\t{notification_status}'
+                separator = "  [bold white]" + ("=" * 47) + "[/bold white]"
                 
                 console.print(byline)
                 print(separator + auto_status)
@@ -761,7 +768,12 @@ async def stake_management_loop():
                     f"\t\n"
                     #f"==========================================================================="
                 )
+                
+                if len(log_entries) > 20:
+                    log_entries.pop(0)
                 log_entries.append(log_entry)  # TODO: Maybe limit how many log entries are stored for displaying
+                
+                c.log_entries = log_entries
                 
                 # Display logs above the real-time display
                 console.clear()
@@ -840,19 +852,19 @@ async def realtime_display(enable_tmux=False):
                 
                 # Real-time display content (no surrounding panel)
                 realtime_content = (
-                    f"\t{LIGHT_WHITE}======{DEFAULT} {currenttime} Block: {LIGHT_BLUE}#{blk} {DEFAULT}Peers: {peercolor}{shared_state['peer_count']}{DEFAULT} {LIGHT_WHITE}=======\n"
-                    f"\t{CYAN}Last Action{DEFAULT}   | {CYAN}{last_act}{DEFAULT}\n"
-                    f"\t{LIGHT_GREEN}Next Check    {DEFAULT}| {charclr}{disp_time}{DEFAULT} ({donetime}){DEFAULT}\n"
-                    f"\t              |\n"
-                    f"\t{LIGHT_WHITE}Balance{DEFAULT}       | {LIGHT_WHITE}  @ ${format_float(price,3)} USD{DEFAULT} {chg24}\n"
-                    f"\t  {LIGHT_WHITE}├─ {YELLOW}Public   {DEFAULT}| {YELLOW}{format_float(b['public'])} (${format_float(b['public'] * price, 2)}){DEFAULT}\n"
-                    f"\t  {LIGHT_WHITE}└─ {BLUE}Shielded {DEFAULT}| {BLUE}{format_float(b['shielded'])} (${format_float(b['shielded'] * price, 2)}){DEFAULT}\n"
-                    f"\t     {LIGHT_WHITE}   Total {DEFAULT}| {LIGHT_WHITE}{format_float(tot_bal)} DUSK (${format_float((tot_bal) * price, 2)}){DEFAULT}\n"
-                    f"\t              |\n"
-                    f"\t{LIGHT_WHITE}Staked{DEFAULT}        | {LIGHT_WHITE}{format_float(st_info['stake_amount'])} (${format_float(st_info['stake_amount'] * price, 2)}){DEFAULT}\n"
-                    f"\t{YELLOW}Rewards{DEFAULT}       | {YELLOW}{format_float(st_info['rewards_amount'])} (${format_float(st_info['rewards_amount'] * price, 2)}){DEFAULT}\n"
-                    f"\t{LIGHT_RED}Reclaimable{DEFAULT}   | {LIGHT_RED}{format_float(st_info['reclaimable_slashed_stake'])} (${format_float(st_info['reclaimable_slashed_stake'] * price, 2)}){DEFAULT}\n"
-                    f"\t===============================================\n"
+                    f" {LIGHT_WHITE}======={DEFAULT} {currenttime} Block: {LIGHT_BLUE}#{blk} {DEFAULT}Peers: {peercolor}{shared_state['peer_count']}{DEFAULT} {LIGHT_WHITE}=======\n"
+                    f"    {CYAN}Last Action{DEFAULT}   | {CYAN}{last_act}{DEFAULT}\n"
+                    f"    {LIGHT_GREEN}Next Check    {DEFAULT}| {charclr}{disp_time}{DEFAULT} ({donetime}){DEFAULT}\n"
+                    f"                  |\n"
+                    f"    {LIGHT_WHITE}Balance{DEFAULT}       | {LIGHT_WHITE}  @ ${format_float(price,3)} USD{DEFAULT} {chg24}\n"
+                    f"      {LIGHT_WHITE}├─ {YELLOW}Public   {DEFAULT}| {YELLOW}{format_float(b['public'])} (${format_float(b['public'] * price, 2)}){DEFAULT}\n"
+                    f"      {LIGHT_WHITE}└─ {BLUE}Shielded {DEFAULT}| {BLUE}{format_float(b['shielded'])} (${format_float(b['shielded'] * price, 2)}){DEFAULT}\n"
+                    f"         {LIGHT_WHITE}   Total {DEFAULT}| {LIGHT_WHITE}{format_float(tot_bal)} DUSK (${format_float((tot_bal) * price, 2)}){DEFAULT}\n"
+                    f"                   |\n"
+                    f"    {LIGHT_WHITE}Staked{DEFAULT}        | {LIGHT_WHITE}{format_float(st_info['stake_amount'])} (${format_float(st_info['stake_amount'] * price, 2)}){DEFAULT}\n"
+                    f"    {YELLOW}Rewards{DEFAULT}       | {YELLOW}{format_float(st_info['rewards_amount'])} (${format_float(st_info['rewards_amount'] * price, 2)}){DEFAULT}\n"
+                    f"    {LIGHT_RED}Reclaimable{DEFAULT}   | {LIGHT_RED}{format_float(st_info['reclaimable_slashed_stake'])} (${format_float(st_info['reclaimable_slashed_stake'] * price, 2)}){DEFAULT}\n"
+                    f" ===============================================\n"
                 )
 
                 # Update the Live display
@@ -866,11 +878,7 @@ async def realtime_display(enable_tmux=False):
                     error_txt = str()
                 last_txt = str()
                 
-                
-                
                 donetime = f"{DEFAULT}({shared_state["completion_time"]}) "
-                
-                
 
                 peercnt = f"Peers: {shared_state["peer_count"]}"
                 splitter= " | "
@@ -950,10 +958,13 @@ async def main():
     # console.clear()
     await init_balance() # Make sure balances are initialized for display
     
+    if enable_dashboard and dash_port and dash_ip:
+        from utilities.web_dashboard import start_dashboard
+        await start_dashboard(shared_state, c.log_entries, host=dash_ip, port=dash_port)
+    
     await asyncio.gather(
         stake_management_loop(),
         realtime_display(enable_tmux),
-        #update_tmux_status_bar(),
         frequent_update_loop(),
         
     )
