@@ -1,17 +1,17 @@
-# DUSK Monitoring and Notification Script
-![image](https://github.com/user-attachments/assets/48de7b01-b320-4602-84e4-32146081dd02)
+# DuskMan: The Dusk Network stake management system
+![image](https://github.com/user-attachments/assets/b56a80ec-122d-440a-a8d8-0c1fcaeee3bc)
 
-This Python script automates the monitoring, and management of **DUSK Network staking**, balances, compounding, and monitoring system health. It efficiently handles claiming and restaking rewards, sends notifications via multiple services, and optionally updates the TMUX status bar with real-time information.
+DuskMan automates the monitoring, and management, of **DUSK Network** staking, balances, compounding, and monitoring system health. It efficiently handles claiming and restaking rewards, notifications via multiple services, and optionally updates the TMUX status bar with real-time information.
 
-NOTE: The Auto Staking of rewards and/or Auto Restakes for reclaiming slashes CAN be disabled via the config. 
+**NOTE:** The Auto Staking of rewards and/or Auto Restakes for reclaiming slashes CAN be disabled via the config.
 
 ---
 
+**Dusk wallet for Tips:** 
 
-Dusk wallet for Tips: `eox326D2m1ohpBUFVgiF885yV7aN4sg4caA6UkAg7UUhB6JWystDE7t2bdvstBHKTGYrF1oEhYZEd4Bqh4Uhoer`
+`eox326D2m1ohpBUFVgiF885yV7aN4sg4caA6UkAg7UUhB6JWystDE7t2bdvstBHKTGYrF1oEhYZEd4Bqh4Uhoer`
 
 ## Features
-
 ### 🚀 Automated Actions
 
 - **Staking Management**:
