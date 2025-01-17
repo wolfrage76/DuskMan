@@ -1,5 +1,6 @@
 # DuskMan: The Dusk Network stake management system
 ![image](https://github.com/user-attachments/assets/b56a80ec-122d-440a-a8d8-0c1fcaeee3bc)
+![alt text](image.png)
 
 DuskMan automates the monitoring, and management, of **DUSK Network** staking, balances, compounding, and monitoring system health. It efficiently handles claiming and restaking rewards, notifications via multiple services, and optionally updates the TMUX status bar with real-time information.
 
@@ -19,22 +20,19 @@ DuskMan automates the monitoring, and management, of **DUSK Network** staking, b
   - Unstakes and restakes reclaimable slashed amounts when optimal.
 
 - **Web Dashboard**:
-  -   Access the Web Dashboard using port 5000 by default (configurable in config.yaml)
+  - View analytics through your favorite browser. Defaults to `http://localhost:5000`
+  - Enables API access via deault of `http://localhost:5000/api/data` 
 
 - **Notification Support**:
   - Sends alerts via:
-    - **Discord**
-    - **Pushbullet**
-    - **Telegram**
-    - **Pushover**
-    - **Webhook**
+    - **Discord**, **Pushbullet**, **Telegram**, **Pushover**, **Webhook**
 
 - **Efficient Execution**:
   - Calculates sleep times based on epochs to minimize unnecessary processing.
   - Prevents redundant or runaway actions.
 
-- **TMUX Integration (Optional)**:
-  - Updates the TMUX status bar with real-time staking and balance data.
+- **TMUX Integration**:
+  - Can update the TMUX status bar with real-time staking and balance data.
 
 ---
 
