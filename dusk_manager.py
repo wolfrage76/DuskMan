@@ -40,8 +40,6 @@ def load_config(section="GENERAL", file_path="config.yaml"):
         sys.exit(1)
 
 # Load configuration
-
-
 config = load_config('GENERAL')
 notification_config = load_config('NOTIFICATIONS')
 status_bar = load_config('STATUSBAR')

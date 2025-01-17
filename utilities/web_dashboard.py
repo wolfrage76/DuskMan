@@ -1,14 +1,3 @@
-"""
-web_dashboard.py
-
-A Flask-based web dashboard for Dusk stake management that:
-1. Runs in a separate daemon thread (so it doesn't block your asyncio loops).
-2. Serves a dynamic web page that automatically updates itself via JavaScript.
-   - The main page includes a dark-mode layout with a left panel for
-     real-time stats and a right panel with a scrollable log.
-   - The page polls /api/data every second to get updated values.
-"""
-
 import utilities.conf as c
 import waitress
 import logging
@@ -222,10 +211,9 @@ def _run_flask_in_thread(app, host, port):
     werkzeug_logger.setLevel(logging.ERROR)
     
     waitress.serve(app, host=host, port=port)
-    #app.run(host=host, port=port, debug=False, use_reloader=False)
 
 
-async def start_dashboard(shared_state, log_entries, host="127.0.0.1", port=5000):
+async def start_dashboard(shared_state, log_entries, host="0.0.0.0", port=5000):
 
     # Construct the Flask app
     app = create_app(shared_state, c.log_entries)
@@ -238,7 +226,6 @@ async def start_dashboard(shared_state, log_entries, host="127.0.0.1", port=5000
     )
     flask_thread.start()
 
-    # Optionally, you can await a tiny sleep to let it start
     await asyncio.sleep(0.1)
     logging.debug("Flask dashboard started in background thread (werkzeug logs set to ERROR).")
 
