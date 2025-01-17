@@ -692,7 +692,8 @@ async def stake_management_loop():
             now_ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
             
             if shared_state["first_run"]:
-                byline = Text("\nDusk Stake Management & Monitoring: By Wolfrage", style="bold blue")
+                
+                byline = Text("\n\tDusk Stake Management & Monitoring: By Wolfrage", style="bold blue")
 
                 notification_services = []
                 if notification_config.get('discord_webhook'):
@@ -707,7 +708,7 @@ async def stake_management_loop():
                     notification_services.append('Webhook')
                 
                 if len(notification_services) > 2 and notification_services:
-                    services = "\n\t  " + " ".join(notification_services)
+                    services = "\n\t\t  " + " ".join(notification_services)
                 elif len(notification_services) <= 2 and notification_services:   
                     services = " ".join(notification_services)
                 else:
@@ -716,8 +717,8 @@ async def stake_management_loop():
                 
                 notification_status = f'Enabled Notifications:[yellow]   {services}\n'
                 
-                auto_status = f'\n\tEnable tmux Support:     {enable_tmux}\n\tAuto Staking Rewards:    {auto_stake_rewards}\n\tAuto Restake to Reclaim: {auto_reclaim_full_restakes}\n\t{notification_status}'
-                separator = "[bold white]" + ("=" * 47) + "[/bold white]"
+                auto_status = f'\n\t\tEnable tmux Support:     {enable_tmux}\n\t\tAuto Staking Rewards:    {auto_stake_rewards}\n\t\tAuto Restake to Reclaim: {auto_reclaim_full_restakes}\n\t\t{notification_status}'
+                separator = "\t[bold white]" + ("=" * 47) + "[/bold white]"
                 
                 console.print(byline)
                 print(separator + auto_status)
@@ -751,13 +752,13 @@ async def stake_management_loop():
             if not first_run:
                 # Generate log entry
                 log_entry = (
-                    f"=============== Log Entry @ {now_ts} ===============\n"
-                    f"Block Height  : #{block_height}\n"
-                    f"Last Action   : {action}\n"
-                    f"Staked        : {format_float(st_info['stake_amount'])} (${format_float(st_info['stake_amount'] * shared_state['price'], 2)})\n"
-                    f"Rewards       : {format_float(st_info['rewards_amount'])} (${format_float(st_info['rewards_amount'] * shared_state['price'], 2)})\n"
-                    f"Reclaimable   : {format_float(st_info['reclaimable_slashed_stake'])} (${format_float(st_info['reclaimable_slashed_stake'] * shared_state['price'], 2)})\n"
-                    f"\n"
+                    f"\n\t=============== Log Entry @ {now_ts} ===============\n"
+                    f"\tBlock Height  : #{block_height}\n"
+                    f"\tLast Action   : {action}\n"
+                    f"\tStaked        : {format_float(st_info['stake_amount'])} (${format_float(st_info['stake_amount'] * shared_state['price'], 2)})\n"
+                    f"\tRewards       : {format_float(st_info['rewards_amount'])} (${format_float(st_info['rewards_amount'] * shared_state['price'], 2)})\n"
+                    f"\tReclaimable   : {format_float(st_info['reclaimable_slashed_stake'])} (${format_float(st_info['reclaimable_slashed_stake'] * shared_state['price'], 2)})\n"
+                    f"\t\n"
                     #f"==========================================================================="
                 )
                 log_entries.append(log_entry)  # TODO: Maybe limit how many log entries are stored for displaying
@@ -840,19 +841,19 @@ async def realtime_display(enable_tmux=False):
                 
                 # Real-time display content (no surrounding panel)
                 realtime_content = (
-                    f"{LIGHT_WHITE}======{DEFAULT} {currenttime} Block: {LIGHT_BLUE}#{blk} {DEFAULT}Peers: {peercolor}{shared_state['peer_count']}{DEFAULT} {LIGHT_WHITE}=======\n"
-                    f"{CYAN}Last Action{DEFAULT}   | {CYAN}{last_act}{DEFAULT}\n"
-                    f"{LIGHT_GREEN}Next Check    {DEFAULT}| {charclr}{disp_time}{DEFAULT} ({donetime}){DEFAULT}\n"
-                    f"              |\n"
-                    f"{LIGHT_WHITE}Balance{DEFAULT}       | {LIGHT_WHITE}  @ ${format_float(price,3)} USD{DEFAULT} {chg24}\n"
-                    f"  {LIGHT_WHITE}├─ {YELLOW}Public   {DEFAULT}| {YELLOW}{format_float(b['public'])} (${format_float(b['public'] * price, 2)}){DEFAULT}\n"
-                    f"  {LIGHT_WHITE}└─ {BLUE}Shielded {DEFAULT}| {BLUE}{format_float(b['shielded'])} (${format_float(b['shielded'] * price, 2)}){DEFAULT}\n"
-                    f"     {LIGHT_WHITE}   Total {DEFAULT}| {LIGHT_WHITE}{format_float(tot_bal)} DUSK (${format_float((tot_bal) * price, 2)}){DEFAULT}\n"
-                    f"              |\n"
-                    f"{LIGHT_WHITE}Staked{DEFAULT}        | {LIGHT_WHITE}{format_float(st_info['stake_amount'])} (${format_float(st_info['stake_amount'] * price, 2)}){DEFAULT}\n"
-                    f"{YELLOW}Rewards{DEFAULT}       | {YELLOW}{format_float(st_info['rewards_amount'])} (${format_float(st_info['rewards_amount'] * price, 2)}){DEFAULT}\n"
-                    f"{LIGHT_RED}Reclaimable{DEFAULT}   | {LIGHT_RED}{format_float(st_info['reclaimable_slashed_stake'])} (${format_float(st_info['reclaimable_slashed_stake'] * price, 2)}){DEFAULT}\n"
-                    f"===============================================\n"
+                    f"\t{LIGHT_WHITE}======{DEFAULT} {currenttime} Block: {LIGHT_BLUE}#{blk} {DEFAULT}Peers: {peercolor}{shared_state['peer_count']}{DEFAULT} {LIGHT_WHITE}=======\n"
+                    f"\t{CYAN}Last Action{DEFAULT}   | {CYAN}{last_act}{DEFAULT}\n"
+                    f"\t{LIGHT_GREEN}Next Check    {DEFAULT}| {charclr}{disp_time}{DEFAULT} ({donetime}){DEFAULT}\n"
+                    f"\t              |\n"
+                    f"\t{LIGHT_WHITE}Balance{DEFAULT}       | {LIGHT_WHITE}  @ ${format_float(price,3)} USD{DEFAULT} {chg24}\n"
+                    f"\t  {LIGHT_WHITE}├─ {YELLOW}Public   {DEFAULT}| {YELLOW}{format_float(b['public'])} (${format_float(b['public'] * price, 2)}){DEFAULT}\n"
+                    f"\t  {LIGHT_WHITE}└─ {BLUE}Shielded {DEFAULT}| {BLUE}{format_float(b['shielded'])} (${format_float(b['shielded'] * price, 2)}){DEFAULT}\n"
+                    f"\t     {LIGHT_WHITE}   Total {DEFAULT}| {LIGHT_WHITE}{format_float(tot_bal)} DUSK (${format_float((tot_bal) * price, 2)}){DEFAULT}\n"
+                    f"\t              |\n"
+                    f"\t{LIGHT_WHITE}Staked{DEFAULT}        | {LIGHT_WHITE}{format_float(st_info['stake_amount'])} (${format_float(st_info['stake_amount'] * price, 2)}){DEFAULT}\n"
+                    f"\t{YELLOW}Rewards{DEFAULT}       | {YELLOW}{format_float(st_info['rewards_amount'])} (${format_float(st_info['rewards_amount'] * price, 2)}){DEFAULT}\n"
+                    f"\t{LIGHT_RED}Reclaimable{DEFAULT}   | {LIGHT_RED}{format_float(st_info['reclaimable_slashed_stake'])} (${format_float(st_info['reclaimable_slashed_stake'] * price, 2)}){DEFAULT}\n"
+                    f"\t===============================================\n"
                 )
 
                 # Update the Live display
@@ -947,7 +948,7 @@ async def main():
         - realtime_display: shows real-time info in console
         - update_tmux_status_bar: updates TMUX (if enabled)
     """
-    
+    # console.clear()
     await init_balance() # Make sure balances are initialized for display
     
     await asyncio.gather(
