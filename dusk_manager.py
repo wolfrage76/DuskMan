@@ -808,7 +808,7 @@ async def realtime_display(enable_tmux=False):
                 # Display byline and settings on the first run
                 if first_run:
                     first_run = False
-                    await asyncio.sleep(3)  # Pause briefly before switching to real-time display
+                    await asyncio.sleep(1)  # Pause briefly before switching to real-time display
                     continue 
                 charclr =str()
                 
