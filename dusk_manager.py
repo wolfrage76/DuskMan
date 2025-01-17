@@ -780,8 +780,7 @@ async def stake_management_loop():
 # ─────────────────────────────────────────────────────────────────────────────
 
 from rich.live import Live
-from rich.table import Table
-from rich.panel import Panel
+
 from rich.text import Text
 
 async def realtime_display(enable_tmux=False):
