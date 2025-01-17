@@ -49,8 +49,8 @@ Dusk wallet for Tips: `eox326D2m1ohpBUFVgiF885yV7aN4sg4caA6UkAg7UUhB6JWystDE7t2b
 1. **Clone the Repository**:
 
     ```bash
-    git clone https://github.com/wolfrage76/dusk-manager.git
-    cd dusk-manager
+    git clone https://github.com/wolfrage76/DuskMan.git
+    cd DuskMan
     ```
 
 2. **Install Dependencies**: Install the required Python libraries:
@@ -95,7 +95,7 @@ In the same directory as the script:
     ```  
 9. **Or Run script in the background**:
     ```bash
-    screen -dmS dusk_monitor python dusk_manager.py
+    screen -dmS duskman python dusk_manager.py
     ```
 10. **Or run as a service**:
     Instructions coming later
