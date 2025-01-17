@@ -1,5 +1,5 @@
 # DUSK Monitoring and Notification Script
-![image](https://github.com/user-attachments/assets/48de7b01-b320-4602-84e4-32146081dd02)
+![image](https://github.com/user-attachments/assets/b56a80ec-122d-440a-a8d8-0c1fcaeee3bc)
 
 This Python script automates the monitoring, and management of **DUSK Network staking**, balances, compounding, and monitoring system health. It efficiently handles claiming and restaking rewards, sends notifications via multiple services, and optionally updates the TMUX status bar with real-time information.
 
