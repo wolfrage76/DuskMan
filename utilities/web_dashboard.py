@@ -800,13 +800,16 @@ def create_app(shared_state, log_entries):
             },
             "last_action": shared_state["last_action_taken"],
         }
-        tmpLogs = c.log_entries
+        tmpLogs = log_entries
         tmpLogs.reverse()
-        return jsonify({
+        datajson = jsonify({
             "data": data,
             # If no logs yet, logs[] is empty => we show "No log entries yet."
             "log_entries": tmpLogs
         })
+        
+        tmpLogs.reverse()
+        return datajson
 
     return app
 
@@ -820,7 +823,7 @@ async def start_dashboard(shared_state, log_entries, host="0.0.0.0", port=5000):
     """
     Launch Waitress in a daemon thread so it doesn't block asyncio.
     """
-    app = create_app(shared_state, c.log_entries)
+    app = create_app(shared_state, log_entries)
     flask_thread = threading.Thread(
         target=_run_flask_in_thread, 
         args=(app, host, port),

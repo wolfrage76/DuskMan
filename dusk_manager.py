@@ -63,6 +63,7 @@ else:
     use_sudo = ''
 
 errored = False
+log_entries = []
 
 # If user passes "tmux" as first argument, override enable_tmux
 if config.get('enable_tmux', False) or (len(sys.argv) > 1 and sys.argv[1].lower() == 'tmux'):
@@ -541,8 +542,7 @@ async def stake_management_loop():
     # password = get_env_variable("MY_WALLET_VARIABLE", dotenv_key="WALLET_PASSWORD")
 
     first_run = True
-
-    c.log_entries = []
+    
     while True:
         
         try:
@@ -751,7 +751,7 @@ async def stake_management_loop():
             action = shared_state["last_action_taken"]
             st_info = shared_state["stake_info"]
 
-            if not first_run:
+            if  first_run:
                 # Generate log entry
                 log_entry = (
                     f"\n\t==== Activity @{now_ts}====\n"
@@ -764,13 +764,13 @@ async def stake_management_loop():
                     f"\t \n"
                 )
                 
-                if len(c.log_entries) > 20:
-                    c.log_entries.pop(0)
-                c.log_entries.append(log_entry)
+                if len(log_entries) > 20:
+                    log_entries.pop(0)
+                log_entries.append(log_entry)
                 
                 # Display logs above the real-time display
                 console.clear()
-                for entry in c.log_entries:
+                for entry in log_entries:
                     console.print(entry)
 
             # Mark first run as completed after the first iteration 
@@ -951,11 +951,10 @@ async def main():
     """
     # console.clear()
     await init_balance() # Make sure balances are initialized for display
-    
     if enable_dashboard and dash_port and dash_ip:
         from utilities.web_dashboard import start_dashboard
-        await start_dashboard(shared_state, c.log_entries, host=dash_ip, port=dash_port)
-    
+        await start_dashboard(shared_state, log_entries, host=dash_ip, port=dash_port)
+        
     await asyncio.gather(
         stake_management_loop(),
         realtime_display(enable_tmux),
