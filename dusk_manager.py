@@ -751,27 +751,28 @@ async def stake_management_loop():
             action = shared_state["last_action_taken"]
             st_info = shared_state["stake_info"]
 
-            if  first_run:
-                # Generate log entry
-                log_entry = (
-                    f"\n\t==== Activity @{now_ts}====\n"
-                    f"\n"
-                    f"\t Current Block : #{block_height}\n"
-                    f"\t Last Action   : {action}\n"
-                    f"\t Staked        : {format_float(st_info['stake_amount'])} (${format_float(st_info['stake_amount'] * shared_state['price'], 2)})\n"
-                    f"\t Rewards       : {format_float(st_info['rewards_amount'])} (${format_float(st_info['rewards_amount'] * shared_state['price'], 2)})\n"
-                    f"\t Reclaimable   : {format_float(st_info['reclaimable_slashed_stake'])} (${format_float(st_info['reclaimable_slashed_stake'] * shared_state['price'], 2)})\n"
-                    f"\t \n"
+            
+            # Generate log entry
+            log_entry = (
+                f"\n\t==== Activity @{now_ts}====\n"
+                f"\n"
+                f"\t Current Block : #{block_height}\n"
+                f"\t Last Action   : {action}\n"
+                f"\t Staked        : {format_float(st_info['stake_amount'])} (${format_float(st_info['stake_amount'] * shared_state['price'], 2)})\n"
+                f"\t Rewards       : {format_float(st_info['rewards_amount'])} (${format_float(st_info['rewards_amount'] * shared_state['price'], 2)})\n"
+                f"\t Reclaimable   : {format_float(st_info['reclaimable_slashed_stake'])} (${format_float(st_info['reclaimable_slashed_stake'] * shared_state['price'], 2)})\n"
+                f"\t \n"
                 )
-                
-                if len(log_entries) > 20:
-                    log_entries.pop(0)
-                log_entries.append(log_entry)
-                
-                # Display logs above the real-time display
-                console.clear()
-                for entry in log_entries:
-                    console.print(entry)
+            
+            if len(log_entries) > 20:
+                log_entries.pop(0)
+            log_entries.append(log_entry)
+            
+            # Display logs above the real-time display
+            console.clear()
+            #if not first_run:
+                #for entry in log_entries:
+            console.print(log_entries[0])
 
             # Mark first run as completed after the first iteration 
             first_run = False
@@ -854,7 +855,7 @@ async def realtime_display(enable_tmux=False):
                     f"      {LIGHT_WHITE}├─ {YELLOW}Public   {DEFAULT}| {YELLOW}{format_float(b['public'])} (${format_float(b['public'] * price, 2)}){DEFAULT}\n"
                     f"      {LIGHT_WHITE}└─ {BLUE}Shielded {DEFAULT}| {BLUE}{format_float(b['shielded'])} (${format_float(b['shielded'] * price, 2)}){DEFAULT}\n"
                     f"         {LIGHT_WHITE}   Total {DEFAULT}| {LIGHT_WHITE}{format_float(tot_bal)} DUSK (${format_float((tot_bal) * price, 2)}){DEFAULT}\n"
-                    f"                   |\n"
+                    f"                  |\n"
                     f"    {LIGHT_WHITE}Staked{DEFAULT}        | {LIGHT_WHITE}{format_float(st_info['stake_amount'])} (${format_float(st_info['stake_amount'] * price, 2)}){DEFAULT}\n"
                     f"    {YELLOW}Rewards{DEFAULT}       | {YELLOW}{format_float(st_info['rewards_amount'])} (${format_float(st_info['rewards_amount'] * price, 2)}){DEFAULT}\n"
                     f"    {LIGHT_RED}Reclaimable{DEFAULT}   | {LIGHT_RED}{format_float(st_info['reclaimable_slashed_stake'])} (${format_float(st_info['reclaimable_slashed_stake'] * price, 2)}){DEFAULT}\n"
