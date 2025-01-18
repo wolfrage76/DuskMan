@@ -574,7 +574,7 @@ async def init_balance():
     pub_bal, shld_bal = await get_wallet_balances(password)
     shared_state["balances"]["public"] = pub_bal
     shared_state["balances"]["shielded"] = shld_bal
-
+    
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -820,7 +820,7 @@ async def stake_management_loop():
             
             if not first_run:
                 #for entry in log_entries:
-                console.clear()
+                
                 console.print(log_entries[0])
 
             # Mark first run as completed after the first iteration 
