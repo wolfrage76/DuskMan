@@ -73,39 +73,44 @@ html, body {
   background-color: #1e1e1e;
 }
 
-/* Main container (20% about, 35% left stats, 45% logs) */
+
+/* Desktop / default: side-by-side */
 .main-container {
-  flex: 1 1 auto; 
   display: flex;
   flex-direction: row;
-  height: 100%;
   overflow: hidden;
+  height: 100%;
 }
 
+/* about-panel, left-panel, right-panel with widths 20% / 35% / 45% or so */
 .about-panel {
   flex: 0 0 20%;
-  padding: 1em;
-  height: 100%;
-  overflow-y: auto;
-  background: #1e1e1e;
 }
 .left-panel {
   flex: 0 0 35%;
-  padding: 1em;
-  border-left: 1px solid #3d3d3d; 
-  border-right: 1px solid #3d3d3d;
-  height: 100%;
-  overflow-y: auto;
 }
-/* Right panel: flex column, logs fill leftover, scroll if needed. */
 .right-panel {
   flex: 0 0 45%;
-  display: flex;
-  flex-direction: column;
-  padding: 1em;
-  height:100%;
-  overflow: hidden; 
 }
+
+/* MOBILE LAYOUT: stack everything vertical */
+@media (max-width: 768px) {
+  .main-container {
+    flex-direction: column; /* stack top-to-bottom */
+  }
+  .about-panel,
+  .left-panel,
+  .right-panel {
+    flex: 0 0 auto;
+    width: 100%;
+    margin-bottom: 1em;
+  }
+
+  /* If you specifically want logs to appear right after left-panel, 
+     ensure the DOM has .left-panel above .right-panel. 
+     If you want the About panel last, you could reorder it with 'order'. */
+}
+
 #logs-card {
   flex: 1;
   overflow-y: scroll; /* always show scrollbar */
