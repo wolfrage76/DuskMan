@@ -735,7 +735,6 @@ DASHBOARD_HTML = r"""
         <hr>
         <h5>Staking Info</h5>
         <ul>${stakeList}</ul>
-        <ul>${lastActionLine}</ul>
       `;
       document.getElementById('stats-card').innerHTML=statsHtml;
 
@@ -801,11 +800,12 @@ def create_app(shared_state, log_entries):
             },
             "last_action": shared_state["last_action_taken"],
         }
-
+        tmpLogs = c.log_entries
+        tmpLogs.reverse()
         return jsonify({
             "data": data,
             # If no logs yet, logs[] is empty => we show "No log entries yet."
-            "log_entries": c.log_entries
+            "log_entries": tmpLogs
         })
 
     return app
