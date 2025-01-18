@@ -156,6 +156,53 @@ def get_env_variable(var_name='WALLET_PASSWORD', dotenv_key='WALLET_PASSWORD'):
 
 password = get_env_variable(config.get('pwd_var_name', 'WALLET_PASSWORD'), dotenv_key="WALLET_PASSWORD")
 
+
+def display_wallet_distribution_bar(public_amount, shielded_amount, width=30):
+    """
+    Displays a single horizontal bar (ASCII blocks) with two colored segments:
+
+    :param public_amount: float, the public balance
+    :param shielded_amount: float, the shielded balance
+    :param width: int, total number of blocks in the bar
+    """
+    total = public_amount + shielded_amount
+    if total <= 0:
+        console.print("[bold yellow]No funds found (total=0).[/bold yellow]")
+        return
+
+    # Calculate ratio
+    public_ratio = public_amount / total
+    shielded_ratio = shielded_amount / total
+
+    # Convert ratio to # of blocks
+    pub_blocks = int(public_ratio * width)
+    shd_blocks = int(shielded_ratio * width)
+
+    # If rounding left out a block, fix that
+    used = pub_blocks + shd_blocks
+    if used < width:
+        # Add leftover to shielded or whichever you prefer
+        shd_blocks += (width - used)
+
+    
+    bar_str = (
+        f"{YELLOW}{'▅' * pub_blocks}"
+        f"{BLUE}{'▅' * shd_blocks}"
+    )
+    
+    bar_str2 = (
+        f"{BLUE}{'▅' * shd_blocks}"
+        f"{YELLOW}{'▅' * pub_blocks}"
+    )
+
+    # Display the percentages
+    pub_pct = public_ratio * 100
+    shd_pct = shielded_ratio * 100
+    
+    return f"{YELLOW}{pub_pct:6.2f}% {bar_str}",f"{BLUE}{shd_pct:6.2f}% {bar_str2}"
+        
+    
+
 def remove_ansi(text):
     # Regular expression to match ANSI escape sequences
     ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
@@ -725,6 +772,7 @@ async def stake_management_loop():
                 console.print(byline)
                 print(separator + auto_status)
                 
+                
                 shared_state["first_run"] = False
                 shared_state["last_action_taken"] = f"Startup @ Block #{block_height}"
                 action = shared_state["last_action_taken"]
@@ -756,7 +804,7 @@ async def stake_management_loop():
             log_entry = (
                 f"\n\t==== Activity @{now_ts}====\n"
                 f"\n"
-                f"\t Current Block : #{block_height}\n"
+                #f"\t Current Block : #{block_height}\n"
                 f"\t Last Action   : {action}\n"
                 f"\t Staked        : {format_float(st_info['stake_amount'])} (${format_float(st_info['stake_amount'] * shared_state['price'], 2)})\n"
                 f"\t Rewards       : {format_float(st_info['rewards_amount'])} (${format_float(st_info['rewards_amount'] * shared_state['price'], 2)})\n"
@@ -769,10 +817,11 @@ async def stake_management_loop():
             log_entries.append(log_entry)
             
             # Display logs above the real-time display
-            console.clear()
-            #if not first_run:
+            
+            if not first_run:
                 #for entry in log_entries:
-            console.print(log_entries[0])
+                console.clear()
+                console.print(log_entries[0])
 
             # Mark first run as completed after the first iteration 
             first_run = False
@@ -843,7 +892,7 @@ async def realtime_display(enable_tmux=False):
                     peercolor = YELLOW    
                 
                 currenttime = datetime.datetime.now().strftime('%H:%M:%S')
-                
+                allocation_bar, allocation_bar2 = display_wallet_distribution_bar(b['public'],b['shielded'],10)
                 # Real-time display content (no surrounding panel)
                 realtime_content = (
                     f" {LIGHT_WHITE}======={DEFAULT} {currenttime} Block: {LIGHT_BLUE}#{blk} {DEFAULT}Peers: {peercolor}{shared_state['peer_count']}{DEFAULT} {LIGHT_WHITE}=======\n"
@@ -851,10 +900,10 @@ async def realtime_display(enable_tmux=False):
                     f"    {LIGHT_GREEN}Next Check    {DEFAULT}| {charclr}{disp_time}{DEFAULT} ({donetime}){DEFAULT}\n"
                     f"                  |\n"
                     f"    {LIGHT_WHITE}Balance{DEFAULT}       | {LIGHT_WHITE}  @ ${format_float(price,3)} USD{DEFAULT} {chg24}\n"
-                    f"      {LIGHT_WHITE}├─ {YELLOW}Public   {DEFAULT}| {YELLOW}{format_float(b['public'])} (${format_float(b['public'] * price, 2)}){DEFAULT}\n"
-                    f"      {LIGHT_WHITE}└─ {BLUE}Shielded {DEFAULT}| {BLUE}{format_float(b['shielded'])} (${format_float(b['shielded'] * price, 2)}){DEFAULT}\n"
+                    f"      {LIGHT_WHITE}├─ {YELLOW}Public   {DEFAULT}| {YELLOW}{format_float(b['public'])} (${format_float(b['public'] * price, 2)}) {allocation_bar}{DEFAULT}\n"
+                    f"      {LIGHT_WHITE}└─ {BLUE}Shielded {DEFAULT}| {BLUE}{format_float(b['shielded'])} (${format_float(b['shielded'] * price, 2)}) {allocation_bar2}{DEFAULT}\n"
                     f"         {LIGHT_WHITE}   Total {DEFAULT}| {LIGHT_WHITE}{format_float(tot_bal)} DUSK (${format_float((tot_bal) * price, 2)}){DEFAULT}\n"
-                    f"                  |\n"
+                    f"     \n"
                     f"    {LIGHT_WHITE}Staked{DEFAULT}        | {LIGHT_WHITE}{format_float(st_info['stake_amount'])} (${format_float(st_info['stake_amount'] * price, 2)}){DEFAULT}\n"
                     f"    {YELLOW}Rewards{DEFAULT}       | {YELLOW}{format_float(st_info['rewards_amount'])} (${format_float(st_info['rewards_amount'] * price, 2)}){DEFAULT}\n"
                     f"    {LIGHT_RED}Reclaimable{DEFAULT}   | {LIGHT_RED}{format_float(st_info['reclaimable_slashed_stake'])} (${format_float(st_info['reclaimable_slashed_stake'] * price, 2)}){DEFAULT}\n"
