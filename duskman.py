@@ -819,9 +819,9 @@ async def stake_management_loop():
             # Display logs above the real-time display
             
             if not first_run:
-                #for entry in log_entries:
                 
-                console.print(log_entries[0])
+                for entry in log_entries:
+                    console.print(entry)
 
             # Mark first run as completed after the first iteration 
             first_run = False
