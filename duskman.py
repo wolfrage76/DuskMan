@@ -15,8 +15,6 @@ from rich.text import Text
 from rich import print
 from utilities.notifications import NotificationService
 
-import utilities.conf as c
-
 load_dotenv()
 console = Console()
 
@@ -423,8 +421,8 @@ async def sleep_with_feedback(seconds_to_sleep, msg=None):
         shared_state["remain_time"] -= interval
 
     # Optionally clear or log
-    sys.stdout.write("\r" + (" " * 120) + "\r")
-    sys.stdout.flush()
+    #sys.stdout.write("\r" + (" " * 120) + "\r")
+    #sys.stdout.flush()
 
 async def sleep_until_next_epoch(block_height, buffer_blocks=60, msg=None):
     """
@@ -575,6 +573,7 @@ async def init_balance():
     shared_state["balances"]["public"] = pub_bal
     shared_state["balances"]["shielded"] = shld_bal
     
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -729,7 +728,9 @@ async def stake_management_loop():
             new_stake = stake_amount + rewards_amount
             log_action("Stake Completed", f"New Stake: {format_float(new_stake)}")
             shared_state["last_claim_block"] = block_height
-
+            
+            await sleep_with_feedback(2160 * 10, "1 epoch wait after claiming")
+            continue
         else:
             # No action
             shared_state["last_no_action_block"] = block_height
@@ -742,31 +743,38 @@ async def stake_management_loop():
             
             if shared_state["first_run"]:
                 
-                byline = Text("\n  DuskMan - Stake Management System: By Wolfrage", style="bold blue")
+                byline = Text("\n  DuskMan Stake Management System: By Wolfrage", style="bold blue")
 
                 notification_services = []
-                if notification_config.get('discord_webhook'):
+                if notification_config.get('discord_webhook', False):
                     notification_services.append('Discord')
-                if notification_config.get('pushbullet_token'):
+                if notification_config.get('pushbullet_token', False):
                     notification_services.append('PushBullet')
-                if notification_config.get('telegram_bot_token') and notification_config.get('telegram_chat_id'):
+                if notification_config.get('telegram_bot_token', False) and notification_config.get('telegram_chat_id', False):
                     notification_services.append('Telegram')
-                if notification_config.get('pushover_user_key') and notification_config.get('pushover_app_token'):
+                if notification_config.get('pushover_user_key', False) and notification_config.get('pushover_app_token', False):
                     notification_services.append('Pushover')
-                if notification_config.get('webhook_url'):
+                if notification_config.get('webhook_url', False):
                     notification_services.append('Webhook')
+                if notification_config.get('slack_webhook', False):
+                    notification_services.append('Slack')
                 
                 if len(notification_services) > 2 and notification_services:
-                    services = "\n\t\t  " + " ".join(notification_services)
+                    services = "\n\t  " + " ".join(notification_services)
                 elif len(notification_services) <= 2 and notification_services:   
                     services = " ".join(notification_services)
                 else:
                     services = "None"
                     
                 
+                if dash_ip and dash_port and enable_dashboard: 
+                    enable_webdash = True
+                else:
+                    enable_webdash = False
+                
                 notification_status = f'Enabled Notifications:[yellow]   {services}\n'
                 
-                auto_status = f'\n\tEnable tmux Support:     {enable_tmux}\n\tAuto Staking Rewards:    {auto_stake_rewards}\n\tAuto Restake to Reclaim: {auto_reclaim_full_restakes}\n\t{notification_status}'
+                auto_status = f'\n\tEnable Web Dashboard:    {enable_webdash}\n\tEnable tmux Support:     {enable_tmux}\n\tAuto Staking Rewards:    {auto_stake_rewards}\n\tAuto Restake to Reclaim: {auto_reclaim_full_restakes}\n\t{notification_status}'
                 separator = "  [bold white]" + ("=" * 47) + "[/bold white]"
                 
                 console.print(byline)
@@ -812,16 +820,16 @@ async def stake_management_loop():
                 f"\t \n"
                 )
             
-            if len(log_entries) > 20:
+            if len(log_entries) > 15:
                 log_entries.pop(0)
             log_entries.append(log_entry)
             
             # Display logs above the real-time display
             
-            if not first_run:
+            # if not first_run:
                 
-                for entry in log_entries:
-                    console.print(entry)
+            #    for entry in log_entries:
+            #        console.print(entry)
 
             # Mark first run as completed after the first iteration 
             first_run = False
@@ -1004,6 +1012,7 @@ async def main():
     if enable_dashboard and dash_port and dash_ip:
         from utilities.web_dashboard import start_dashboard
         await start_dashboard(shared_state, log_entries, host=dash_ip, port=dash_port)
+        console.clear()
         
     await asyncio.gather(
         stake_management_loop(),
