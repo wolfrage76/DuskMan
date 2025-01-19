@@ -47,7 +47,7 @@ def create_app(shared_state, log_entries):
             "balances_public":   shared_state["balances"]["public"],
             "balances_shielded": shared_state["balances"]["shielded"],
             "balances_total": (shared_state["balances"]["public"] 
-                               + shared_state["balances"]["shielded"]),
+              + shared_state["balances"]["shielded"]),
             "price": shared_state["price"],
             "usd_24h_change": shared_state["usd_24h_change"],
             "stake_info": {

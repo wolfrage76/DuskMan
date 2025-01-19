@@ -292,16 +292,6 @@ function parseLogEntry(rawText){
       `;
       statsHtml += `<ul>${stakeList}</ul>`;
 
-      // Last action
-      statsHtml += `
-        <ul>
-          <li>
-            <span class="label-col">Last Action:</span>
-            <span class="value-col">${data.last_action}</span>
-          </li>
-        </ul>
-      `;
-
       document.getElementById('stats-card').innerHTML = statsHtml;
 
       // Build logs
