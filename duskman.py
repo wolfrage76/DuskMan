@@ -3,7 +3,6 @@ import sys
 import subprocess
 import re
 import logging
-import datetime
 import yaml
 import asyncio
 import aiohttp
@@ -13,6 +12,7 @@ from rich.console import Console
 from rich.table import Table
 from rich.text import Text
 from rich import print
+from datetime import datetime, timedelta
 from utilities.notifications import NotificationService
 
 load_dotenv()
@@ -42,6 +42,7 @@ config = load_config('GENERAL')
 notification_config = load_config('NOTIFICATIONS')
 status_bar = load_config('STATUSBAR')
 web_dashboard = load_config('WEB_DASHBOARD')
+logs_config = load_config('LOG_FILES')
 
 min_rewards = config.get('min_rewards', 1)
 min_slashed = config.get('min_slashed', 1)
@@ -119,21 +120,16 @@ shared_state = {
     "usd_24h_change": 0,
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# LOGGING CONFIG
-# ─────────────────────────────────────────────────────────────────────────────
+# Define log file paths
+INFO_LOG_FILE = logs_config.get("action_log","duskman_actions.log")
+ERROR_LOG_FILE =  logs_config.get("error_log","duskman_errors.log")
+DEBUG_LOG_FILE =  logs_config.get("debug_log","duskman_tmp_debug.log")
 
-LOG_FILE = "actions.log"
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M',
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler(LOG_FILE)
-    ]
-)
+if os.path.exists(DEBUG_LOG_FILE):
+    os.remove(DEBUG_LOG_FILE)
 
+# Log format
+LOG_FORMAT = "{timestamp} - {message}"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # HELPER FUNCTIONS
@@ -165,8 +161,8 @@ def display_wallet_distribution_bar(public_amount, shielded_amount, width=30):
     """
     total = public_amount + shielded_amount
     if total <= 0:
-        console.print("[bold yellow]No funds found (total=0).[/bold yellow]")
-        return
+        #console.print("[bold yellow]No funds found (total=0).[/bold yellow]")
+        return str()
 
     # Calculate ratio
     public_ratio = public_amount / total
@@ -187,19 +183,38 @@ def display_wallet_distribution_bar(public_amount, shielded_amount, width=30):
         f"{YELLOW}{'▅' * pub_blocks}"
         f"{BLUE}{'▅' * shd_blocks}"
     )
-    
-    bar_str2 = (
-        f"{BLUE}{'▅' * shd_blocks}"
-        f"{YELLOW}{'▅' * pub_blocks}"
-    )
 
     # Display the percentages
     pub_pct = public_ratio * 100
     shd_pct = shielded_ratio * 100
     
-    return f"{YELLOW}{pub_pct:6.2f}% {bar_str}",f"{BLUE}{shd_pct:6.2f}% {bar_str2}"
+    p_pct = f"{pub_pct:.2f}%"
+    s_pct = f"{shd_pct:.2f}%"
+    return f"{YELLOW}{p_pct} {bar_str} {s_pct}"
         
     
+# Superscript Unicode Characters
+SUPERSCRIPT_MAP = {
+    "0": "⁰",
+    "1": "¹",
+    "2": "²",
+    "3": "³",
+    "4": "⁴",
+    "5": "⁵",
+    "6": "⁶",
+    "7": "⁷",
+    "8": "⁸",
+    "9": "⁹",
+    "%": "⁒",
+}
+
+def to_superscript(text):
+    """
+    Convert a string to superscript using Unicode characters.
+    Non-mapped characters are left unchanged.
+    """
+    return "".join(SUPERSCRIPT_MAP.get(char, char) for char in text)
+
 
 def remove_ansi(text):
     # Regular expression to match ANSI escape sequences
@@ -268,16 +283,43 @@ def format_float(value, places=4):
         return f"{parts[0]}.{parts[1][:places]}" if len(parts[1]) > 0 else parts[0]
     return parts[0]
 
-def log_action(action, details, type='info'):
-    """Log actions to file/console and send notifications."""
-    notifier.notify(f"{action}: {details}", shared_state)
+def write_to_log(file_path, message):
+    """
+    Write a message to the specified log file.
     
+    Args:
+        file_path (str): Path to the log file.
+        message (str): Message to write.
+    """
+    try:
+        with open(file_path, "a") as log_file:
+            log_file.write(message + "\n")
+    except Exception as e:
+        # Handle potential errors during file writing, if necessary
+        log_action(f"Error writing to log file {file_path}",e,"error")
+
+def log_action(action, details, type='info'):
+    """
+    Write log messages to specific files based on type.
+    
+    Args:
+        action (str): Action description.
+        details (str): Details about the action.
+        type (str): Log type ('info', 'error', 'debug').
+    """
+    # Create a timestamp
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    # Format the message
+    formatted_message = LOG_FORMAT.format(timestamp=timestamp, message=f"{action}: {details}")
+    
+    # Write to the appropriate log file
     if type == 'debug':
-        logging.debug(f"\n{action}: {details}")
+        write_to_log(DEBUG_LOG_FILE, formatted_message)
     elif type == 'error':
-        logging.error(f"\n{action}: {details}")    
+        write_to_log(ERROR_LOG_FILE, formatted_message)
     else:
-        logging.info(f"\n{action}: {details}")
+        write_to_log(INFO_LOG_FILE, formatted_message)
+    
 
 def parse_stake_info(output):
     """
@@ -409,7 +451,7 @@ async def sleep_with_feedback(seconds_to_sleep, msg=None):
     Asynchronous version of sleep with visual feedback.
     Updates shared_state['remain_time'] for real-time display.
     """
-    completion_time = (datetime.datetime.now() + datetime.timedelta(seconds=seconds_to_sleep)).strftime('%H:%M')
+    completion_time = (datetime.now() + timedelta(seconds=seconds_to_sleep)).strftime('%H:%M')
 
     shared_state["remain_time"] = seconds_to_sleep
     shared_state["completion_time"] = "@ " + completion_time
@@ -555,6 +597,7 @@ async def init_balance():
     """
         Init display values
     """
+    
     dusk_data = await fetch_dusk_data()
     if not dusk_data:
         dusk_data = {}
@@ -592,7 +635,8 @@ async def stake_management_loop():
     while True:
         
         try:
-            dusk_info= await fetch_dusk_data()
+            dusk_info= await fetch_dusk_data() or {}
+            
             shared_state["price"] = dusk_info.get('usd',0)
         except Exception as e:
             logging.error(f"Error in real-time display: {e}")
@@ -737,9 +781,9 @@ async def stake_management_loop():
             shared_state["last_action_taken"] = f"No Action @ Block {block_height}"
 
             b = shared_state["balances"]
-            totBal = b["public"] + b["shielded"]
+            #totBal = b["public"] + b["shielded"]
             
-            now_ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
+            now_ts = datetime.now().strftime('%Y-%m-%d %H:%M')
             
             if shared_state["first_run"]:
                 
@@ -786,21 +830,22 @@ async def stake_management_loop():
                 action = shared_state["last_action_taken"]
                 
                 stats = (
-                f"\n{"=" * 44}\n"
-                f"  Action       : {action}\n"
-                f"  Balance      : {format_float(totBal)} DUSK\n"
-                f"    ├─ Public  :   {format_float(b['public'])} DUSK (${format_float(b['public'] * float(shared_state["price"]))})\n"
-                f"    └─ Shielded:   {format_float(b['shielded'])} DUSK (${format_float(b['shielded'] * float(shared_state["price"]))})\n"
-                f"  Staked       : {format_float(stake_amount)} DUSK (${format_float(stake_amount * float(shared_state["price"]))})\n"
-                f"  Rewards      : {format_float(rewards_amount)} DUSK (${format_float(rewards_amount * float(shared_state["price"]))})\n"
-                f"  Reclaimable  : {format_float(reclaimable_slashed_stake)} DUSK (${format_float(reclaimable_slashed_stake * float(shared_state["price"]))})\n"
+                f"  Timestamp     :  {now_ts}\n"
+                f"{"=" * 44}\n"
+                f"  Action              :  {action}\n\n"
+                f"  Balance           :  {format_float(b['public'] + b['shielded'],)}\n"
+                f"    ├─ Public      :    {format_float(b['public'])} (${format_float(b['public'] * float(shared_state["price"]))})\n"
+                f"    └─ Shielded  :    {format_float(b['shielded'])} (${format_float(b['shielded'] * float(shared_state["price"]))})\n\n"
+                f"  Staked              :  {format_float(stake_amount)} (${format_float(stake_amount * float(shared_state["price"]))})\n"
+                f"  Rewards           :  {format_float(rewards_amount)} (${format_float(rewards_amount * float(shared_state["price"]))})\n"
+                f"  Reclaimable    :  {format_float(reclaimable_slashed_stake)} (${format_float(reclaimable_slashed_stake * float(shared_state["price"]))})\n"
                     )
                 notifier.notify(stats, shared_state)
 
             action = shared_state["last_action_taken"]
             
             
-            now_ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
+            now_ts = datetime.now().strftime('%Y-%m-%d %H:%M')
 
             # Fetch required data
             block_height = shared_state["block_height"]
@@ -826,13 +871,13 @@ async def stake_management_loop():
             
             # Display logs above the real-time display
             
-            # if not first_run:
-                
+            if first_run:
+                log_action("Startup", f"Block: {block_height_str}","debug") 
             #    for entry in log_entries:
             #        console.print(entry)
 
             # Mark first run as completed after the first iteration 
-            first_run = False
+                first_run = False
 
         # Sleep until near the next epoch
         await sleep_until_next_epoch(block_height, buffer_blocks=buffer_blocks)
@@ -854,7 +899,7 @@ async def realtime_display(enable_tmux=False):
     """
     first_run = True
 
-    with Live(console=console, refresh_per_second=10, auto_refresh=False) as live:
+    with Live(console=console, refresh_per_second=4, auto_refresh=False) as live:
         while True:
             try:
                 blk = shared_state["block_height"]
@@ -864,9 +909,12 @@ async def realtime_display(enable_tmux=False):
                 remain_seconds = shared_state["remain_time"]
                 disp_time = format_hms(remain_seconds) if remain_seconds > 0 else "0s"
                 donetime = shared_state["completion_time"]
+                if donetime == '--:--':
+                    await asyncio.sleep(2)
+                    continue
                 tot_bal = b["public"] + b["shielded"]
                 price = shared_state["price"]
-                now_ts = datetime.datetime.now().strftime('%m-%d %H:%M:%S')
+                now_ts = datetime.now().strftime('%m-%d %H:%M:%S')
 
                 # Display byline and settings on the first run
                 if first_run:
@@ -900,17 +948,20 @@ async def realtime_display(enable_tmux=False):
                 elif int(shared_state['peer_count']) > 16:
                     peercolor = YELLOW    
                 
-                currenttime = datetime.datetime.now().strftime('%H:%M:%S')
-                allocation_bar, allocation_bar2 = display_wallet_distribution_bar(b['public'],b['shielded'],10)
+                currenttime = datetime.now().strftime('%H:%M:%S')
+                allocation_bar = display_wallet_distribution_bar(b['public'],b['shielded'],8)
                 # Real-time display content (no surrounding panel)
                 realtime_content = (
                     f" {LIGHT_WHITE}======={DEFAULT} {currenttime} Block: {LIGHT_BLUE}#{blk} {DEFAULT}Peers: {peercolor}{shared_state['peer_count']}{DEFAULT} {LIGHT_WHITE}=======\n"
                     f"    {CYAN}Last Action{DEFAULT}   | {CYAN}{last_act}{DEFAULT}\n"
                     f"    {LIGHT_GREEN}Next Check    {DEFAULT}| {charclr}{disp_time}{DEFAULT} ({donetime}){DEFAULT}\n"
                     f"                  |\n"
-                    f"    {LIGHT_WHITE}Balance{DEFAULT}       | {LIGHT_WHITE}  @ ${format_float(price,3)} USD{DEFAULT} {chg24}\n"
-                    f"      {LIGHT_WHITE}├─ {YELLOW}Public   {DEFAULT}| {YELLOW}{format_float(b['public'])} (${format_float(b['public'] * price, 2)}) {allocation_bar}{DEFAULT}\n"
-                    f"      {LIGHT_WHITE}└─ {BLUE}Shielded {DEFAULT}| {BLUE}{format_float(b['shielded'])} (${format_float(b['shielded'] * price, 2)}) {allocation_bar2}{DEFAULT}\n"
+                    f"    {LIGHT_WHITE}Price USD{DEFAULT}     | {LIGHT_WHITE}${format_float(price,3)}{DEFAULT} {chg24}\n"
+                    f"                  |\n"
+                    f"    {LIGHT_WHITE}Balance{DEFAULT}       | {LIGHT_WHITE}{allocation_bar}\n"
+                    
+                    f"      {LIGHT_WHITE}├─ {YELLOW}Public   {DEFAULT}| {YELLOW}{format_float(b['public'])} (${format_float(b['public'] * price, 2)}){DEFAULT}\n"
+                    f"      {LIGHT_WHITE}└─ {BLUE}Shielded {DEFAULT}| {BLUE}{format_float(b['shielded'])} (${format_float(b['shielded'] * price, 2)}){DEFAULT}\n"
                     f"         {LIGHT_WHITE}   Total {DEFAULT}| {LIGHT_WHITE}{format_float(tot_bal)} DUSK (${format_float((tot_bal) * price, 2)}){DEFAULT}\n"
                     f"     \n"
                     f"    {LIGHT_WHITE}Staked{DEFAULT}        | {LIGHT_WHITE}{format_float(st_info['stake_amount'])} (${format_float(st_info['stake_amount'] * price, 2)}){DEFAULT}\n"
@@ -938,7 +989,7 @@ async def realtime_display(enable_tmux=False):
 
                 if enable_tmux:
                     try:
-                        blk = f"\r> Blk: #{blk} | "
+                        curblk = f"\r> Blk: #{blk} | "
                         stk = f"Stk: {format_float(st_info['stake_amount'])} | "
                         rcl = f"Rcl: {format_float(st_info['reclaimable_slashed_stake'])} | "
                         rwd = f"Rwd: {format_float(st_info['rewards_amount'])} | "
@@ -954,7 +1005,7 @@ async def realtime_display(enable_tmux=False):
                         #splitter= " | "
                         
                         if not status_bar.get('show_current_block', True):
-                            blk = str()
+                            curblk = str()
                         if not status_bar.get('show_staked', True):
                             stk = str()
                         if not status_bar.get('show_public', True):
@@ -982,7 +1033,7 @@ async def realtime_display(enable_tmux=False):
                             spacer = "  "
 
                             
-                        tmux_status = f"\r> {blk}{stk}{rcl}{rwd}{bal}{p}{spacer}{s}{splitter}{usd}{last_txt}{timer}{donetime}{peercnt} {error_txt}"
+                        tmux_status = f"\r> {curblk}{stk}{rcl}{rwd}{bal}{p}{spacer}{s}{splitter}{usd}{last_txt}{timer}{donetime}{peercnt} {error_txt}"
 
                         subprocess.check_call(["tmux", "set-option", "-g", "status-left", remove_ansi(tmux_status)])
                     except subprocess.CalledProcessError:
@@ -1012,7 +1063,7 @@ async def main():
     if enable_dashboard and dash_port and dash_ip:
         from utilities.web_dashboard import start_dashboard
         await start_dashboard(shared_state, log_entries, host=dash_ip, port=dash_port)
-        console.clear()
+        #console.clear()
         
     await asyncio.gather(
         stake_management_loop(),
