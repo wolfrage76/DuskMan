@@ -1,3 +1,4 @@
+
 GENERAL:
   buffer_blocks: 21 # How many blocks before Epoch to trigger (1 block = 10seconds)
   enable_tmux: False # Enables tmux statusbar 

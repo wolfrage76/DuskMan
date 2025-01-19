@@ -714,27 +714,27 @@ async def stake_management_loop():
                 )
 
                 # 1) Withdraw
-                curr_cmd = f"{use_sudo} rusk-wallet --password {password} withdraw"
-                curr_cmd2 = f"{use_sudo} rusk-wallet --password ####### withdraw"
-                cmd_success = await execute_command_async(curr_cmd)
+            
+                curr_cmd = f"{use_sudo} rusk-wallet --password ####### withdraw"
+                cmd_success = await execute_command_async(curr_cmd.replace('######',f"{password}"))
                 if not cmd_success:
-                    log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd2}", 'error')
+                    log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
                     raise Exception("CMD execution failed")
                 
                 # 2) Unstake
-                curr_cmd =f"{use_sudo} rusk-wallet --password {password} unstake"
-                curr_cmd2 =f"{use_sudo} rusk-wallet --password ####### unstake"
-                cmd_success = await execute_command_async(curr_cmd)
+            
+                curr_cmd =f"{use_sudo} rusk-wallet --password ####### unstake"
+                cmd_success = await execute_command_async(curr_cmd.replace('######',f"{password}"))
                 if not cmd_success:
-                    log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd2}", 'error')
+                    log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
                     raise Exception("CMD execution failed")
                 
                 # 3) Stake
-                curr_cmd = f"{use_sudo} rusk-wallet --password {password} stake --amt {total_restake}"
-                curr_cmd2 = f"{use_sudo} rusk-wallet --password ####### stake --amt {total_restake}"
-                cmd_success = await execute_command_async(curr_cmd)
+            
+                curr_cmd = f"{use_sudo} rusk-wallet --password ####### stake --amt {total_restake}"
+                cmd_success = await execute_command_async(curr_cmd.replace('######',f"{password}"))
                 if not cmd_success:
-                    log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd2}", 'error')
+                    log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
                     raise Exception("CMD execution failed")
 
                 log_action("Restake Completed", f"New Stake: {format_float(float(total_restake))}")
@@ -754,19 +754,19 @@ async def stake_management_loop():
             log_action("Claim and Stake", f"Rewards: {format_float(rewards_amount)}")
 
             # 1) Withdraw
-            curr_cmd =f"{use_sudo} rusk-wallet --password {password} withdraw"
-            curr_cmd2 =f"{use_sudo} rusk-wallet --password ###### withdraw"
-            cmd_success = await execute_command_async(curr_cmd) # TODO: have it use curr_cmd.replace('######',f"{password}"))
+            
+            curr_cmd =f"{use_sudo} rusk-wallet --password ###### withdraw"
+            cmd_success = await execute_command_async(curr_cmd.replace('######',f"{password}"))
             if not cmd_success:
-                    log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd2}", 'error')
+                    log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
                     raise Exception("CMD execution failed")
                 
             # 2) Stake
-            curr_cmd = f"{use_sudo} rusk-wallet --password {password} stake --amt {rewards_amount}"
-            curr_cmd2 = f"{use_sudo} rusk-wallet --password ###### stake --amt {rewards_amount}"
-            cmd_success = await execute_command_async(curr_cmd)
+            
+            curr_cmd = f"{use_sudo} rusk-wallet --password ###### stake --amt {rewards_amount}"
+            cmd_success = await execute_command_async(curr_cmd.replace('######',f"{password}"))
             if not cmd_success:
-                    log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd2}", 'error')
+                    log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
                     raise Exception("CMD execution failed")
                 
             new_stake = stake_amount + rewards_amount
@@ -830,54 +830,31 @@ async def stake_management_loop():
                 action = shared_state["last_action_taken"]
                 # Fetch required data
                 block_height = shared_state["block_height"]
-                action = shared_state["last_action_taken"]
-                st_info = shared_state["stake_info"]
+            else:
+                continue    
+            # st_info = shared_state["stake_info"]
 
-                stats = (
-                f"\t==== Activity @{now_ts}====\n"
-                #f"{"=" * 44}\n"
-                f"  Action              :  {action}\n\n"
-                f"  Balance           :  {format_float(b['public'] + b['shielded'],)}\n"
-                f"    ├─ Public      :    {format_float(b['public'])} (${format_float(b['public'] * float(shared_state["price"]))})\n"
-                f"    └─ Shielded  :    {format_float(b['shielded'])} (${format_float(b['shielded'] * float(shared_state["price"]))})\n\n"
-                f"  Staked              :  {format_float(st_info['stake_amount'])} (${format_float(st_info['stake_amount'] * float(shared_state["price"]))})\n"
-                f"  Rewards           :  {format_float(st_info['rewards_amount'])} (${format_float(st_info['rewards_amount'] * float(shared_state["price"]))})\n"
-                f"  Reclaimable    :  {format_float(st_info['reclaimable_slashed_stake'])} (${format_float(st_info['reclaimable_slashed_stake'] * float(shared_state["price"]))})\n"
-                    )
-                notifier.notify(stats, shared_state)
 
-            action = shared_state["last_action_taken"]
+            Log_info = (
+            f"\t==== Activity @{now_ts}====\n"
+            f"  Action              :  {action}\n\n"
+            f"  Balance           :  {format_float(b['public'] + b['shielded'],)}\n"
+            f"    ├─ Public      :    {format_float(b['public'])} (${format_float(b['public'] * float(shared_state["price"]))})\n"
+            f"    └─ Shielded  :    {format_float(b['shielded'])} (${format_float(b['shielded'] * float(shared_state["price"]))})\n\n"
+            f"  Staked              :  {format_float(shared_state.get('stake_info',{}).get('stake_amount','0.0'))} (${format_float(shared_state.get('stake_info',{}).get('stake_amount','0.0') * float(shared_state["price"]))})\n"
+            f"  Rewards           :  {format_float(shared_state.get('stake_info',{}).get('rewards_amount','0.0'))} (${format_float(shared_state.get('stake_info',{}).get('rewards_amount',{}) * float(shared_state["price"]))})\n"
+            f"  Reclaimable    :  {format_float(shared_state.get('stake_info',{}).get('reclaimable_slashed_stake','0.0'))} (${format_float(shared_state.get('stake_info',{}).get('reclaimable_slashed_stake') * float(shared_state["price"]))})\n"
+                )
             
-            now_ts = datetime.now().strftime('%Y-%m-%d %H:%M')
+            notifier.notify(Log_info, shared_state)
 
-            # Fetch required data
-            block_height = shared_state["block_height"]
-            action = shared_state["last_action_taken"]
-            st_info = shared_state["stake_info"]
-
-            
-            # Generate log entry
-            """ log_entry = (
-                f"\n\t==== Activity @{now_ts}====\n"
-                f"\n"
-                #f"\t Current Block : #{block_height}\n"
-                f"\t Last Action   : {action}\n"
-                f"\t Staked        : {format_float(st_info['stake_amount'])} (${format_float(st_info['stake_amount'] * shared_state['price'], 2)})\n"
-                f"\t Rewards       : {format_float(st_info['rewards_amount'])} (${format_float(st_info['rewards_amount'] * shared_state['price'], 2)})\n"
-                f"\t Reclaimable   : {format_float(st_info['reclaimable_slashed_stake'])} (${format_float(st_info['reclaimable_slashed_stake'] * shared_state['price'], 2)})\n"
-                f"\t \n"
-                ) """
-            
-            log_entry = (stats)
-            
             if len(log_entries) > 15:
                 log_entries.pop(0)
-            log_entries.append(log_entry)
+            log_entries.append(Log_info)
             
             # Display logs above the real-time display
             
-            #if first_run:
-                #log_action("Startup", f"Block: {block_height_str}","debug") 
+            #if not first_run:
             #    for entry in log_entries:
             #        console.print(entry)
 
@@ -1001,13 +978,6 @@ async def realtime_display(enable_tmux=False):
                         bal = "Bal: "
                         p = f"P:{format_float(b['public'])}"
                         s = f"S:{format_float(b['shielded'])}"
-                        
-                        #x = usd
-                        #usd = f"$USD: {format_float(shared_state["price"],3)} {chg24} | "
-                        #timer = f"Next: {disp_time} "
-                        #donetime = f"({shared_state["completion_time"]}) "
-                        #peercnt = f"Peers: {shared_state["peer_count"]}"
-                        #splitter= " | "
                         
                         if not status_bar.get('show_current_block', True):
                             curblk = str()
