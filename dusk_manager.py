@@ -199,7 +199,7 @@ def display_wallet_distribution_bar(public_amount, shielded_amount, width=30):
     pub_pct = public_ratio * 100
     shd_pct = shielded_ratio * 100
     
-    return f"{YELLOW}{pub_pct:6.2f}% {bar_str}",f"{BLUE}{shd_pct:6.2f}% {bar_str2}"
+    return f"{YELLOW}{pub_pct:6.2f}% {bar_str} {BLUE}{shd_pct:6.2f}%"
         
     
 
@@ -423,8 +423,8 @@ async def sleep_with_feedback(seconds_to_sleep, msg=None):
         shared_state["remain_time"] -= interval
 
     # Optionally clear or log
-    sys.stdout.write("\r" + (" " * 120) + "\r")
-    sys.stdout.flush()
+    #sys.stdout.write("\r" + (" " * 120) + "\r")
+    #sys.stdout.flush()
 
 async def sleep_until_next_epoch(block_height, buffer_blocks=60, msg=None):
     """
@@ -586,18 +586,20 @@ async def stake_management_loop():
     Main staking logic. Sleeps until the next epoch after each action/no-action.
     Meanwhile, frequent_update_loop updates block height & balances for display.
     """
-    # password = get_env_variable("MY_WALLET_VARIABLE", dotenv_key="WALLET_PASSWORD")
 
     first_run = True
     
     while True:
         
         try:
-            dusk_info= await fetch_dusk_data()
+            dusk_info = await fetch_dusk_data()
             shared_state["price"] = dusk_info.get('usd',0)
         except Exception as e:
-            logging.error(f"Error in real-time display: {e}")
-            
+            #logging.error(f"Error in real-time display: {e}")
+            #await sleep_with_feedback(10, "retry block height fetch")
+            await asyncio.sleep(5)
+            continue
+        
         # For logic, we may want a fresh block height right before we do anything:
         block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height")
         if not block_height_str:
@@ -729,6 +731,9 @@ async def stake_management_loop():
             new_stake = stake_amount + rewards_amount
             log_action("Stake Completed", f"New Stake: {format_float(new_stake)}")
             shared_state["last_claim_block"] = block_height
+            
+            await sleep_until_next_epoch(block_height, msg="Waiting until next Epoch")
+            continue
 
         else:
             # No action
@@ -742,35 +747,13 @@ async def stake_management_loop():
             
             if shared_state["first_run"]:
                 
-                byline = Text("\n  DuskMan - Stake Management System: By Wolfrage", style="bold blue")
-
-                notification_services = []
-                if notification_config.get('discord_webhook'):
-                    notification_services.append('Discord')
-                if notification_config.get('pushbullet_token'):
-                    notification_services.append('PushBullet')
-                if notification_config.get('telegram_bot_token') and notification_config.get('telegram_chat_id'):
-                    notification_services.append('Telegram')
-                if notification_config.get('pushover_user_key') and notification_config.get('pushover_app_token'):
-                    notification_services.append('Pushover')
-                if notification_config.get('webhook_url'):
-                    notification_services.append('Webhook')
+                byline = Text("\n  DuskMan: Stake Management System - By Wolfrage", style="bold blue")
                 
-                if len(notification_services) > 2 and notification_services:
-                    services = "\n\t\t  " + " ".join(notification_services)
-                elif len(notification_services) <= 2 and notification_services:   
-                    services = " ".join(notification_services)
-                else:
-                    services = "None"
-                    
+                #auto_status = f'\n\tEnable tmux Support:     {enable_tmux}\n\tAuto Staking Rewards:    {auto_stake_rewards}\n\tAuto Restake to Reclaim: {auto_reclaim_full_restakes}\n\t{notification_status}'
+                #separator = "  [bold white]" + ("=" * 47) + "[/bold white]"
                 
-                notification_status = f'Enabled Notifications:[yellow]   {services}\n'
-                
-                auto_status = f'\n\tEnable tmux Support:     {enable_tmux}\n\tAuto Staking Rewards:    {auto_stake_rewards}\n\tAuto Restake to Reclaim: {auto_reclaim_full_restakes}\n\t{notification_status}'
-                separator = "  [bold white]" + ("=" * 47) + "[/bold white]"
-                
-                console.print(byline)
-                print(separator + auto_status)
+                #console.print(byline)
+               # print(separator + auto_status)
                 
                 
                 shared_state["first_run"] = False
@@ -779,7 +762,7 @@ async def stake_management_loop():
                 
                 stats = (
                 f"\n{"=" * 44}\n"
-                f"  Action       : {action}\n"
+                f"  Action       : {now_ts} {action}\n"
                 f"  Balance      : {format_float(totBal)} DUSK\n"
                 f"    ├─ Public  :   {format_float(b['public'])} DUSK (${format_float(b['public'] * float(shared_state["price"]))})\n"
                 f"    └─ Shielded:   {format_float(b['shielded'])} DUSK (${format_float(b['shielded'] * float(shared_state["price"]))})\n"
@@ -799,29 +782,30 @@ async def stake_management_loop():
             action = shared_state["last_action_taken"]
             st_info = shared_state["stake_info"]
 
-            
-            # Generate log entry
-            log_entry = (
-                f"\n\t==== Activity @{now_ts}====\n"
-                f"\n"
-                #f"\t Current Block : #{block_height}\n"
-                f"\t Last Action   : {action}\n"
-                f"\t Staked        : {format_float(st_info['stake_amount'])} (${format_float(st_info['stake_amount'] * shared_state['price'], 2)})\n"
-                f"\t Rewards       : {format_float(st_info['rewards_amount'])} (${format_float(st_info['rewards_amount'] * shared_state['price'], 2)})\n"
-                f"\t Reclaimable   : {format_float(st_info['reclaimable_slashed_stake'])} (${format_float(st_info['reclaimable_slashed_stake'] * shared_state['price'], 2)})\n"
-                f"\t \n"
-                )
-            
-            if len(log_entries) > 20:
-                log_entries.pop(0)
-            log_entries.append(log_entry)
-            
+            x = 0
+            while x < 10:
+                # Generate log entry
+                log_entry = (
+                    f"\n\t==== Activity @{now_ts}====\n"
+                    f"\n"
+                    #f"\t Current Block : #{block_height}\n"
+                    f"\t Last Action   : {action}\n"
+                    f"\t Staked        : {format_float(st_info['stake_amount'])} (${format_float(st_info['stake_amount'] * shared_state['price'], 2)})\n"
+                    f"\t Rewards       : {format_float(st_info['rewards_amount'])} (${format_float(st_info['rewards_amount'] * shared_state['price'], 2)})\n"
+                    f"\t Reclaimable   : {format_float(st_info['reclaimable_slashed_stake'])} (${format_float(st_info['reclaimable_slashed_stake'] * shared_state['price'], 2)})\n"
+                    f"\t \n"
+                    )
+                
+                if len(log_entries) > 20:
+                    log_entries.pop(0)
+                log_entries.append(log_entry)
+                x += 1
             # Display logs above the real-time display
             
-            if not first_run:
+            #if not first_run:
                 #for entry in log_entries:
-                
-                console.print(log_entries[0])
+                #console.clear()
+                #console.print(log_entries[0])
 
             # Mark first run as completed after the first iteration 
             first_run = False
@@ -835,156 +819,240 @@ async def stake_management_loop():
 # ─────────────────────────────────────────────────────────────────────────────
 
 from rich.live import Live
-from rich.table import Table
+from rich.layout import Layout
 from rich.panel import Panel
+from rich.table import Table
 from rich.text import Text
+from rich.align import Align
+from rich.box import ROUNDED
+import datetime
+
 
 async def realtime_display(enable_tmux=False):
     """
-    Continuously display real-time info in the console.
-    Initially shows configuration and byline, then switches to real-time stats.
+    Continuously display real-time info in the console using Rich Layout.
+    Also updates TMUX status bar if enabled.
     """
-    first_run = True
 
-    with Live(console=console, refresh_per_second=10, auto_refresh=False) as live:
+    # Create the main layout
+    layout = Layout(name="root")
+    layout.split_column(
+        Layout(name="header", size=3),
+        Layout(name="body", ratio=1),
+        # Remove or reduce the footer if space is tight:
+        # Layout(name="footer", size=1),
+    )
+
+    # The body is split into a left and right column.
+    layout["body"].split_row(
+        Layout(name="left", ratio=1),
+        Layout(name="right", ratio=1, ),
+    )
+
+    # The left column is further split vertically for Node Stats and Balances
+    layout["left"].split_column(
+        Layout(name="node_stats", size=9),
+        Layout(name="balances"),
+        #Layout(name="options",size=10),
+    )
+
+    def truncate_to(num, decimals=4):
+        """Truncate a number to a certain number of decimals (no rounding)."""
+        if not isinstance(num, (float, int)):
+            return str(num)
+        s = str(num)
+        if "." not in s:
+            return s
+        front, back = s.split(".", 1)
+        return f"{front}.{back[:decimals]}"
+
+    def update_layout():
+        """
+        Updates all sections of the layout with real-time data.
+        """
+        # 1) HEADER
+        now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        header_text = Text.assemble(
+            ("DuskMan: Dusk Stake Manager  ", "bold cyan"),
+            (f"{now_str}", "bold white"),
+        )
+        layout["header"].update(
+            Panel(Align.center(header_text), )
+        )
+
+        # 2) NODE STATS
+        stats_table = Table(
+            expand=True,
+            show_header=False,
+            padding=(0, 0),
+        )
+        
+        stats_table.add_column("Metric", style="bold yellow", no_wrap=True)
+        stats_table.add_column("Value", style="bold white")
+
+        
+
+        blk = shared_state["block_height"]
+        peer_count = shared_state["peer_count"]
+        remain_seconds = shared_state["remain_time"]
+        disp_time = format_hms(remain_seconds) if remain_seconds > 0 else "0s"
+        completion_time = shared_state["completion_time"]
+        last_action = shared_state["last_action_taken"]
+
+        stats_table.add_row("Block Height", f"#{blk}")
+        stats_table.add_row("Peer Count", str(peer_count))
+        stats_table.add_row("Next Check", f"{disp_time} ({completion_time})")
+        stats_table.add_row("Last Action", f"{last_action}")
+
+        node_stats_panel = Panel(
+            stats_table,
+            title=" Node Stats ",
+            border_style="bright_cyan",
+        )
+        layout["left"]["node_stats"].update(node_stats_panel)
+
+        # 3) BALANCES & STAKING
+        b = shared_state["balances"]
+        st_info = shared_state["stake_info"]
+        price = shared_state["price"]
+
+        pub_bal = b["public"]
+        shld_bal = b["shielded"]
+        tot_bal = pub_bal + shld_bal
+        staked = st_info["stake_amount"]
+        rewards = st_info["rewards_amount"]
+        reclaimable = st_info["reclaimable_slashed_stake"]
+
+        balance_table = Table(
+            show_header=False,
+            expand=True,
+            padding=(0, 0),
+        )
+        balance_table.add_column("Label", justify="right", style="bold yellow")
+        balance_table.add_column("Amount", style="bold white")
+
+        balance_table.add_row("Public", f"{truncate_to(pub_bal,4)} DUSK (${(pub_bal*price):.2f})")
+        balance_table.add_row("Shielded", f"{truncate_to(shld_bal,4)} DUSK (${(shld_bal*price):.2f})")
+        balance_table.add_row("Total", f"{truncate_to(tot_bal,4)} DUSK (${(tot_bal*price):.2f})")
+        balance_table.add_row("Staked", f"{truncate_to(staked,4)} (${staked*price:.2f})")
+        balance_table.add_row("Rewards", f"{truncate_to(rewards,4)} (${rewards*price:.2f})")
+        balance_table.add_row("Reclaimable", f"{truncate_to(reclaimable,4)} (${reclaimable*price:.2f})")
+
+        balances_panel = Panel(
+            balance_table,
+            title=" Balances & Staking ",
+            border_style="bright_blue",
+            height=11
+        )
+        layout["left"]["balances"].update(balances_panel)
+# 3) OPTIONS
+        
+        notification_services = []
+        if notification_config.get('discord_webhook'):
+            notification_services.append('Discord')
+        if notification_config.get('pushbullet_token'):
+            notification_services.append('PushBullet')
+        if notification_config.get('telegram_bot_token') and notification_config.get('telegram_chat_id'):
+            notification_services.append('Telegram')
+        if notification_config.get('pushover_user_key') and notification_config.get('pushover_app_token'):
+            notification_services.append('Pushover')
+        if notification_config.get('webhook_url'):
+            notification_services.append('Webhook')
+        
+        if len(notification_services) > 2 and notification_services:
+            services = "\n\t\t  " + " ".join(notification_services)
+        elif len(notification_services) <= 2 and notification_services:   
+            services = " ".join(notification_services)
+        else:
+            services = "None"
+            
+        
+        notification_status = f'Enabled Notifications:[yellow]   {services}\n'
+            
+        options_table = Table(expand=True, show_header=False,)
+        options_table.add_column("Option", style="bold yellow", no_wrap=True)
+        options_table.add_column("Value", style="bold white")
+        options_table.add_row("Enabled tmux Support","True" if config.get("enable_tmux", False) else "Disabled")
+        options_table.add_row("Auto Stake Rewards", "True" if config.get("auto_stake_rewards", False) else "Disabled")
+        options_table.add_row("Auto Reclaim Full Restakes","True" if config.get("auto_reclaim_full_restakes", False) else "Disabled",)
+        options_table.add_row("Enabled Notifications", services)
+        
+        # Limit height so it doesn't push everything else off the screen
+        options_panel = Panel(
+            options_table,
+            title=" Options ",
+            border_style="bright_magenta",
+            height=10,
+            expand=True,
+        )
+        # layout["left"]["options"].update(options_panel)
+        
+        
+        # 4) RECENT LOGS (limit its height!)
+        log_table = Table(
+            expand=True,
+            show_header=False,
+            padding=(0, 0),
+        )
+        log_table.add_column("Logs", style="bold white", no_wrap=True, overflow="fold")
+
+        # Show the last 5 logs, newest first
+        recent_logs = reversed(log_entries[-5:])
+        for raw_log in recent_logs:
+            log_table.add_row(raw_log.strip())
+
+        # Limit height so it doesn't push everything else off the screen
+        logs_panel = Panel(
+            log_table,
+            title=" Recent Logs ",
+            border_style="bright_magenta",
+            expand=True,
+        )
+        layout["right"].update(logs_panel)
+
+        # 5) FOOTER (Removed or commented out to save space)
+        # footer_text = Text("Hello!", justify="center", style="bold white")
+        # footer_panel = Panel(
+        #     footer_text,
+        #     box=box.ROUNDED,
+        #     style="on black",
+        # )
+        # layout["footer"].update(footer_panel)
+
+    async def update_tmux_status():
+        """
+        Update the TMUX status bar with current stats.
+        """
+        if not enable_tmux:
+            return
+
+        blk = f"Blk: #{shared_state['block_height']}"
+        pcount = f"Peers: {shared_state['peer_count']}"
+        laction = f"Last: {shared_state['last_action_taken']}"
+        status_text = f"{blk} | {pcount} | {laction}"
+
+        try:
+            subprocess.check_call(["tmux", "set-option", "-g", "status-left", remove_ansi(status_text)])
+        except subprocess.CalledProcessError:
+            logging.error("Failed to update TMUX status bar. Is tmux running?")
+
+    # The real-time display loop
+    with Live(layout, console=console, refresh_per_second=10, auto_refresh=False) as live:
         while True:
             try:
-                blk = shared_state["block_height"]
-                st_info = shared_state["stake_info"]
-                b = shared_state["balances"]
-                last_act = shared_state["last_action_taken"]
-                remain_seconds = shared_state["remain_time"]
-                disp_time = format_hms(remain_seconds) if remain_seconds > 0 else "0s"
-                donetime = shared_state["completion_time"]
-                tot_bal = b["public"] + b["shielded"]
-                price = shared_state["price"]
-                now_ts = datetime.datetime.now().strftime('%m-%d %H:%M:%S')
+                # Update the layout with fresh data
+                update_layout()
 
-                # Display byline and settings on the first run
-                if first_run:
-                    first_run = False
-                    await asyncio.sleep(1)  # Pause briefly before switching to real-time display
-                    continue 
-                charclr =str()
-                
-                if remain_seconds <= 3600: # red <1hr
-                    charclr = RED
-                elif remain_seconds <= 7200: # yellow <2hr
-                    charclr = YELLOW
-                elif remain_seconds <= 10800: # green <3hr
-                    charclr = GREEN
-                else:
-                    charclr = LIGHT_WHITE
-                    
-                timer = f"Next:{charclr} {disp_time} "
-                chg24=""
-                if shared_state["usd_24h_change"] > 0:
-                    chg24 = f"({GREEN}+{shared_state["usd_24h_change"]:.2f}%{DEFAULT} 24h)"
-                elif shared_state["usd_24h_change"] < 0:
-                    chg24= f"({RED}{shared_state["usd_24h_change"]:.2f}%{DEFAULT} 24h)"
-                else:
-                    chg24= f"({DEFAULT}{shared_state["usd_24h_change"]:.2f}% 24h)"
-                usd = f"$USD: {format_float(shared_state["price"],3)} {chg24} | "
-                
-                peercolor = RED
-                if int(shared_state['peer_count']) > 40:
-                    peercolor = LIGHT_GREEN
-                elif int(shared_state['peer_count']) > 16:
-                    peercolor = YELLOW    
-                
-                currenttime = datetime.datetime.now().strftime('%H:%M:%S')
-                allocation_bar, allocation_bar2 = display_wallet_distribution_bar(b['public'],b['shielded'],10)
-                # Real-time display content (no surrounding panel)
-                realtime_content = (
-                    f" {LIGHT_WHITE}======={DEFAULT} {currenttime} Block: {LIGHT_BLUE}#{blk} {DEFAULT}Peers: {peercolor}{shared_state['peer_count']}{DEFAULT} {LIGHT_WHITE}=======\n"
-                    f"    {CYAN}Last Action{DEFAULT}   | {CYAN}{last_act}{DEFAULT}\n"
-                    f"    {LIGHT_GREEN}Next Check    {DEFAULT}| {charclr}{disp_time}{DEFAULT} ({donetime}){DEFAULT}\n"
-                    f"                  |\n"
-                    f"    {LIGHT_WHITE}Balance{DEFAULT}       | {LIGHT_WHITE}  @ ${format_float(price,3)} USD{DEFAULT} {chg24}\n"
-                    f"      {LIGHT_WHITE}├─ {YELLOW}Public   {DEFAULT}| {YELLOW}{format_float(b['public'])} (${format_float(b['public'] * price, 2)}) {allocation_bar}{DEFAULT}\n"
-                    f"      {LIGHT_WHITE}└─ {BLUE}Shielded {DEFAULT}| {BLUE}{format_float(b['shielded'])} (${format_float(b['shielded'] * price, 2)}) {allocation_bar2}{DEFAULT}\n"
-                    f"         {LIGHT_WHITE}   Total {DEFAULT}| {LIGHT_WHITE}{format_float(tot_bal)} DUSK (${format_float((tot_bal) * price, 2)}){DEFAULT}\n"
-                    f"     \n"
-                    f"    {LIGHT_WHITE}Staked{DEFAULT}        | {LIGHT_WHITE}{format_float(st_info['stake_amount'])} (${format_float(st_info['stake_amount'] * price, 2)}){DEFAULT}\n"
-                    f"    {YELLOW}Rewards{DEFAULT}       | {YELLOW}{format_float(st_info['rewards_amount'])} (${format_float(st_info['rewards_amount'] * price, 2)}){DEFAULT}\n"
-                    f"    {LIGHT_RED}Reclaimable{DEFAULT}   | {LIGHT_RED}{format_float(st_info['reclaimable_slashed_stake'])} (${format_float(st_info['reclaimable_slashed_stake'] * price, 2)}){DEFAULT}\n"
-                    f" ===============================================\n"
-                )
+                # Refresh the live display
+                live.refresh()
 
-                # Update the Live display
-                live.update(Text(realtime_content), refresh=True)
-
-                # Update TMUX status bar
-                
-                if errored:  # TODO: add visual alerts
-                    error_txt = "- !ERROR DETECTED!"
-                else:
-                    error_txt = str()
-                last_txt = str()
-                
-                donetime = f"{DEFAULT}({shared_state["completion_time"]}) "
-
-                peercnt = f"Peers: {shared_state["peer_count"]}"
-                splitter= " | "
-                
-
-                if enable_tmux:
-                    try:
-                        blk = f"\r> Blk: #{blk} | "
-                        stk = f"Stk: {format_float(st_info['stake_amount'])} | "
-                        rcl = f"Rcl: {format_float(st_info['reclaimable_slashed_stake'])} | "
-                        rwd = f"Rwd: {format_float(st_info['rewards_amount'])} | "
-                        bal = "Bal: "
-                        p = f"P:{format_float(b['public'])}"
-                        s = f"S:{format_float(b['shielded'])}"
-                        
-                        #x = usd
-                        #usd = f"$USD: {format_float(shared_state["price"],3)} {chg24} | "
-                        #timer = f"Next: {disp_time} "
-                        #donetime = f"({shared_state["completion_time"]}) "
-                        #peercnt = f"Peers: {shared_state["peer_count"]}"
-                        #splitter= " | "
-                        
-                        if not status_bar.get('show_current_block', True):
-                            blk = str()
-                        if not status_bar.get('show_staked', True):
-                            stk = str()
-                        if not status_bar.get('show_public', True):
-                            p = str()
-                        if not status_bar.get('show_shielded', True):
-                            s = str()
-                        if not status_bar.get('show_total', True):
-                            bal = str()
-                        if not status_bar.get('show_rewards', True):
-                            rwd = str()
-                        if not status_bar.get('show_reclaimable', True):
-                            rcl = str()
-                        if not status_bar.get('show_price', True):
-                            usd = str()
-                        if not status_bar.get('show_timer', True):
-                            timer = str()
-                        if not status_bar.get('show_trigger_time', True):
-                            donetime = str()
-                        if not status_bar.get('show_peer_count', True):
-                            peercnt = str()
-                        if not status_bar.get('show_public', True) and not status_bar.get('show_shielded', True):
-                            bal = str()
-                            splitter = str()
-                        if status_bar.get('show_public', True) and status_bar.get('show_shielded', True):
-                            spacer = "  "
-
-                            
-                        tmux_status = f"\r> {blk}{stk}{rcl}{rwd}{bal}{p}{spacer}{s}{splitter}{usd}{last_txt}{timer}{donetime}{peercnt} {error_txt}"
-
-                        subprocess.check_call(["tmux", "set-option", "-g", "status-left", remove_ansi(tmux_status)])
-                    except subprocess.CalledProcessError:
-                        logging.error("Failed to update tmux status bar. Is tmux running?")
-                        enable_tmux = False
+                # Update TMUX
+                await update_tmux_status()
 
                 await asyncio.sleep(1)
 
             except Exception as e:
-                logging.error(f"Error in real-time display: {e}")
+                logging.error(f"Error in real-time display loop: {e}")
                 await asyncio.sleep(5)
 
 # ─────────────────────────────────────────────────────────────────────────────
