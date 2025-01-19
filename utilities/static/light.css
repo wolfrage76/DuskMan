@@ -203,7 +203,7 @@ strong {
 }
 
 .log-entry-card {
-    background: #2f2f2f;
+    background: #FFFFFF;
     border-radius: 8px;
     padding: 0.6em 0.8em;
     margin-bottom: 1em;
@@ -242,7 +242,7 @@ strong {
     position: absolute;
     top: 10px;
     right: 10px;
-    background: #ccc;
+    background: #FFFF;
     color: #333;
     border: 1px solid #999;
     padding: 0.4em 0.8em;
