@@ -830,7 +830,7 @@ async def stake_management_loop():
                 action = shared_state["last_action_taken"]
                 
                 stats = (
-                f"  Timestamp     :  {now_ts}\n"
+                f"\t==== Activity @{now_ts}====\n"
                 f"{"=" * 44}\n"
                 f"  Action              :  {action}\n\n"
                 f"  Balance           :  {format_float(b['public'] + b['shielded'],)}\n"
@@ -844,17 +844,16 @@ async def stake_management_loop():
 
             action = shared_state["last_action_taken"]
             
-            
             now_ts = datetime.now().strftime('%Y-%m-%d %H:%M')
 
             # Fetch required data
             block_height = shared_state["block_height"]
             action = shared_state["last_action_taken"]
-            st_info = shared_state["stake_info"]
+            # st_info = shared_state["stake_info"]
 
             
             # Generate log entry
-            log_entry = (
+            """ log_entry = (
                 f"\n\t==== Activity @{now_ts}====\n"
                 f"\n"
                 #f"\t Current Block : #{block_height}\n"
@@ -863,7 +862,9 @@ async def stake_management_loop():
                 f"\t Rewards       : {format_float(st_info['rewards_amount'])} (${format_float(st_info['rewards_amount'] * shared_state['price'], 2)})\n"
                 f"\t Reclaimable   : {format_float(st_info['reclaimable_slashed_stake'])} (${format_float(st_info['reclaimable_slashed_stake'] * shared_state['price'], 2)})\n"
                 f"\t \n"
-                )
+                ) """
+            
+            log_entry = (stats)
             
             if len(log_entries) > 15:
                 log_entries.pop(0)
@@ -871,13 +872,13 @@ async def stake_management_loop():
             
             # Display logs above the real-time display
             
-            if first_run:
-                log_action("Startup", f"Block: {block_height_str}","debug") 
+            #if first_run:
+                #log_action("Startup", f"Block: {block_height_str}","debug") 
             #    for entry in log_entries:
             #        console.print(entry)
 
             # Mark first run as completed after the first iteration 
-                first_run = False
+            first_run = False
 
         # Sleep until near the next epoch
         await sleep_until_next_epoch(block_height, buffer_blocks=buffer_blocks)
