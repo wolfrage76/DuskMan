@@ -335,15 +335,15 @@ def parse_stake_info(output):
         for line in lines:
             line = line.strip()
             if "Eligible stake:" in line:
-                match = re.search(r"Eligible stake:\s*([\d\.]+)\s*DUSK", line)
+                match = re.search(r"Eligible stake:\s*([\d]+(?:\.\d+)?)\s*DUSK", line)
                 if match:
                     eligible_stake = float(match.group(1))
             elif "Reclaimable slashed stake:" in line:
-                match = re.search(r"Reclaimable slashed stake:\s*([\d\.]+)\s*DUSK", line)
+                match = re.search(r"Reclaimable slashed stake:\s*([\d]+(?:\.\d+)?)\s*DUSK", line)
                 if match:
                     reclaimable_slashed_stake = float(match.group(1))
             elif "Accumulated rewards is:" in line:
-                match = re.search(r"Accumulated rewards is:\s*([\d\.]+)\s*DUSK", line)
+                match = re.search(r"Accumulated rewards is:\s*([\d]+(?:\.\d+)?)\s*DUSK", line)
                 if match:
                     accumulated_rewards = float(match.group(1))
 
@@ -828,17 +828,21 @@ async def stake_management_loop():
                 shared_state["first_run"] = False
                 shared_state["last_action_taken"] = f"Startup @ Block #{block_height}"
                 action = shared_state["last_action_taken"]
-                
+                # Fetch required data
+                block_height = shared_state["block_height"]
+                action = shared_state["last_action_taken"]
+                st_info = shared_state["stake_info"]
+
                 stats = (
                 f"\t==== Activity @{now_ts}====\n"
-                f"{"=" * 44}\n"
+                #f"{"=" * 44}\n"
                 f"  Action              :  {action}\n\n"
                 f"  Balance           :  {format_float(b['public'] + b['shielded'],)}\n"
                 f"    ├─ Public      :    {format_float(b['public'])} (${format_float(b['public'] * float(shared_state["price"]))})\n"
                 f"    └─ Shielded  :    {format_float(b['shielded'])} (${format_float(b['shielded'] * float(shared_state["price"]))})\n\n"
-                f"  Staked              :  {format_float(stake_amount)} (${format_float(stake_amount * float(shared_state["price"]))})\n"
-                f"  Rewards           :  {format_float(rewards_amount)} (${format_float(rewards_amount * float(shared_state["price"]))})\n"
-                f"  Reclaimable    :  {format_float(reclaimable_slashed_stake)} (${format_float(reclaimable_slashed_stake * float(shared_state["price"]))})\n"
+                f"  Staked              :  {format_float(st_info['stake_amount'])} (${format_float(st_info['stake_amount'] * float(shared_state["price"]))})\n"
+                f"  Rewards           :  {format_float(st_info['rewards_amount'])} (${format_float(st_info['rewards_amount'] * float(shared_state["price"]))})\n"
+                f"  Reclaimable    :  {format_float(st_info['reclaimable_slashed_stake'])} (${format_float(st_info['reclaimable_slashed_stake'] * float(shared_state["price"]))})\n"
                     )
                 notifier.notify(stats, shared_state)
 
@@ -849,7 +853,7 @@ async def stake_management_loop():
             # Fetch required data
             block_height = shared_state["block_height"]
             action = shared_state["last_action_taken"]
-            # st_info = shared_state["stake_info"]
+            st_info = shared_state["stake_info"]
 
             
             # Generate log entry
