@@ -30,7 +30,7 @@ DuskMan automates the monitoring, and management, of **DUSK Network** staking, b
 
 - **Web Dashboard**:
   - View analytics through your favorite browser. Defaults to `http://localhost:5000`
-  - Enables API access via deault of `http://localhost:5000/api/data` 
+  - Enables API access to pull data via deafult of `http://localhost:5000/api/data` 
 
 - **Notification Support**:
   - Sends alerts via:
@@ -100,11 +100,11 @@ In the same directory as the script:
 8. **Run the Script in Foreground**:
 
     ```bash
-    python dusk_manager.py
+    python duskman.py
     ```  
 9. **Or Run script in the background**:
     ```bash
-    screen -dmS dusk_manager python dusk_manager.py
+    screen -dmS dusk_manager python duskman.py
     ```
 10. **Or run as a service**:
     Instructions coming later
