@@ -11,7 +11,7 @@ GENERAL:
   min_rewards: 1 # Minimum amount of rewards to consider claiming rewards to stake
   min_slashed: 1 # Minimum amount of slashed rewards from topoffs before considering restaking to reclaim
   
-  # Replaced with using .env file, but still works as an alternative:
+  # Replaced with using .env file (SEE INSTRUCTIONS), but still works as an alternative:
   # pwd_var_name: MY_WALLET_VARIABLE  # NAME OF THE ENVIRONMENT VARIABLE WITH THE PASSWORD! DO_NOT_ PUT IN YOUR DAMN PASSWORD HERE, FFS!
   #                                    # Make sure you read the instructions on exporting the environment variable.
   #                                    # OPTIONAL.  See instructions for .env file instead
@@ -30,7 +30,11 @@ NOTIFICATIONS:
   pushover_app_token:  # Leave Blank to Disable
   slack_webhook: # "https://hooks.slack.com/services/your/webhook/url"
   webhook_url:         # https://your-webhook-url.com/endpoint # For parsing with your own server/middleware
-  
+
+LOG_FILES:
+ action_log:           # Defaults to ./duskman_actions.log
+ debug_log:            # Defaults to ./duskman_tmp_debug.log  :NOTE: Is deleted on each start!
+ error_log:            # Defaults to ./duskman_errors.log
 
 STATUSBAR: # Determines what to show in bottom statusbar and tmux statusbar
   show_current_block: True
