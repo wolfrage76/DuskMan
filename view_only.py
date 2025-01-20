@@ -72,9 +72,6 @@ def load_config(section="GENERAL", file_path="config.yaml"):
         
 
 status_bar = load_config('STATUSBAR')
-viewer = load_config('VIEWER')
-remote_port = viewer.get('viewer_port', '5000')
-remote_ip = viewer.get('remote_ip', '127.0.0.1')
 
 def remove_ansi(text):
     # Regular expression to match ANSI escape sequences
@@ -89,8 +86,8 @@ def format_hms(seconds):
     minutes, seconds = divmod(remainder, 60)
     return f"{int(hours)}h {int(minutes)}m {int(seconds)}s"
 
-async def fetch_data(remote_ip, remote_port):
-    url = f"http://{remote_ip}:{remote_port}/api/data"
+async def fetch_data():
+    url = "http://localhost:5001/api/data"
     async with aiohttp.ClientSession() as session:
         while True:
             try:
@@ -287,7 +284,7 @@ async def realtime_display(enable_tmux=False):
 
                         subprocess.check_call(["tmux", "set-option", "-g", "status-left", remove_ansi(tmux_status)])
                     except subprocess.CalledProcessError:
-                        #logging.error("Failed to update tmux status bar. Is tmux running?")
+                        logging.error("Failed to update tmux status bar. Is tmux running?")
                         enable_tmux = False
 
                 await asyncio.sleep(1)
@@ -298,7 +295,7 @@ async def realtime_display(enable_tmux=False):
 
 
 async def main():
-    await asyncio.gather(fetch_data(remote_ip,remote_port), realtime_display())
+    await asyncio.gather(fetch_data(), realtime_display())
 
 if __name__ == "__main__":
     asyncio.run(main())

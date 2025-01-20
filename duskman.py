@@ -7,10 +7,10 @@ import yaml
 import asyncio
 import aiohttp
 
+from rich.live import Live
+from rich.text import Text
 from dotenv import load_dotenv
 from rich.console import Console
-from rich.table import Table
-from rich.text import Text
 from rich import print
 from datetime import datetime, timedelta
 from utilities.notifications import NotificationService
@@ -55,6 +55,9 @@ pwd_var = config.get('pwd_var_name', 'MY_WALLET_VARIABLE')
 enable_dashboard = web_dashboard.get('enable_dashboard', True)
 dash_port = web_dashboard.get('dash_port')
 dash_ip = web_dashboard.get('dash_ip', '0.0.0.0')
+include_rendered = web_dashboard.get('include_rendered', False)
+
+
 
 if config.get('use_sudo', False):
     use_sudo = 'sudo'
@@ -118,6 +121,7 @@ shared_state = {
     "market": 0,
     "volume": 0,
     "usd_24h_change": 0,
+    "rendered":""
 }
 
 # Define log file paths
@@ -556,10 +560,10 @@ async def frequent_update_loop():
             
             dusk_data = await fetch_dusk_data()
             if dusk_data:
-                shared_state["price"] = dusk_data.get("usd", "N/A")
-                shared_state["market_cap"]  = dusk_data.get("usd_market_cap", "N/A")
-                shared_state["volume"]  = dusk_data.get("usd_24h_vol", "N/A")
-                shared_state["usd_24h_change"]  = dusk_data.get("usd_24h_change", "N/A")
+                shared_state["price"] = dusk_data.get("usd", 0.0)
+                shared_state["market_cap"]  = dusk_data.get("usd_market_cap", 0.0)
+                shared_state["volume"]  = dusk_data.get("usd_24h_vol", 0.0)
+                shared_state["usd_24h_change"]  = dusk_data.get("usd_24h_change", 0.0)
                 
                 
             loopcnt = 0  # Reset loop count after update
@@ -888,11 +892,6 @@ async def stake_management_loop():
 # REAL-TIME DISPLAY
 # ─────────────────────────────────────────────────────────────────────────────
 
-from rich.live import Live
-from rich.table import Table
-from rich.panel import Panel
-from rich.text import Text
-
 async def realtime_display(enable_tmux=False):
     """
     Continuously display real-time info in the console.
@@ -970,7 +969,13 @@ async def realtime_display(enable_tmux=False):
                     f"    {LIGHT_RED}Reclaimable{DEFAULT}   | {LIGHT_RED}{format_float(st_info['reclaimable_slashed_stake'])} (${format_float(st_info['reclaimable_slashed_stake'] * price, 2)}){DEFAULT}\n"
                     f" ===============================================\n"
                 )
-
+                
+                if include_rendered:
+                    shared_state["rendered"] = realtime_content
+                else:
+                    shared_state["rendered"] = None
+                
+                
                 # Update the Live display
                 live.update(Text(realtime_content), refresh=True)
 
@@ -1047,6 +1052,49 @@ async def realtime_display(enable_tmux=False):
                 logging.error(f"Error in real-time display: {e}")
                 await asyncio.sleep(5)
 
+
+async def fetch_shared_info(hostname="localhost", port=5001, endpoint="/api/data"):
+    """
+    Fetch data from the specified endpoint and update the shared_state object.
+    
+    Args:
+        hostname (str): Hostname or IP address of the server.
+        port (int): Port of the server.
+        endpoint (str): API endpoint to fetch data from.
+    """
+    url = f"http://{hostname}:{port}{endpoint}"
+    while True:
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        
+                        # Update shared_state with received data
+                        shared_state["block_height"] = data.get("block_height", )
+                        shared_state["peer_count"] = data.get("peer_count", shared_state["peer_count"])
+                        shared_state["remain_time"] = data.get("remain_time",)
+                        shared_state["completion_time"] = data.get("completion_time", )
+                        shared_state["stake_info"]["stake_amount"] = data.get("stake_info", {}).get("stake_amount", 0.0)
+                        shared_state["stake_info"]["rewards_amount"] = data.get("stake_info", {}).get("rewards_amount", 0.0)
+                        shared_state["stake_info"]["reclaimable_slashed_stake"] = data.get("stake_info", {}).get(
+                            "reclaimable_slashed_stake", 0.0)
+                        shared_state["balances"]["public"] = data.get("balances", {}).get("public", 0.0)
+                        shared_state["balances"]["shielded"] = data.get("balances", {}).get("shielded", 0.0)
+                        shared_state["last_action_taken"] = data.get("last_action_taken", shared_state["last_action_taken"])
+                        shared_state["price"] = data.get("price", 0.0)
+                        shared_state["usd_24h_change"] = data.get("usd_24h_change", 0.0)
+
+                        #logging.info("Shared state updated successfully.")
+                    else:
+                        logging.error(f"Failed to fetch data. HTTP status: {response.status}")
+        except Exception as e:
+            logging.error(f"Error fetching data from {url}: {e}")
+        
+        # Wait before the next fetch
+        await asyncio.sleep(1)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # MAIN
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1059,19 +1107,26 @@ async def main():
         - realtime_display: shows real-time info in console
         - update_tmux_status_bar: updates TMUX (if enabled)
     """
+    
     # console.clear()
-    await init_balance() # Make sure balances are initialized for display
-    if enable_dashboard and dash_port and dash_ip:
-        from utilities.web_dashboard import start_dashboard
-        await start_dashboard(shared_state, log_entries, host=dash_ip, port=dash_port)
+    
+        
+    display_only = False    
+    if not display_only:
+        await init_balance() # Make sure balances are initialized for display
+        if enable_dashboard and dash_port and dash_ip:
+            from utilities.web_dashboard import start_dashboard
+            await start_dashboard(shared_state, log_entries,  host=dash_ip, port=dash_port)
         #console.clear()
+        await asyncio.gather(
+            stake_management_loop(),
+            realtime_display(enable_tmux),
+            frequent_update_loop(),
+            
+        )
+    else:
+        await fetch_shared_info()
         
-    await asyncio.gather(
-        stake_management_loop(),
-        realtime_display(enable_tmux),
-        frequent_update_loop(),
-        
-    )
 
 if __name__ == "__main__":
     try:
