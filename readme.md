@@ -15,6 +15,7 @@ DuskMan automates the monitoring, and management, of **DUSK Network** staking, b
 
 ## 🚀 Features:
 
+
 - **Staking Management**:
   - Monitors staking rewards, reclaimable slashed stakes, and eligible stakes.
   - Automatically claims and stakes rewards when profitable.

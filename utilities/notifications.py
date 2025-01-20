@@ -76,6 +76,37 @@ class NotificationService:
             logging.error(f"Error sending webhook: {e}")
             return False
 
+
+    def send_shared_state_webhook(self,shared_state):
+        """
+        Sends the shared_state object as a JSON payload to the specified webhook URL.
+
+        Args:
+            shared_state (dict): The shared state object to send.
+            webhook_url (str): The destination webhook URL.
+
+        Returns:
+            bool: True if the webhook was sent successfully, False otherwise.
+        """
+        webhook_url = self.webhook_url
+        try:
+            headers = {'Content-Type': 'application/json'}
+            payload = json.dumps(shared_state, indent=2)
+            
+            logging.debug(f"Sending shared state to webhook URL: {webhook_url}")
+            response = requests.post(webhook_url, headers=headers, data=payload)
+            
+            if response.status_code == 200:
+                logging.debug("Webhook sent successfully.")
+                return True
+            else:
+                logging.error(f"Failed to send webhook. Status Code: {response.status_code}, Response: {response.text}")
+                return False
+        except Exception as e:
+            logging.error(f"Error sending webhook: {e}")
+            return False
+
+        
     def send_discord_notification(self, message):
         """
         Send a notification to Discord using a webhook.
