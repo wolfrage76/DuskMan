@@ -1,3 +1,5 @@
+Please try the Beta branch for most current
+
 # DUSK Monitoring and Notification Script
 ![image](https://github.com/user-attachments/assets/bf465066-8637-45b7-91d2-b77b77d211f9)
 
