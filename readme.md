@@ -1,12 +1,4 @@
-<<<<<<< HEAD
-<<<<<<< HEAD
 # DuskMan: The Dusk Network stake management system
-=======
-# DUSK Monitoring and Notification Script
->>>>>>> dde3906 (Update readme.md)
-=======
-# DuskMan: The Dusk Network stake management system
->>>>>>> cb30b67 (Update readme.md)
 ![image](https://github.com/user-attachments/assets/b56a80ec-122d-440a-a8d8-0c1fcaeee3bc)
 ![image](https://github.com/user-attachments/assets/a780feed-e0fe-46f2-9713-44bcbed0eb5c)
 
