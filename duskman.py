@@ -704,7 +704,7 @@ async def stake_management_loop():
                     # 3) Stake
                 
                     curr_cmd = f"{use_sudo} rusk-wallet --password ####### stake --amt {total_restake}"
-                    cmd_success = await execute_command_async(curr_cmd.replace('#######',password))
+                    cmd_success = await execute_command_async(curr_cmd.replace('#######', password))
                     if not cmd_success:
                         log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
                         raise Exception("CMD execution failed")
@@ -817,8 +817,6 @@ async def stake_management_loop():
                 f"  Reclaimable    :  {format_float(shared_state.get('stake_info',{}).get('reclaimable_slashed_stake','0.0'))} (${format_float(shared_state.get('stake_info',{}).get('reclaimable_slashed_stake') * float(shared_state["price"]))})\n"
                     )
                 
-                notifier.notify(Log_info, shared_state)
-
                 if len(log_entries) > 15:
                     log_entries.pop(0)
                 log_entries.append(Log_info)
