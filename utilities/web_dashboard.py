@@ -10,8 +10,8 @@ import waitress
 def create_app(shared_state, log_entries):
     """
     Creates the Flask app:
-      - / => main HTML/JS page (dashboard)
-      - /api/data => JSON with real-time stats + logs
+        - / => main HTML/JS page (dashboard)
+        - /api/data => JSON with real-time stats + logs
     """
     # Set up Flask with appropriate template & static folders
     this_dir = os.path.dirname(__file__)
@@ -47,7 +47,7 @@ def create_app(shared_state, log_entries):
             "balances_public":   shared_state["balances"]["public"],
             "balances_shielded": shared_state["balances"]["shielded"],
             "balances_total": (shared_state["balances"]["public"] 
-              + shared_state["balances"]["shielded"]),
+                + shared_state["balances"]["shielded"]),
             "price": shared_state["price"],
             "usd_24h_change": shared_state["usd_24h_change"],
             "stake_info": {
@@ -56,6 +56,7 @@ def create_app(shared_state, log_entries):
                 "reclaimable_slashed_stake": shared_state["stake_info"]["reclaimable_slashed_stake"]
             },
             "last_action": shared_state["last_action_taken"],
+            "rendered": shared_state["rendered"],
         }
 
         # Reverse the logs so newest appear first

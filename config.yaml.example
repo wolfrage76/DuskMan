@@ -21,6 +21,7 @@ WEB_DASHBOARD:
   enable_dashboard: True
   dash_port: 5000 # Port the Dashboard and API should listen on. Defaults to 5000
   dash_ip: 0.0.0.0 # Defaults to 0.0.0.0 for any IP, otherwise specific IP
+  include_rendered: False # include a render text of the console display in the API response
 
 NOTIFICATIONS:
   discord_webhook:     # Insert webhook to activate. Example: https://discord.com/api/webhooks/xxxxxxxxxx/XXXXXXXXX
