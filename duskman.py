@@ -191,30 +191,6 @@ def display_wallet_distribution_bar(public_amount, shielded_amount, width=30):
     p_pct = f"{pub_pct:.2f}%"
     s_pct = f"{shd_pct:.2f}%"
     return f"{YELLOW}{p_pct} {bar_str} {s_pct}"
-        
-    
-# Superscript Unicode Characters
-SUPERSCRIPT_MAP = {
-    "0": "⁰",
-    "1": "¹",
-    "2": "²",
-    "3": "³",
-    "4": "⁴",
-    "5": "⁵",
-    "6": "⁶",
-    "7": "⁷",
-    "8": "⁸",
-    "9": "⁹",
-    "%": "⁒",
-}
-
-def to_superscript(text):
-    """
-    Convert a string to superscript using Unicode characters.
-    Non-mapped characters are left unchanged.
-    """
-    return "".join(SUPERSCRIPT_MAP.get(char, char) for char in text)
-
 
 def remove_ansi(text):
     # Regular expression to match ANSI escape sequences
@@ -247,7 +223,7 @@ async def execute_command_async(command, log_output=True):
         return None
 
 
-async def fetch_dusk_data():
+async def fetch_dusk_data(): # TODO: change to full data call for more info
     """
     Fetch DUSK token data from CoinGecko API.
     Returns a dictionary with relevant data or logs an error if the request fails.
@@ -277,7 +253,7 @@ async def fetch_dusk_data():
 
 
 def format_float(value, places=4):
-    """Convert float to a string with max 4 decimal digits."""
+    """Convert float to a string with max 4 (default) decimal digits."""
     parts = str(value).split('.')
     if len(parts) == 2:
         return f"{parts[0]}.{parts[1][:places]}" if len(parts[1]) > 0 else parts[0]
@@ -286,10 +262,6 @@ def format_float(value, places=4):
 def write_to_log(file_path, message):
     """
     Write a message to the specified log file.
-    
-    Args:
-        file_path (str): Path to the log file.
-        message (str): Message to write.
     """
     try:
         with open(file_path, "a") as log_file:
@@ -301,11 +273,6 @@ def write_to_log(file_path, message):
 def log_action(action, details, type='info'):
     """
     Write log messages to specific files based on type.
-    
-    Args:
-        action (str): Action description.
-        details (str): Details about the action.
-        type (str): Log type ('info', 'error', 'debug').
     """
     # Create a timestamp
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -461,10 +428,7 @@ async def sleep_with_feedback(seconds_to_sleep, msg=None):
         
         await asyncio.sleep(interval)
         shared_state["remain_time"] -= interval
-
-    # Optionally clear or log
-    #sys.stdout.write("\r" + (" " * 120) + "\r")
-    #sys.stdout.flush()
+        
 
 async def sleep_until_next_epoch(block_height, buffer_blocks=60, msg=None):
     """
@@ -716,7 +680,7 @@ async def stake_management_loop():
                 # 1) Withdraw
             
                 curr_cmd = f"{use_sudo} rusk-wallet --password ####### withdraw"
-                cmd_success = await execute_command_async(curr_cmd.replace('######',f"{password}"))
+                cmd_success = await execute_command_async(curr_cmd.replace('######',password))
                 if not cmd_success:
                     log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
                     raise Exception("CMD execution failed")
@@ -724,7 +688,7 @@ async def stake_management_loop():
                 # 2) Unstake
             
                 curr_cmd =f"{use_sudo} rusk-wallet --password ####### unstake"
-                cmd_success = await execute_command_async(curr_cmd.replace('######',f"{password}"))
+                cmd_success = await execute_command_async(curr_cmd.replace('######',password))
                 if not cmd_success:
                     log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
                     raise Exception("CMD execution failed")
@@ -732,7 +696,7 @@ async def stake_management_loop():
                 # 3) Stake
             
                 curr_cmd = f"{use_sudo} rusk-wallet --password ####### stake --amt {total_restake}"
-                cmd_success = await execute_command_async(curr_cmd.replace('######',f"{password}"))
+                cmd_success = await execute_command_async(curr_cmd.replace('######',password))
                 if not cmd_success:
                     log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
                     raise Exception("CMD execution failed")
@@ -756,7 +720,7 @@ async def stake_management_loop():
             # 1) Withdraw
             
             curr_cmd =f"{use_sudo} rusk-wallet --password ###### withdraw"
-            cmd_success = await execute_command_async(curr_cmd.replace('######',f"{password}"))
+            cmd_success = await execute_command_async(curr_cmd.replace('######',password))
             if not cmd_success:
                     log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
                     raise Exception("CMD execution failed")
@@ -764,7 +728,7 @@ async def stake_management_loop():
             # 2) Stake
             
             curr_cmd = f"{use_sudo} rusk-wallet --password ###### stake --amt {rewards_amount}"
-            cmd_success = await execute_command_async(curr_cmd.replace('######',f"{password}"))
+            cmd_success = await execute_command_async(curr_cmd.replace('######',password))
             if not cmd_success:
                     log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
                     raise Exception("CMD execution failed")
@@ -831,9 +795,8 @@ async def stake_management_loop():
                 # Fetch required data
                 block_height = shared_state["block_height"]
             else:
+                await sleep_until_next_epoch(block_height, buffer_blocks=buffer_blocks)
                 continue    
-            # st_info = shared_state["stake_info"]
-
 
             Log_info = (
             f"\t==== Activity @{now_ts}====\n"
@@ -896,7 +859,7 @@ async def realtime_display(enable_tmux=False):
                     continue
                 tot_bal = b["public"] + b["shielded"]
                 price = shared_state["price"]
-                now_ts = datetime.now().strftime('%m-%d %H:%M:%S')
+                # now_ts = datetime.now().strftime('%m-%d %H:%M:%S')
 
                 # Display byline and settings on the first run
                 if first_run:
@@ -1007,7 +970,6 @@ async def realtime_display(enable_tmux=False):
                         if status_bar.get('show_public', True) and status_bar.get('show_shielded', True):
                             spacer = "  "
 
-                            
                         tmux_status = f"\r> {curblk}{stk}{rcl}{rwd}{bal}{p}{spacer}{s}{splitter}{usd}{last_txt}{timer}{donetime}{peercnt} {error_txt}"
 
                         subprocess.check_call(["tmux", "set-option", "-g", "status-left", remove_ansi(tmux_status)])
