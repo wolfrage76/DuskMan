@@ -333,28 +333,32 @@ async def get_wallet_balances(password):
     2) For each address, sum its spendable balances
     Return (public_total, shielded_total).
     """
-    addresses = {
-        "public": [],
-        "shielded": []
-    }
+    try:
+        addresses = {
+            "public": [],
+            "shielded": []
+        }
 
-    cmd_profiles = f"{use_sudo} rusk-wallet --password {password} profiles"
-    output_profiles = await execute_command_async(cmd_profiles)
-    if not output_profiles:
-        return 0.0, 0.0
+        cmd_profiles = f"{use_sudo} rusk-wallet --password {password} profiles"
+        output_profiles = await execute_command_async(cmd_profiles)
+        if not output_profiles:
+            return 0.0, 0.0
 
-    # Parse addresses
-    for line in output_profiles.splitlines():
-        line = line.strip()
-        if "Shielded account" in line:
-            match = re.search(r"Shielded account\s*-\s*(\S+)", line)
-            if match:
-                addresses["shielded"].append(match.group(1))
-        elif "Public account" in line:
-            match = re.search(r"Public account\s*-\s*(\S+)", line)
-            if match:
-                addresses["public"].append(match.group(1))
-
+        # Parse addresses
+        for line in output_profiles.splitlines():
+            line = line.strip()
+            if "Shielded account" in line:
+                match = re.search(r"Shielded account\s*-\s*(\S+)", line)
+                if match:
+                    addresses["shielded"].append(match.group(1))
+            elif "Public account" in line:
+                match = re.search(r"Public account\s*-\s*(\S+)", line)
+                if match:
+                    addresses["public"].append(match.group(1))
+    except Exception as e:
+                logging.error(f"Error in get_wallet_balances(): {e}")
+                await asyncio.sleep(5)
+    
     async def get_spendable_for_address(addr):
         cmd_balance = f"{use_sudo} rusk-wallet --password {password} balance --spendable --address {addr}"
         out = await execute_command_async(cmd_balance)
@@ -1006,6 +1010,7 @@ async def main():
     if enable_dashboard and dash_port and dash_ip:
         from utilities.web_dashboard import start_dashboard
         await start_dashboard(shared_state, log_entries,  host=dash_ip, port=dash_port)
+        
     #console.clear()
     await asyncio.gather(
         stake_management_loop(),
