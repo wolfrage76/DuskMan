@@ -14,7 +14,9 @@ from rich.console import Console
 from rich import print
 from datetime import datetime, timedelta
 from utilities.notifications import NotificationService
+from rich.traceback import install
 
+install()
 load_dotenv()
 console = Console()
 
@@ -512,7 +514,7 @@ async def frequent_update_loop():
         shared_state["block_height"] = current_block_height
         
         # Perform balance and stake-info updates every X  loops (e.g., 30 is 5 minutes)
-        if loopcnt >= 33:
+        if loopcnt >= 20:
             pub_bal, shld_bal = await get_wallet_balances(password)
             shared_state["balances"]["public"] = pub_bal
             shared_state["balances"]["shielded"] = shld_bal
@@ -603,234 +605,236 @@ async def stake_management_loop():
     first_run = True
     
     while True:
-        
         try:
-            dusk_info= await fetch_dusk_data() or {}
-            
-            shared_state["price"] = dusk_info.get('usd',0)
-        except Exception as e:
-            logging.error(f"Error in real-time display: {e}")
-            
-        # For logic, we may want a fresh block height right before we do anything:
-        block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height")
-        if not block_height_str:
-            logging.error("Failed to fetch block height. Retrying in 60s...")
-            await sleep_with_feedback(30, "retry block height fetch")
-            continue
-
-        block_height = int(block_height_str)
-        shared_state["block_height"] = block_height
-
-        # If we already saw 'No Action' for this block, wait a bit
-        if shared_state["last_no_action_block"] == block_height:
-            msg = f"Already did 'No Action' at block {block_height}; sleeping 60s."
-            await sleep_with_feedback(60, msg)
-            continue
-
-        # Fetch stake-info
-        stake_output = await execute_command_async(f"{use_sudo} rusk-wallet --password {password} stake-info")
-        if not stake_output:
-            logging.error("Failed to fetch stake-info. Retrying in 60s...")
-            await sleep_with_feedback(30, "retry stake-info fetch")
-            continue
-
-        e_stake, r_slashed, a_rewards = parse_stake_info(stake_output)
-        if e_stake is None or r_slashed is None or a_rewards is None:
-            logging.warning("Parsing stake info failed or incomplete. Skipping cycle...")
-            await sleep_with_feedback(30, "skipping cycle")
-            continue
-
-        # Update in shared state
-        shared_state["stake_info"]["stake_amount"] = e_stake
-        shared_state["stake_info"]["reclaimable_slashed_stake"] = r_slashed
-        shared_state["stake_info"]["rewards_amount"] = a_rewards
-
-        # For logic thresholds
-        last_claim_block = shared_state["last_claim_block"]
-        stake_amount = e_stake
-        reclaimable_slashed_stake = r_slashed
-        rewards_amount = a_rewards
-
-        rewards_per_epoch = calculate_rewards_per_epoch(rewards_amount, last_claim_block, block_height)
-        downtime_loss = calculate_downtime_loss(rewards_per_epoch)
-        incremental_threshold = rewards_per_epoch
-        total_restake = stake_amount + rewards_amount + reclaimable_slashed_stake
-
-        # Should this check first run and wait till first epoch? need to test
-        if should_unstake_and_restake(reclaimable_slashed_stake, downtime_loss):
-            if total_restake < min_stake_amount:
-                shared_state["last_action_taken"] = "Unstake/Restake Skipped (Below Min)"
-                log_action(
-                    f"Balance Info (#{block_height})", 
-                    f"Rwd: {format_float(rewards_amount)}, Stk: {format_float(stake_amount)}, Rcl: {format_float(reclaimable_slashed_stake)}"
-                )
+            try:    
+                dusk_info= await fetch_dusk_data() or {}
                 
-                log_action(
-                    f"Unstake/Restake Skipped (Block #{block_height})",
-                    f"Total restake ({format_float(total_restake)} DUSK) < {min_stake_amount} DUSK."
-                )
-            else:
-                # Unstake & Restake
-                act_msg = f"Unstake/Restake @ Block #{block_height}"
-                shared_state["last_action_taken"] = act_msg
-
-                log_action(
-                    f"Balance Info (#{block_height})",
-                    f"Rwd: {format_float(rewards_amount)}, Stake: {format_float(stake_amount)}, Rcl: {format_float(reclaimable_slashed_stake)}"
-                )
-                log_action(
-                    act_msg,
-                    f"Reclaimable: {format_float(reclaimable_slashed_stake)}, Downtime Loss: {format_float(downtime_loss)}"
-                )
-
-                # 1) Withdraw
-            
-                curr_cmd = f"{use_sudo} rusk-wallet --password ####### withdraw"
-                cmd_success = await execute_command_async(curr_cmd.replace('######',password))
-                if not cmd_success:
-                    log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
-                    raise Exception("CMD execution failed")
+                shared_state["price"] = dusk_info.get('usd',0)
+            except Exception as e:
+                logging.error(f"Error fetching dusk in stake loop: {e}")
                 
-                # 2) Unstake
-            
-                curr_cmd =f"{use_sudo} rusk-wallet --password ####### unstake"
-                cmd_success = await execute_command_async(curr_cmd.replace('######',password))
-                if not cmd_success:
-                    log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
-                    raise Exception("CMD execution failed")
-                
-                # 3) Stake
-            
-                curr_cmd = f"{use_sudo} rusk-wallet --password ####### stake --amt {total_restake}"
-                cmd_success = await execute_command_async(curr_cmd.replace('######',password))
-                if not cmd_success:
-                    log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
-                    raise Exception("CMD execution failed")
-
-                log_action("Restake Completed", f"New Stake: {format_float(float(total_restake))}")
-                shared_state["last_claim_block"] = block_height
-
-                # Sleep 2 epochs
-                await sleep_until_next_epoch(block_height + 2160, msg="2-epoch wait after restaking...")
+            # For logic, we may want a fresh block height right before we do anything:
+            block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height")
+            if not block_height_str:
+                logging.error("Failed to fetch block height. Retrying in 60s...")
+                await sleep_with_feedback(30, "retry block height fetch")
                 continue
 
-        elif should_claim_and_stake(rewards_amount, incremental_threshold):
-            # Claim & Stake
-            shared_state["last_action_taken"] = f"Claim/Stake @ Block {block_height}"
-            log_action(
-                f"Balance Info (#{block_height})",
-                f"Rwd: {format_float(rewards_amount)}, Stk: {format_float(stake_amount)}, Rcl: {format_float(reclaimable_slashed_stake)}"
-            )
-            log_action("Claim and Stake", f"Rewards: {format_float(rewards_amount)}")
+            block_height = int(block_height_str)
+            shared_state["block_height"] = block_height
 
-            # 1) Withdraw
-            
-            curr_cmd =f"{use_sudo} rusk-wallet --password ###### withdraw"
-            cmd_success = await execute_command_async(curr_cmd.replace('######',password))
-            if not cmd_success:
-                    log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
-                    raise Exception("CMD execution failed")
-                
-            # 2) Stake
-            
-            curr_cmd = f"{use_sudo} rusk-wallet --password ###### stake --amt {rewards_amount}"
-            cmd_success = await execute_command_async(curr_cmd.replace('######',password))
-            if not cmd_success:
-                    log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
-                    raise Exception("CMD execution failed")
-                
-            new_stake = stake_amount + rewards_amount
-            log_action("Stake Completed", f"New Stake: {format_float(new_stake)}")
-            shared_state["last_claim_block"] = block_height
-            
-            await sleep_with_feedback(2160 * 10, "1 epoch wait after claiming")
-            continue
-        else:
-            # No action
-            shared_state["last_no_action_block"] = block_height
-            shared_state["last_action_taken"] = f"No Action @ Block {block_height}"
+            # If we already saw 'No Action' for this block, wait a bit
+            if shared_state["last_no_action_block"] == block_height:
+                msg = f"Already did 'No Action' at block {block_height}; sleeping 60s."
+                await sleep_with_feedback(60, msg)
+                continue
 
-            b = shared_state["balances"]
-            #totBal = b["public"] + b["shielded"]
-            
-            now_ts = datetime.now().strftime('%Y-%m-%d %H:%M')
-            
-            if shared_state["first_run"]:
-                
-                byline = Text("\n  DuskMan Stake Management System: By Wolfrage", style="bold blue")
+            # Fetch stake-info
+            stake_output = await execute_command_async(f"{use_sudo} rusk-wallet --password {password} stake-info")
+            if not stake_output:
+                logging.error("Failed to fetch stake-info. Retrying in 60s...")
+                await sleep_with_feedback(30, "retry stake-info fetch")
+                continue
 
-                notification_services = []
-                if notification_config.get('discord_webhook', False):
-                    notification_services.append('Discord')
-                if notification_config.get('pushbullet_token', False):
-                    notification_services.append('PushBullet')
-                if notification_config.get('telegram_bot_token', False) and notification_config.get('telegram_chat_id', False):
-                    notification_services.append('Telegram')
-                if notification_config.get('pushover_user_key', False) and notification_config.get('pushover_app_token', False):
-                    notification_services.append('Pushover')
-                if notification_config.get('webhook_url', False):
-                    notification_services.append('Webhook')
-                if notification_config.get('slack_webhook', False):
-                    notification_services.append('Slack')
-                
-                if len(notification_services) > 2 and notification_services:
-                    services = "\n\t  " + " ".join(notification_services)
-                elif len(notification_services) <= 2 and notification_services:   
-                    services = " ".join(notification_services)
-                else:
-                    services = "None"
+            e_stake, r_slashed, a_rewards = parse_stake_info(stake_output)
+            if e_stake is None or r_slashed is None or a_rewards is None:
+                logging.warning("Parsing stake info failed or incomplete. Skipping cycle...")
+                await sleep_with_feedback(30, "skipping cycle")
+                continue
+
+            # Update in shared state
+            shared_state["stake_info"]["stake_amount"] = e_stake
+            shared_state["stake_info"]["reclaimable_slashed_stake"] = r_slashed
+            shared_state["stake_info"]["rewards_amount"] = a_rewards
+
+            # For logic thresholds
+            last_claim_block = shared_state["last_claim_block"]
+            stake_amount = e_stake
+            reclaimable_slashed_stake = r_slashed
+            rewards_amount = a_rewards
+
+            rewards_per_epoch = calculate_rewards_per_epoch(rewards_amount, last_claim_block, block_height)
+            downtime_loss = calculate_downtime_loss(rewards_per_epoch)
+            incremental_threshold = rewards_per_epoch
+            total_restake = stake_amount + rewards_amount + reclaimable_slashed_stake
+
+            # Should this check first run and wait till first epoch? need to test
+            if should_unstake_and_restake(reclaimable_slashed_stake, downtime_loss):
+                if total_restake < min_stake_amount:
+                    shared_state["last_action_taken"] = "Unstake/Restake Skipped (Below Min)"
+                    log_action(
+                        f"Balance Info (#{block_height})", 
+                        f"Rwd: {format_float(rewards_amount)}, Stk: {format_float(stake_amount)}, Rcl: {format_float(reclaimable_slashed_stake)}"
+                    )
                     
-                
-                if dash_ip and dash_port and enable_dashboard: 
-                    enable_webdash = True
+                    log_action(
+                        f"Unstake/Restake Skipped (Block #{block_height})",
+                        f"Total restake ({format_float(total_restake)} DUSK) < {min_stake_amount} DUSK."
+                    )
                 else:
-                    enable_webdash = False
-                
-                notification_status = f'Enabled Notifications:[yellow]   {services}\n'
-                
-                auto_status = f'\n\tEnable Web Dashboard:    {enable_webdash}\n\tEnable tmux Support:     {enable_tmux}\n\tAuto Staking Rewards:    {auto_stake_rewards}\n\tAuto Restake to Reclaim: {auto_reclaim_full_restakes}\n\t{notification_status}'
-                separator = "  [bold white]" + ("=" * 47) + "[/bold white]"
-                
-                console.print(byline)
-                print(separator + auto_status)
-                
-                
-                shared_state["first_run"] = False
-                shared_state["last_action_taken"] = f"Startup @ Block #{block_height}"
-                action = shared_state["last_action_taken"]
-                # Fetch required data
-                block_height = shared_state["block_height"]
-            else:
-                await sleep_until_next_epoch(block_height, buffer_blocks=buffer_blocks)
-                continue    
+                    # Unstake & Restake
+                    act_msg = f"Unstake/Restake @ Block #{block_height}"
+                    shared_state["last_action_taken"] = act_msg
 
-            Log_info = (
-            f"\t==== Activity @{now_ts}====\n"
-            f"  Action              :  {action}\n\n"
-            f"  Balance           :  {format_float(b['public'] + b['shielded'],)}\n"
-            f"    ├─ Public      :    {format_float(b['public'])} (${format_float(b['public'] * float(shared_state["price"]))})\n"
-            f"    └─ Shielded  :    {format_float(b['shielded'])} (${format_float(b['shielded'] * float(shared_state["price"]))})\n\n"
-            f"  Staked              :  {format_float(shared_state.get('stake_info',{}).get('stake_amount','0.0'))} (${format_float(shared_state.get('stake_info',{}).get('stake_amount','0.0') * float(shared_state["price"]))})\n"
-            f"  Rewards           :  {format_float(shared_state.get('stake_info',{}).get('rewards_amount','0.0'))} (${format_float(shared_state.get('stake_info',{}).get('rewards_amount',{}) * float(shared_state["price"]))})\n"
-            f"  Reclaimable    :  {format_float(shared_state.get('stake_info',{}).get('reclaimable_slashed_stake','0.0'))} (${format_float(shared_state.get('stake_info',{}).get('reclaimable_slashed_stake') * float(shared_state["price"]))})\n"
+                    log_action(
+                        f"Balance Info (#{block_height})",
+                        f"Rwd: {format_float(rewards_amount)}, Stake: {format_float(stake_amount)}, Rcl: {format_float(reclaimable_slashed_stake)}"
+                    )
+                    log_action(
+                        act_msg,
+                        f"Reclaimable: {format_float(reclaimable_slashed_stake)}, Downtime Loss: {format_float(downtime_loss)}"
+                    )
+
+                    # 1) Withdraw
+                
+                    curr_cmd = f"{use_sudo} rusk-wallet --password ####### withdraw"
+                    cmd_success = await execute_command_async(curr_cmd.replace('#######',password))
+                    if not cmd_success:
+                        log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
+                        raise Exception("CMD execution failed")
+                    
+                    # 2) Unstake
+                
+                    curr_cmd =f"{use_sudo} rusk-wallet --password ####### unstake"
+                    cmd_success = await execute_command_async(curr_cmd.replace('#######',password))
+                    if not cmd_success:
+                        log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
+                        raise Exception("CMD execution failed")
+                    
+                    # 3) Stake
+                
+                    curr_cmd = f"{use_sudo} rusk-wallet --password ####### stake --amt {total_restake}"
+                    cmd_success = await execute_command_async(curr_cmd.replace('#######',password))
+                    if not cmd_success:
+                        log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
+                        raise Exception("CMD execution failed")
+
+                    log_action("Restake Completed", f"New Stake: {format_float(float(total_restake))}")
+                    shared_state["last_claim_block"] = block_height
+
+                    # Sleep 2 epochs
+                    await sleep_until_next_epoch(block_height + 2160, msg="2-epoch wait after restaking...")
+                    continue
+
+            elif should_claim_and_stake(rewards_amount, incremental_threshold):
+                # Claim & Stake
+                shared_state["last_action_taken"] = f"Claim/Stake @ Block {block_height}"
+                log_action(
+                    f"Balance Info (#{block_height})",
+                    f"Rwd: {format_float(rewards_amount)}, Stk: {format_float(stake_amount)}, Rcl: {format_float(reclaimable_slashed_stake)}"
                 )
-            
-            notifier.notify(Log_info, shared_state)
+                log_action("Claim and Stake", f"Rewards: {format_float(rewards_amount)}")
 
-            if len(log_entries) > 15:
-                log_entries.pop(0)
-            log_entries.append(Log_info)
-            
-            # Display logs above the real-time display
-            
-            #if not first_run:
-            #    for entry in log_entries:
-            #        console.print(entry)
+                # 1) Withdraw
+                
+                curr_cmd =f"{use_sudo} rusk-wallet --password ####### withdraw"
+                cmd_success = await execute_command_async(curr_cmd.replace('#######',password))
+                if not cmd_success:
+                        log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
+                        raise Exception("CMD execution failed")
+                    
+                # 2) Stake
+                
+                curr_cmd = f"{use_sudo} rusk-wallet --password ####### stake --amt {rewards_amount}"
+                cmd_success = await execute_command_async(curr_cmd.replace('#######',password))
+                if not cmd_success:
+                        log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
+                        raise Exception("CMD execution failed")
+                    
+                new_stake = stake_amount + rewards_amount
+                log_action("Stake Completed", f"New Stake: {format_float(new_stake)}")
+                shared_state["last_claim_block"] = block_height
+                
+                await sleep_with_feedback(2160 * 10, "1 epoch wait after claiming")
+                continue
+            else:
+                # No action
+                shared_state["last_no_action_block"] = block_height
+                shared_state["last_action_taken"] = f"No Action @ Block {block_height}"
+
+                b = shared_state["balances"]
+                #totBal = b["public"] + b["shielded"]
+                
+                now_ts = datetime.now().strftime('%Y-%m-%d %H:%M')
+                
+                if shared_state["first_run"]:
+                    
+                    byline = Text("\n  DuskMan Stake Management System: By Wolfrage", style="bold blue")
+
+                    notification_services = []
+                    if notification_config.get('discord_webhook', False):
+                        notification_services.append('Discord')
+                    if notification_config.get('pushbullet_token', False):
+                        notification_services.append('PushBullet')
+                    if notification_config.get('telegram_bot_token', False) and notification_config.get('telegram_chat_id', False):
+                        notification_services.append('Telegram')
+                    if notification_config.get('pushover_user_key', False) and notification_config.get('pushover_app_token', False):
+                        notification_services.append('Pushover')
+                    if notification_config.get('webhook_url', False):
+                        notification_services.append('Webhook')
+                    if notification_config.get('slack_webhook', False):
+                        notification_services.append('Slack')
+                    
+                    if len(notification_services) > 2 and notification_services:
+                        services = "\n\t  " + " ".join(notification_services)
+                    elif len(notification_services) <= 2 and notification_services:   
+                        services = " ".join(notification_services)
+                    else:
+                        services = "None"
+                        
+                    
+                    if dash_ip and dash_port and enable_dashboard: 
+                        enable_webdash = True
+                    else:
+                        enable_webdash = False
+                    
+                    notification_status = f'Enabled Notifications:[yellow]   {services}\n'
+                    
+                    auto_status = f'\n\tEnable Web Dashboard:    {enable_webdash}\n\tEnable tmux Support:     {enable_tmux}\n\tAuto Staking Rewards:    {auto_stake_rewards}\n\tAuto Restake to Reclaim: {auto_reclaim_full_restakes}\n\t{notification_status}'
+                    separator = "  [bold white]" + ("=" * 47) + "[/bold white]"
+                    
+                    console.print(byline)
+                    print(separator + auto_status)
+                    
+                    
+                    shared_state["first_run"] = False
+                    shared_state["last_action_taken"] = f"Startup @ Block #{block_height}"
+                    action = shared_state["last_action_taken"]
+                    # Fetch required data
+                    block_height = shared_state["block_height"]
+                else:
+                    await sleep_until_next_epoch(block_height, buffer_blocks=buffer_blocks)
+                    continue    
+
+                Log_info = (
+                f"\t==== Activity @{now_ts}====\n"
+                f"  Action              :  {action}\n\n"
+                f"  Balance           :  {format_float(b['public'] + b['shielded'],)}\n"
+                f"    ├─ Public      :    {format_float(b['public'])} (${format_float(b['public'] * float(shared_state["price"]))})\n"
+                f"    └─ Shielded  :    {format_float(b['shielded'])} (${format_float(b['shielded'] * float(shared_state["price"]))})\n\n"
+                f"  Staked              :  {format_float(shared_state.get('stake_info',{}).get('stake_amount','0.0'))} (${format_float(shared_state.get('stake_info',{}).get('stake_amount','0.0') * float(shared_state["price"]))})\n"
+                f"  Rewards           :  {format_float(shared_state.get('stake_info',{}).get('rewards_amount','0.0'))} (${format_float(shared_state.get('stake_info',{}).get('rewards_amount',{}) * float(shared_state["price"]))})\n"
+                f"  Reclaimable    :  {format_float(shared_state.get('stake_info',{}).get('reclaimable_slashed_stake','0.0'))} (${format_float(shared_state.get('stake_info',{}).get('reclaimable_slashed_stake') * float(shared_state["price"]))})\n"
+                    )
+                
+                notifier.notify(Log_info, shared_state)
+
+                if len(log_entries) > 15:
+                    log_entries.pop(0)
+                log_entries.append(Log_info)
+                
+                # Display logs above the real-time display
+                
+                #if not first_run:
+                #    for entry in log_entries:
+                #        console.print(entry)
 
             # Mark first run as completed after the first iteration 
             first_run = False
-
-        # Sleep until near the next epoch
+        except Exception as e:
+                logging.error(f"Error in stake management loop: {e}")
+                log_action("Error in stake management loop", e, "error")
+            # Sleep until near the next epoch
         await sleep_until_next_epoch(block_height, buffer_blocks=buffer_blocks)
 
 
