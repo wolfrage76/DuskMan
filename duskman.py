@@ -53,11 +53,9 @@ auto_stake_rewards = config.get('auto_stake_rewards', False)
 auto_reclaim_full_restakes = config.get('auto_reclaim_full_restakes', False)
 pwd_var = config.get('pwd_var_name', 'MY_WALLET_VARIABLE')
 enable_dashboard = web_dashboard.get('enable_dashboard', True)
-dash_port = web_dashboard.get('dash_port')
+dash_port = web_dashboard.get('dash_port', '5000')
 dash_ip = web_dashboard.get('dash_ip', '0.0.0.0')
 include_rendered = web_dashboard.get('include_rendered', False)
-
-
 
 if config.get('use_sudo', False):
     use_sudo = 'sudo'
@@ -654,7 +652,7 @@ async def stake_management_loop():
         incremental_threshold = rewards_per_epoch
         total_restake = stake_amount + rewards_amount + reclaimable_slashed_stake
 
-        # Decide
+        # Should this check first run and wait till first epoch? need to test
         if should_unstake_and_restake(reclaimable_slashed_stake, downtime_loss):
             if total_restake < min_stake_amount:
                 shared_state["last_action_taken"] = "Unstake/Restake Skipped (Below Min)"
@@ -988,49 +986,6 @@ async def realtime_display(enable_tmux=False):
                 logging.error(f"Error in real-time display: {e}")
                 await asyncio.sleep(5)
 
-
-async def fetch_shared_info(hostname="localhost", port=5001, endpoint="/api/data"):
-    """
-    Fetch data from the specified endpoint and update the shared_state object.
-    
-    Args:
-        hostname (str): Hostname or IP address of the server.
-        port (int): Port of the server.
-        endpoint (str): API endpoint to fetch data from.
-    """
-    url = f"http://{hostname}:{port}{endpoint}"
-    while True:
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        
-                        # Update shared_state with received data
-                        shared_state["block_height"] = data.get("block_height", )
-                        shared_state["peer_count"] = data.get("peer_count", shared_state["peer_count"])
-                        shared_state["remain_time"] = data.get("remain_time",)
-                        shared_state["completion_time"] = data.get("completion_time", )
-                        shared_state["stake_info"]["stake_amount"] = data.get("stake_info", {}).get("stake_amount", 0.0)
-                        shared_state["stake_info"]["rewards_amount"] = data.get("stake_info", {}).get("rewards_amount", 0.0)
-                        shared_state["stake_info"]["reclaimable_slashed_stake"] = data.get("stake_info", {}).get(
-                            "reclaimable_slashed_stake", 0.0)
-                        shared_state["balances"]["public"] = data.get("balances", {}).get("public", 0.0)
-                        shared_state["balances"]["shielded"] = data.get("balances", {}).get("shielded", 0.0)
-                        shared_state["last_action_taken"] = data.get("last_action_taken", shared_state["last_action_taken"])
-                        shared_state["price"] = data.get("price", 0.0)
-                        shared_state["usd_24h_change"] = data.get("usd_24h_change", 0.0)
-
-                        #logging.info("Shared state updated successfully.")
-                    else:
-                        logging.error(f"Failed to fetch data. HTTP status: {response.status}")
-        except Exception as e:
-            logging.error(f"Error fetching data from {url}: {e}")
-        
-        # Wait before the next fetch
-        await asyncio.sleep(1)
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # MAIN
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1038,30 +993,27 @@ async def fetch_shared_info(hostname="localhost", port=5001, endpoint="/api/data
 async def main():
     """
     Concurrently run:
-        - frequent_update_loop: refresh block height & balances every 20s
+        - frequent_update_loop: refresh block height & balances
         - stake_management_loop: performs staking logic and sleeps until next epoch
         - realtime_display: shows real-time info in console
-        - update_tmux_status_bar: updates TMUX (if enabled)
     """
     
     # console.clear()
     
         
-    display_only = False    
-    if not display_only:
-        await init_balance() # Make sure balances are initialized for display
-        if enable_dashboard and dash_port and dash_ip:
-            from utilities.web_dashboard import start_dashboard
-            await start_dashboard(shared_state, log_entries,  host=dash_ip, port=dash_port)
-        #console.clear()
-        await asyncio.gather(
-            stake_management_loop(),
-            realtime_display(enable_tmux),
-            frequent_update_loop(),
-            
+    
+    await init_balance() # Make sure balances are initialized for display
+    if enable_dashboard and dash_port and dash_ip:
+        from utilities.web_dashboard import start_dashboard
+        await start_dashboard(shared_state, log_entries,  host=dash_ip, port=dash_port)
+    #console.clear()
+    await asyncio.gather(
+        stake_management_loop(),
+        realtime_display(enable_tmux),
+        frequent_update_loop(),
+        
         )
-    else:
-        await fetch_shared_info()
+
         
 
 if __name__ == "__main__":
