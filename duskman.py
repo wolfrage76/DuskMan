@@ -121,7 +121,8 @@ shared_state = {
     "market": 0,
     "volume": 0,
     "usd_24h_change": 0,
-    "rendered":""
+    "rendered":"",
+    "stake_active_blk": 0,
 }
 
 # Define log file paths
@@ -317,6 +318,11 @@ def parse_stake_info(output):
                 match = re.search(r"Accumulated rewards is:\s*([\d]+(?:\.\d+)?)\s*DUSK", line)
                 if match:
                     accumulated_rewards = float(match.group(1))
+            elif "Stake active from block #" in line:
+                match = re.search(r"#(\d+)", line)
+                if match:
+                    stake_active_blk = int(match.group(1))
+                    shared_state["active_blk"] = stake_active_blk
 
         if (eligible_stake is None or
             reclaimable_slashed_stake is None or
@@ -897,22 +903,30 @@ async def realtime_display(enable_tmux=False):
                     peercolor = YELLOW    
                 
                 currenttime = datetime.now().strftime('%H:%M:%S')
+                epoch_num = int(blk / 2160)
+                
+                active_block = shared_state.get("active_blk", 00000)
+                if int(blk) - active_block >= 0:
+                    is_active = str() 
+                    
+                else:
+                    is_active = f"{RED}\n\tActive in {format_hms((active_block - blk) * 10)} @ #{active_block}{DEFAULT}\n"               
+                
                 allocation_bar = display_wallet_distribution_bar(b['public'],b['shielded'],8)
                 # Real-time display content (no surrounding panel)
                 realtime_content = (
-                    f" {LIGHT_WHITE}======={DEFAULT} {currenttime} Block: {LIGHT_BLUE}#{blk} {DEFAULT}Peers: {peercolor}{shared_state['peer_count']}{DEFAULT} {LIGHT_WHITE}=======\n"
+                    f" {LIGHT_WHITE}====={DEFAULT} {currenttime} Block: {LIGHT_BLUE}#{blk} {DEFAULT}(E: {LIGHT_BLUE}{epoch_num}{DEFAULT}) Peers: {peercolor}{shared_state['peer_count']}{DEFAULT} {LIGHT_WHITE}=====\n"
                     f"    {CYAN}Last Action{DEFAULT}   | {CYAN}{last_act}{DEFAULT}\n"
                     f"    {LIGHT_GREEN}Next Check    {DEFAULT}| {charclr}{disp_time}{DEFAULT} ({donetime}){DEFAULT}\n"
                     f"                  |\n"
                     f"    {LIGHT_WHITE}Price USD{DEFAULT}     | {LIGHT_WHITE}${format_float(price,3)}{DEFAULT} {chg24}\n"
                     f"                  |\n"
                     f"    {LIGHT_WHITE}Balance{DEFAULT}       | {LIGHT_WHITE}{allocation_bar}\n"
-                    
                     f"      {LIGHT_WHITE}├─ {YELLOW}Public   {DEFAULT}| {YELLOW}{format_float(b['public'])} (${format_float(b['public'] * price, 2)}){DEFAULT}\n"
                     f"      {LIGHT_WHITE}└─ {BLUE}Shielded {DEFAULT}| {BLUE}{format_float(b['shielded'])} (${format_float(b['shielded'] * price, 2)}){DEFAULT}\n"
                     f"         {LIGHT_WHITE}   Total {DEFAULT}| {LIGHT_WHITE}{format_float(tot_bal)} DUSK (${format_float((tot_bal) * price, 2)}){DEFAULT}\n"
                     f"     \n"
-                    f"    {LIGHT_WHITE}Staked{DEFAULT}        | {LIGHT_WHITE}{format_float(st_info['stake_amount'])} (${format_float(st_info['stake_amount'] * price, 2)}){DEFAULT}\n"
+                    f"    {LIGHT_WHITE}Staked{DEFAULT}        | {LIGHT_WHITE}{format_float(st_info['stake_amount'])} (${format_float(st_info['stake_amount'] * price, 2)}){DEFAULT}{is_active}\n"
                     f"    {YELLOW}Rewards{DEFAULT}       | {YELLOW}{format_float(st_info['rewards_amount'])} (${format_float(st_info['rewards_amount'] * price, 2)}){DEFAULT}\n"
                     f"    {LIGHT_RED}Reclaimable{DEFAULT}   | {LIGHT_RED}{format_float(st_info['reclaimable_slashed_stake'])} (${format_float(st_info['reclaimable_slashed_stake'] * price, 2)}){DEFAULT}\n"
                     f" ===============================================\n"
