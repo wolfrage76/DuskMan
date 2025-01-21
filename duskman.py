@@ -58,6 +58,7 @@ enable_dashboard = web_dashboard.get('enable_dashboard', True)
 dash_port = web_dashboard.get('dash_port', '5000')
 dash_ip = web_dashboard.get('dash_ip', '0.0.0.0')
 include_rendered = web_dashboard.get('include_rendered', False)
+isDebug = logs_config.get('debug', False)
 
 if config.get('use_sudo', False):
     use_sudo = 'sudo'
@@ -114,7 +115,6 @@ shared_state = {
         "shielded": 0.0
     },
     "last_action_taken": "Starting Up",
-    "first_run": True,
     "completion_time": "--:--",
     "peer_count": 0,
     "price":0.0,
@@ -148,7 +148,7 @@ def get_env_variable(var_name='WALLET_PASSWORD', dotenv_key='WALLET_PASSWORD'):
         # logging.warning(f"Environment variable '{var_name}' not found. Checking .env file...")
         value = os.getenv(dotenv_key)
         if not value:
-            log_action("Wallet Password Variabel Error", f"Neither environment variable '{var_name}' nor .env key '{dotenv_key}' found for wallet password.", "error")
+            log_action("Wallet Password Variable Error", f"Neither environment variable '{var_name}' nor .env key '{dotenv_key}' found for wallet password.", "error")
             sys.exit(1)
             
     return value
@@ -206,7 +206,10 @@ async def execute_command_async(command, log_output=True):
     """Execute a shell command asynchronously and return its output (stdout)."""
     try:
         if log_output:
-            logging.debug(f"Executing command: {command}")
+            cmd2 = command
+            if log_output:
+                log_action("Executing Command", cmd2.replace(password,'#####'), "debug")
+            #logging.debug(f"Executing command: {command}")
         process = await asyncio.create_subprocess_shell(
             command,
             stdout=asyncio.subprocess.PIPE,
@@ -217,44 +220,60 @@ async def execute_command_async(command, log_output=True):
         stderr_str = stderr.decode().strip()
 
         if process.returncode != 0:
-            log_action(f"Command failed with return code {process.returncode}: {command}", stderr_str,"error")
+            log_action(f"Command failed with return code {process.returncode}: {command.replace(password,'#####')}", stderr_str,"error")
             return None # Or raise an exception
         else:
             if log_output and stdout_str:
-                logging.debug(f"Command output: {stdout_str}")
+                log_action(f"Command output", stdout_str.replace(password,'#####'), 'debug')
             return stdout_str
     except Exception as e:
         log_action(f"Error executing command: {command}", e, "error")
         return None
 
-
-async def fetch_dusk_data(): # TODO: change to full data call for more info
+async def fetch_dusk_data():
     """
-    Fetch DUSK token data from CoinGecko API.
-    Returns a dictionary with relevant data or logs an error if the request fails.
+    Fetch DUSK token data from CoinGecko's /coins/markets endpoint and update shared_state.
+    Logs an error if the request fails or data is incomplete.
     """
-    url = "https://api.coingecko.com/api/v3/simple/price"
+    url = "https://api.coingecko.com/api/v3/coins/markets"
     params = {
+        "vs_currency": "usd",  # Convert price to USD
         "ids": "dusk-network",  # CoinGecko's ID for DUSK
-        "vs_currencies": "usd",  # Fetch price in USD
-        "include_market_cap": "true",
-        "include_24hr_vol": "true",
-        "include_24hr_change": "true",
+        "order": "market_cap_desc",  # Sort by market cap
+        "per_page": 1,
+        "page": 1,
+        "sparkline": "false",  # Do not include sparkline data
+        "price_change_percentage": "1h,24h,7d,14d,30d,200d,1y",  # Include price change percentages
+        "locale": "en",
     }
-    
+
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url, params=params) as response:
                 if response.status == 200:
                     data = await response.json()
-                    dusk_data = data.get("dusk-network", {})
-                    return dusk_data
+                    dusk_data = {}
+                    if data:
+                        dusk_data = data[0]  # Extract the first result for "dusk-network"
+                        
+                    # Update shared_state directly
+                    shared_state["price"] = dusk_data.get("current_price", 0.0)
+                    shared_state["market_cap"] = dusk_data.get("market_cap", 0.0)
+                    shared_state["volume"] = dusk_data.get("total_volume", 0.0)
+                    shared_state["usd_24h_change"] = dusk_data.get("price_change_percentage_24h", 0.0)
+                    shared_state["market_cap_rank"] = dusk_data.get("market_cap_rank", None)
+                    shared_state["circulating_supply"] = dusk_data.get("circulating_supply", None)
+                    shared_state["total_supply"] = dusk_data.get("total_supply", None)
+                    shared_state["ath"] = dusk_data.get("ath", 0.0)
+                    shared_state["ath_change_percentage"] = dusk_data.get("ath_change_percentage", 0.0)
+                    shared_state["price_change_percentage_1h"] = dusk_data.get("price_change_percentage_1h_in_currency", 0.0)
+                    shared_state["last_updated"] = dusk_data.get("last_updated", "N/A")
+                
                 else:
-                    logging.debug(f"Failed to fetch DUSK data. HTTP Status: {response.status}")
-                    return None
+                    log_action("Failed to fetch DUSK data", f"HTTP Status: {response.status}", 'debug')
     except Exception as e:
-        logging.debug(f"Error while fetching DUSK data: {e}")
-        return None
+        log_action("Error while fetching DUSK data", str(e), 'debug')
+
 
 
 def format_float(value, places=4):
@@ -275,7 +294,7 @@ def write_to_log(file_path, message):
         # Handle potential errors during file writing, if necessary
         log_action(f"Error writing to log file {file_path}",e,"error")
 
-def log_action(action, details, type='info'):
+def log_action(action="Action", details="No Details", type='info'):
     """
     Write log messages to specific files based on type.
     """
@@ -286,12 +305,13 @@ def log_action(action, details, type='info'):
     
     # Write to the appropriate log file
     if type == 'debug':
-        write_to_log(DEBUG_LOG_FILE, formatted_message)
+        if isDebug:
+            write_to_log(DEBUG_LOG_FILE, formatted_message)
     elif type == 'error':
         write_to_log(ERROR_LOG_FILE, formatted_message)
     else:
         write_to_log(INFO_LOG_FILE, formatted_message)
-        notifier.notify(formatted_message, shared_state)
+        #notifier.notify(formatted_message, shared_state)
         
     
 
@@ -491,7 +511,7 @@ async def frequent_update_loop():
     
     while True:
         # 1) Fetch block height
-        block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height")
+        block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height", False)
         if not block_height_str:
             log_action("Failed to fetch block height.", ' Retrying in 10s...', "error")
             await asyncio.sleep(10)
@@ -534,18 +554,12 @@ async def frequent_update_loop():
                 shared_state["stake_info"]["reclaimable_slashed_stake"] = r_slashed or 0.0
                 shared_state["stake_info"]["rewards_amount"] = a_rewards or 0.0
             
-            dusk_data = await fetch_dusk_data()
-            if dusk_data:
-                shared_state["price"] = dusk_data.get("usd", 0.0)
-                shared_state["market_cap"]  = dusk_data.get("usd_market_cap", 0.0)
-                shared_state["volume"]  = dusk_data.get("usd_24h_vol", 0.0)
-                shared_state["usd_24h_change"]  = dusk_data.get("usd_24h_change", 0.0)
-                
+            await fetch_dusk_data()  
                 
             loopcnt = 0  # Reset loop count after update
         
         
-        shared_state["peer_count"] = await execute_command_async(f"{use_sudo} ruskquery peers")
+        shared_state["peer_count"] = await execute_command_async(f"{use_sudo} ruskquery peers", False)
         peer_count = int(shared_state["peer_count"])
         
         if not peer_count:
@@ -565,7 +579,7 @@ async def frequent_update_loop():
         # Log and notify if low count for too long
         if consecutive_low_peers >= 240:
             message = f"WARNING! Low peer count for {consecutive_low_peers * 10} seconds.\nCurrent Count: {peer_count}"
-            log_action("Low peer count!",message, "error")
+            log_action("Low peer count!", message, "error")
             notifier.notify(message, shared_state)
             consecutive_low_peers = 0  # Reset after notifying to avoid spamming
 
@@ -578,20 +592,14 @@ async def init_balance():
         Init display values
     """
     
-    dusk_data = await fetch_dusk_data()
-    if not dusk_data:
-        dusk_data = {}
-    shared_state["price"] = dusk_data.get("usd", "N/A")
-    shared_state["market_cap"]  = dusk_data.get("usd_market_cap", "N/A")
-    shared_state["volume"]  = dusk_data.get("usd_24h_vol", "N/A")
-    shared_state["usd_24h_change"]  = dusk_data.get("usd_24h_change", "N/A")
+    await fetch_dusk_data() # grab data from Coingecko
 
-    # 1) Fetch block height
-    block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height")
+    # Fetch block height
+    block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height", False)
     if block_height_str:
         shared_state["block_height"] = int(block_height_str)
 
-    # 2) Fetch wallet balances
+    # Fetch wallet balances
     pub_bal, shld_bal = await get_wallet_balances(password)
     shared_state["balances"]["public"] = pub_bal
     shared_state["balances"]["shielded"] = shld_bal
@@ -608,22 +616,14 @@ async def stake_management_loop():
     Main staking logic. Sleeps until the next epoch after each action/no-action.
     Meanwhile, frequent_update_loop updates block height & balances for display.
     """
-    # password = get_env_variable("MY_WALLET_VARIABLE", dotenv_key="WALLET_PASSWORD")
 
     first_run = True
     
     while True:
         try:
-            try:    
-                dusk_info= await fetch_dusk_data() or {}
-                
-                shared_state["price"] = dusk_info.get('usd',0)
-            except Exception as e:
-                log_action("Error fetching dusk in stake loop", e, "error")
-
                 
             # For logic, we may want a fresh block height right before we do anything:
-            block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height")
+            block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height", False)
             if not block_height_str:
                 log_action("Failed to fetch block height", "Retrying in 30s...", "error")
                 await sleep_with_feedback(30, "retry block height fetch")
@@ -634,20 +634,20 @@ async def stake_management_loop():
 
             # If we already saw 'No Action' for this block, wait a bit
             if shared_state["last_no_action_block"] == block_height:
-                msg = f"Already did 'No Action' at block {block_height}; sleeping 60s."
-                await sleep_with_feedback(60, msg)
+                msg = f"Already did 'No Action' at block {block_height}; sleeping 30s."
+                await sleep_with_feedback(30, msg)
                 continue
 
             # Fetch stake-info
             stake_output = await execute_command_async(f"{use_sudo} rusk-wallet --password {password} stake-info")
             if not stake_output:
-                log_action("Failed to fetch stake-info. Retrying in 60s...")
+                log_action("Error", "Failed to fetch stake-info. Retrying in 60s...", "error")
                 await sleep_with_feedback(30, "retry stake-info fetch")
                 continue
 
             e_stake, r_slashed, a_rewards = parse_stake_info(stake_output)
             if e_stake is None or r_slashed is None or a_rewards is None:
-                logging.warning("Parsing stake info failed or incomplete. Skipping cycle...")
+                log_action("Skiping Cycle","Parsing stake info failed or incomplete. Skipping cycle...", 'debug')
                 await sleep_with_feedback(30, "skipping cycle")
                 continue
 
@@ -668,7 +668,7 @@ async def stake_management_loop():
             total_restake = stake_amount + rewards_amount + reclaimable_slashed_stake
 
             # Should this check first run and wait till first epoch? need to test
-            if should_unstake_and_restake(reclaimable_slashed_stake, downtime_loss):
+            if should_unstake_and_restake(reclaimable_slashed_stake, downtime_loss) and not first_run:
                 if total_restake < min_stake_amount:
                     shared_state["last_action_taken"] = "Unstake/Restake Skipped (Below Min)"
                     log_action(
@@ -693,29 +693,32 @@ async def stake_management_loop():
                         act_msg,
                         f"Reclaimable: {format_float(reclaimable_slashed_stake)}, Downtime Loss: {format_float(downtime_loss)}"
                     )
-
+                    
                     # 1) Withdraw
                 
                     curr_cmd = f"{use_sudo} rusk-wallet --password ####### withdraw"
+                    curr2 = curr_cmd
                     cmd_success = await execute_command_async(curr_cmd.replace('#######',password))
                     if not cmd_success:
-                        log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
+                        log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr2}", 'error')
                         raise Exception("CMD execution failed")
                     
                     # 2) Unstake
                 
                     curr_cmd =f"{use_sudo} rusk-wallet --password ####### unstake"
+                    curr2 = curr_cmd
                     cmd_success = await execute_command_async(curr_cmd.replace('#######',password))
                     if not cmd_success:
-                        log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
+                        log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr2}", 'error')
                         raise Exception("CMD execution failed")
                     
                     # 3) Stake
                 
                     curr_cmd = f"{use_sudo} rusk-wallet --password ####### stake --amt {total_restake}"
+                    curr2 = curr_cmd
                     cmd_success = await execute_command_async(curr_cmd.replace('#######', password))
                     if not cmd_success:
-                        log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
+                        log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr2}", 'error')
                         raise Exception("CMD execution failed")
 
                     stake_output = await execute_command_async(f"{use_sudo} rusk-wallet --password {password} stake-info")
@@ -731,7 +734,7 @@ async def stake_management_loop():
                     await sleep_until_next_epoch(block_height + 2160, msg="2-epoch wait after restaking...")
                     continue
 
-            elif should_claim_and_stake(rewards_amount, incremental_threshold):
+            elif should_claim_and_stake(rewards_amount, incremental_threshold) and not first_run:
                 # Claim & Stake
                 shared_state["last_action_taken"] = f"Claim/Stake @ Block {block_height}"
                 log_action(
@@ -743,17 +746,19 @@ async def stake_management_loop():
                 # 1) Withdraw
                 
                 curr_cmd =f"{use_sudo} rusk-wallet --password ####### withdraw"
+                curr2 = curr_cmd
                 cmd_success = await execute_command_async(curr_cmd.replace('#######',password))
                 if not cmd_success:
-                        log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
+                        log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr2}", 'error')
                         raise Exception("CMD execution failed")
                     
                 # 2) Stake
                 
                 curr_cmd = f"{use_sudo} rusk-wallet --password ####### stake --amt {rewards_amount}"
+                curr2 = curr_cmd
                 cmd_success = await execute_command_async(curr_cmd.replace('#######',password))
                 if not cmd_success:
-                        log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
+                        log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr2}", 'error')
                         raise Exception("CMD execution failed")
                     
                 new_stake = stake_amount + rewards_amount
@@ -779,7 +784,7 @@ async def stake_management_loop():
                 
                 now_ts = datetime.now().strftime('%Y-%m-%d %H:%M')
                 
-                if shared_state["first_run"]:
+                if first_run:
                     
                     byline = Text("\n  DuskMan Stake Management System: By Wolfrage", style="bold blue")
 
@@ -819,15 +824,13 @@ async def stake_management_loop():
                     print(separator + auto_status)
                     
                     
-                    shared_state["first_run"] = False
+                    #shared_state["first_run"] = False
                     shared_state["last_action_taken"] = f"Startup @ Block #{block_height}"
                     action = shared_state["last_action_taken"]
-                    # Fetch required data
                     block_height = shared_state["block_height"]
                     first_run = False
-                    # log_action('Activity',action)
-                    
                 else:
+                    # If no action, just wait and don't log sinc eno longer first run
                     await sleep_until_next_epoch(block_height, buffer_blocks=buffer_blocks)
                     continue    
 
@@ -845,7 +848,7 @@ async def stake_management_loop():
             if len(log_entries) > 15: # TODO: Make configurable
                 log_entries.pop(0)
             log_entries.append(Log_info)
-            notifier.notify(Log_info, shared_state)
+            notifier.notify(Log_info, shared_state) # 
             
             
                 # Display logs above the real-time display
@@ -856,9 +859,10 @@ async def stake_management_loop():
 
             # Mark first run as completed after the first iteration 
             
-            
+            first_run = False
         except Exception as e:
                 log_action("Error in stake management loop", e, "error")
+                raise Exception("Error in stake management loop")
             # Sleep until near the next epoch
         await sleep_until_next_epoch(block_height, buffer_blocks=buffer_blocks)
 
@@ -1049,7 +1053,6 @@ async def main():
     if enable_dashboard and dash_port and dash_ip:
         from utilities.web_dashboard import start_dashboard
         await start_dashboard(shared_state, log_entries,  host=dash_ip, port=dash_port)
-        
     #console.clear()
     await asyncio.gather(
         stake_management_loop(),

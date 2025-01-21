@@ -28,7 +28,9 @@ WEB_DASHBOARD: # Default at http://localhost:5000
   enable_dashboard: True
   dash_port: 5000         # Port the Dashboard and API should listen on. Defaults to 5000
   dash_ip: 0.0.0.0        # Defaults to 0.0.0.0 for any IP, otherwise specific IP
-  include_rendered: False # include a render text of the console display in the API response
+  
+  include_rendered: False # Include a render text of the console display in the API response
+                          # Allows grabbing the whole thing to display easily, vs parsing and building a display because I got bored
 
 
 NOTIFICATIONS:
@@ -42,9 +44,12 @@ NOTIFICATIONS:
   webhook_url:         # https://your-webhook-url.com/endpoint # For parsing with your own server/middleware
 
 LOG_FILES:
- action_log:           # Defaults to ./duskman_actions.log
- debug_log:            # Defaults to ./duskman_tmp_debug.log  :NOTE: Is deleted on each start!
- error_log:            # Defaults to ./duskman_errors.log
+  
+  action_log:           # Defaults to ./duskman_actions.log
+  error_log:            # Defaults to ./duskman_errors.log
+  debug_log:            # Defaults to ./duskman_tmp_debug.log  :NOTE: Debug log is deleted on each start!
+  
+  debug: False          # Enable the debugging log. Debug log is deleted on each start!
 
 STATUSBAR: # Determines what to show in bottom statusbar and tmux statusbar
 # Also for Viewer
@@ -60,3 +65,5 @@ STATUSBAR: # Determines what to show in bottom statusbar and tmux statusbar
   show_timer: True
   show_trigger_time: True
   show_peer_count: False
+
+
