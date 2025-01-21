@@ -291,6 +291,8 @@ def log_action(action, details, type='info'):
         write_to_log(ERROR_LOG_FILE, formatted_message)
     else:
         write_to_log(INFO_LOG_FILE, formatted_message)
+        notifier.notify(formatted_message, shared_state)
+        
     
 
 def parse_stake_info(output):
@@ -808,25 +810,28 @@ async def stake_management_loop():
                     action = shared_state["last_action_taken"]
                     # Fetch required data
                     block_height = shared_state["block_height"]
+                    first_run = False
+
+                    
                 else:
                     await sleep_until_next_epoch(block_height, buffer_blocks=buffer_blocks)
                     continue    
 
-                Log_info = (
-                f"\t==== Activity @{now_ts}====\n"
-                f"  Action              :  {action}\n\n"
-                f"  Balance           :  {format_float(b['public'] + b['shielded'],)}\n"
-                f"    ├─ Public      :    {format_float(b['public'])} (${format_float(b['public'] * float(shared_state["price"]))})\n"
-                f"    └─ Shielded  :    {format_float(b['shielded'])} (${format_float(b['shielded'] * float(shared_state["price"]))})\n\n"
-                f"  Staked              :  {format_float(shared_state.get('stake_info',{}).get('stake_amount','0.0'))} (${format_float(shared_state.get('stake_info',{}).get('stake_amount','0.0') * float(shared_state["price"]))})\n"
-                f"  Rewards           :  {format_float(shared_state.get('stake_info',{}).get('rewards_amount','0.0'))} (${format_float(shared_state.get('stake_info',{}).get('rewards_amount',{}) * float(shared_state["price"]))})\n"
-                f"  Reclaimable    :  {format_float(shared_state.get('stake_info',{}).get('reclaimable_slashed_stake','0.0'))} (${format_float(shared_state.get('stake_info',{}).get('reclaimable_slashed_stake') * float(shared_state["price"]))})\n"
-                    )
-                
-                if len(log_entries) > 15:
-                    log_entries.pop(0)
-                log_entries.append(Log_info)
-                
+            Log_info = (
+            f"\t==== Activity @{now_ts}====\n"
+            f"  Action              :  {action}\n\n"
+            f"  Balance           :  {format_float(b['public'] + b['shielded'],)}\n"
+            f"    ├─ Public      :    {format_float(b['public'])} (${format_float(b['public'] * float(shared_state["price"]))})\n"
+            f"    └─ Shielded  :    {format_float(b['shielded'])} (${format_float(b['shielded'] * float(shared_state["price"]))})\n\n"
+            f"  Staked              :  {format_float(shared_state.get('stake_info',{}).get('stake_amount','0.0'))} (${format_float(shared_state.get('stake_info',{}).get('stake_amount','0.0') * float(shared_state["price"]))})\n"
+            f"  Rewards           :  {format_float(shared_state.get('stake_info',{}).get('rewards_amount','0.0'))} (${format_float(shared_state.get('stake_info',{}).get('rewards_amount',{}) * float(shared_state["price"]))})\n"
+            f"  Reclaimable    :  {format_float(shared_state.get('stake_info',{}).get('reclaimable_slashed_stake','0.0'))} (${format_float(shared_state.get('stake_info',{}).get('reclaimable_slashed_stake') * float(shared_state["price"]))})\n"
+                )
+            
+            if len(log_entries) > 15: # TODO: Make configurable
+                log_entries.pop(0)
+            log_entries.append(Log_info)
+            notifier.notify(Log_info, shared_state)
                 # Display logs above the real-time display
                 
                 #if not first_run:
@@ -834,7 +839,8 @@ async def stake_management_loop():
                 #        console.print(entry)
 
             # Mark first run as completed after the first iteration 
-            first_run = False
+            
+            
         except Exception as e:
                 logging.error(f"Error in stake management loop: {e}")
                 log_action("Error in stake management loop", e, "error")
@@ -905,12 +911,14 @@ async def realtime_display(enable_tmux=False):
                 currenttime = datetime.now().strftime('%H:%M:%S')
                 epoch_num = int(blk / 2160)
                 
-                active_block = shared_state.get("active_blk", 00000)
+                active_block = shared_state.get("active_blk", 2160)
                 if int(blk) - active_block >= 0:
                     is_active = str() 
                     
                 else:
-                    is_active = f"{RED}\n\tActive in {format_hms((active_block - blk) * 10)} @ #{active_block}{DEFAULT}\n"               
+                    active_secs = (active_block - blk) * 10
+                    when_active = (datetime.now() + timedelta(seconds=active_secs)).strftime('%H:%M')
+                    is_active = f"{LIGHT_RED}\n\tActive @ {when_active} - #{active_block} (E: {int(active_block/2160)}){DEFAULT}\n"               
                 
                 allocation_bar = display_wallet_distribution_bar(b['public'],b['shielded'],8)
                 # Real-time display content (no surrounding panel)
