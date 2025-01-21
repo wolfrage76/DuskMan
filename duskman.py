@@ -718,6 +718,12 @@ async def stake_management_loop():
                         log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
                         raise Exception("CMD execution failed")
 
+                    stake_output = await execute_command_async(f"{use_sudo} rusk-wallet --password {password} stake-info")
+                    if stake_output:
+                        e_stake, r_slashed, a_rewards = parse_stake_info(stake_output)
+                        shared_state["stake_info"]["stake_amount"] = e_stake or 0.0
+                        shared_state["stake_info"]["reclaimable_slashed_stake"] = r_slashed or 0.0
+                        shared_state["stake_info"]["rewards_amount"] = a_rewards or 0.0
                     log_action("Restake Completed", f"New Stake: {format_float(float(total_restake))}")
                     shared_state["last_claim_block"] = block_height
 
@@ -751,6 +757,13 @@ async def stake_management_loop():
                         raise Exception("CMD execution failed")
                     
                 new_stake = stake_amount + rewards_amount
+                stake_output = await execute_command_async(f"{use_sudo} rusk-wallet --password {password} stake-info")
+                if stake_output:
+                    e_stake, r_slashed, a_rewards = parse_stake_info(stake_output)
+                    shared_state["stake_info"]["stake_amount"] = e_stake or 0.0
+                    shared_state["stake_info"]["reclaimable_slashed_stake"] = r_slashed or 0.0
+                    shared_state["stake_info"]["rewards_amount"] = a_rewards or 0.0
+                    
                 log_action("Stake Completed", f"New Stake: {format_float(new_stake)}")
                 shared_state["last_claim_block"] = block_height
                 
@@ -812,7 +825,7 @@ async def stake_management_loop():
                     # Fetch required data
                     block_height = shared_state["block_height"]
                     first_run = False
-
+                    # log_action('Activity',action)
                     
                 else:
                     await sleep_until_next_epoch(block_height, buffer_blocks=buffer_blocks)
@@ -833,6 +846,8 @@ async def stake_management_loop():
                 log_entries.pop(0)
             log_entries.append(Log_info)
             notifier.notify(Log_info, shared_state)
+            
+            
                 # Display logs above the real-time display
                 
                 #if not first_run:
