@@ -1,9 +1,10 @@
 VIEWER: # ONLY needed if using this for the remote viewer script
-  viewer_ip:    # The remote IP/hostname to connect to. Defaults to localhost
+  viewer_ip: 127.0.0.1   # The remote IP/hostname to connect to.
   viewer_port: 5000  # The remote port to connect to. 
-### NOTE: STATUSBAR SECTION BELOW CAN ALSO (OPTIONALLY) USED FOR VIEWER SCRIPT TMUX  ###
-### Nothing else needed for Viewer only script                                       ###
- ######################################################################################
+  
+#   NOTE: STATUSBAR SECTION BELOW CAN ALSO (OPTIONALLY) USED FOR VIEWER SCRIPT TMUX     #
+#   Nothing else needed for Viewer only script. Will separate into its own file later   #
+ #######################################################################################
 
 GENERAL:
   buffer_blocks: 40 # How many blocks before Epoch to trigger (1 block = 10seconds)
