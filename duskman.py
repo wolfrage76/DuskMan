@@ -33,10 +33,10 @@ def load_config(section="GENERAL", file_path="config.yaml"):
             config = yaml.safe_load(file)
             return config.get(section, {})
     except FileNotFoundError:
-        logging.error(f"Configuration file {file_path} not found. Exiting.")
+        log_action("Config File error", f"Configuration file {file_path} not found. Exiting.", "error")
         sys.exit(1)
     except yaml.YAMLError as e:
-        logging.error(f"Error parsing YAML file {file_path}: {e}")
+        log_action("Config File Error", f"Error parsing YAML file {file_path}: {e}", "error")
         sys.exit(1)
 
 # Load configuration
@@ -148,7 +148,7 @@ def get_env_variable(var_name='WALLET_PASSWORD', dotenv_key='WALLET_PASSWORD'):
         # logging.warning(f"Environment variable '{var_name}' not found. Checking .env file...")
         value = os.getenv(dotenv_key)
         if not value:
-            logging.error(f"Neither environment variable '{var_name}' nor .env key '{dotenv_key}' found for wallet password.")
+            log_action("Wallet Password Variabel Error", f"Neither environment variable '{var_name}' nor .env key '{dotenv_key}' found for wallet password.", "error")
             sys.exit(1)
             
     return value
@@ -217,14 +217,14 @@ async def execute_command_async(command, log_output=True):
         stderr_str = stderr.decode().strip()
 
         if process.returncode != 0:
-            logging.error(f"Command failed with return code {process.returncode}: {command}\n{stderr_str}")
+            log_action(f"Command failed with return code {process.returncode}: {command}", stderr_str,"error")
             return None # Or raise an exception
         else:
             if log_output and stdout_str:
                 logging.debug(f"Command output: {stdout_str}")
             return stdout_str
     except Exception as e:
-        logging.error(f"Error executing command: {command}\n{e}")
+        log_action(f"Error executing command: {command}", e, "error")
         return None
 
 
@@ -329,12 +329,12 @@ def parse_stake_info(output):
         if (eligible_stake is None or
             reclaimable_slashed_stake is None or
             accumulated_rewards is None):
-            logging.error("Incomplete stake-info values. Could not parse fully.")
+            log_action("Incomplete stake-info values.","Could not parse fully.", "error")
             return None, None, None
 
         return eligible_stake, reclaimable_slashed_stake, accumulated_rewards
     except Exception as e:
-        logging.error(f"Error parsing stake-info output: {e}")
+        log_action(f"Error parsing stake-info output: ",e,"error")
         return None, None, None
 
 async def get_wallet_balances(password):
@@ -366,7 +366,7 @@ async def get_wallet_balances(password):
                 if match:
                     addresses["public"].append(match.group(1))
     except Exception as e:
-                logging.error(f"Error in get_wallet_balances(): {e}")
+                log_action(f"Error in get_wallet_balances(): ",e,"error")
                 await asyncio.sleep(5)
     
     async def get_spendable_for_address(addr):
@@ -493,7 +493,7 @@ async def frequent_update_loop():
         # 1) Fetch block height
         block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height")
         if not block_height_str:
-            logging.error("Failed to fetch block height. Retrying in 10s...")
+            log_action("Failed to fetch block height.", ' Retrying in 10s...', "error")
             await asyncio.sleep(10)
             continue
         
@@ -511,7 +511,7 @@ async def frequent_update_loop():
         # Log and notify if block height hasn't changed for 10 loops (100 seconds)
         if consecutive_no_change >= 10:
             message = f"WARNING! Block height has not changed for {consecutive_no_change * 10} seconds.\nLast height: {last_known_block_height}"
-            logging.error(message)
+            log_action("Block Height Error!", message,"error")
             notifier.notify(message, shared_state)
             consecutive_no_change = 0  # Reset after notifying to avoid spamming
             await asyncio.sleep(1)
@@ -549,7 +549,7 @@ async def frequent_update_loop():
         peer_count = int(shared_state["peer_count"])
         
         if not peer_count:
-            logging.error("Failed to fetch peers. Retrying in 10s...")
+            log_action("Failed to fetch peers.", "Retrying in 10s...", "error")
             await asyncio.sleep(10)
             continue
         
@@ -565,7 +565,7 @@ async def frequent_update_loop():
         # Log and notify if low count for too long
         if consecutive_low_peers >= 240:
             message = f"WARNING! Low peer count for {consecutive_low_peers * 10} seconds.\nCurrent Count: {peer_count}"
-            logging.error(message)
+            log_action("Low peer count!",message, "error")
             notifier.notify(message, shared_state)
             consecutive_low_peers = 0  # Reset after notifying to avoid spamming
 
@@ -619,12 +619,13 @@ async def stake_management_loop():
                 
                 shared_state["price"] = dusk_info.get('usd',0)
             except Exception as e:
-                logging.error(f"Error fetching dusk in stake loop: {e}")
+                log_action("Error fetching dusk in stake loop", e, "error")
+
                 
             # For logic, we may want a fresh block height right before we do anything:
             block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height")
             if not block_height_str:
-                logging.error("Failed to fetch block height. Retrying in 60s...")
+                log_action("Failed to fetch block height", "Retrying in 30s...", "error")
                 await sleep_with_feedback(30, "retry block height fetch")
                 continue
 
@@ -640,7 +641,7 @@ async def stake_management_loop():
             # Fetch stake-info
             stake_output = await execute_command_async(f"{use_sudo} rusk-wallet --password {password} stake-info")
             if not stake_output:
-                logging.error("Failed to fetch stake-info. Retrying in 60s...")
+                log_action("Failed to fetch stake-info. Retrying in 60s...")
                 await sleep_with_feedback(30, "retry stake-info fetch")
                 continue
 
@@ -842,7 +843,6 @@ async def stake_management_loop():
             
             
         except Exception as e:
-                logging.error(f"Error in stake management loop: {e}")
                 log_action("Error in stake management loop", e, "error")
             # Sleep until near the next epoch
         await sleep_until_next_epoch(block_height, buffer_blocks=buffer_blocks)
@@ -1005,13 +1005,13 @@ async def realtime_display(enable_tmux=False):
 
                         subprocess.check_call(["tmux", "set-option", "-g", "status-left", remove_ansi(tmux_status)])
                     except subprocess.CalledProcessError:
-                        logging.error("Failed to update tmux status bar. Is tmux running?")
+                        log_action("tmux Error", "Failed to update tmux status bar. Is tmux running?", "error")
                         enable_tmux = False
 
                 await asyncio.sleep(1)
 
             except Exception as e:
-                logging.error(f"Error in real-time display: {e}")
+                log_action(f"Error in real-time display", e, "error")
                 await asyncio.sleep(5)
 
 # ─────────────────────────────────────────────────────────────────────────────
