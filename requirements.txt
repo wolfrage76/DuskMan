@@ -4,3 +4,5 @@ rich
 asyncio 
 aiohttp 
 python-dotenv
+flask
+waitress

@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>DuskMan: The Dusk Network Stake Manager</title>
+  <!-- We'll inject the theme CSS dynamically via JS below -->
+  <style id="theme-style"></style>
+</head>
+<body>
+
+<!-- Light/Dark Toggle -->
+<button id="theme-toggle"></button>
+
+<!-- HEADER -->
+<div class="header">
+  <h1>DuskMan: The Dusk Network Stake Manager</h1>
+</div>
+
+<!-- Container + Sidebars -->
+<div class="container-wrapper">
+  <div class="sidebar-left"></div>
+
+  <div class="main-container">
+    <!-- About (20%) -->
+    <div class="about-panel">
+      <div class="about-card">
+        <h3>About DuskMan</h3>
+        <p>
+          DuskMan is a stake management dashboard for
+          the <strong>Dusk Network</strong>. 
+          It monitors your node status, balances, and staking rewards 
+          in near real time.
+        </p>
+        <p>
+          Author: <strong>Wolfrage</strong><br>
+          Source: 
+          <a href="https://github.com/wolfrage76" target="_blank"
+             style="color:#42a5f5; text-decoration:none;">
+            https://github.com/wolfrage76
+          </a>
+        </p>
+        <p>
+          Official Dusk Network Site:
+          <a href="https://dusk.network" target="_blank"
+             style="color:#42a5f5; text-decoration:none;">
+             https://dusk.network
+          </a>
+        </p>
+        <p>
+          Official Dusk Discord:
+          <a href="https://discord.gg/dusk-official" target="_blank"
+             style="color:#42a5f5; text-decoration:none;">
+             https://discord.gg/dusk-official
+          </a>
+        </p>
+      </div>
+    </div>
+
+    <!-- Stats (35%) -->
+    <div class="left-panel">
+      <div class="card" id="stats-card">
+        <h4>Loading real-time data...</h4>
+      </div>
+    </div>
+
+    <!-- Logs (45%) -->
+    <div class="right-panel">
+      <div class="card" id="logs-card">
+        <h4>Loading logs...</h4>
+      </div>
+    </div>
+  </div>
+
+  <div class="sidebar-right"></div>
+</div>
+
+<!-- FOOTER -->
+<div class="footer">
+  <p>© {{ year }} Wolfrage’s Dusk Dashboard. All rights reserved.
+    <a href="https://github.com/wolfrage76" target="_blank" style="margin-left:8px;">
+      <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" 
+           alt="GitHub" 
+           style="width:20px; height:20px; vertical-align:middle;" />
+    </a>
+  </p>
+</div>
+
+<script>
+  // We'll inject these from Python so we can dynamically swap them
+  const DARK_MODE_CSS = `{{ dark_css|safe }}`;
+  const LIGHT_MODE_CSS = `{{ light_css|safe }}`;
+
+  function applyTheme(isDark) {
+    document.getElementById('theme-style').innerHTML = isDark ? DARK_MODE_CSS : LIGHT_MODE_CSS;
+    localStorage.setItem('duskmanIsDark', isDark);
+    updateThemeButton(isDark);
+  }
+
+  function updateThemeButton(isDark) {
+    const btn = document.getElementById("theme-toggle");
+    // Only show icons (sun or moon), no text
+    btn.textContent = isDark ? "☀️" : "🌙";
+  }
+
+  function toggleTheme() {
+    const current = localStorage.getItem('duskmanIsDark') === 'true';
+    applyTheme(!current);
+  }
+
+  // On load, check stored preference or default to dark
+  (function initTheme() {
+    let stored = localStorage.getItem('duskmanIsDark');
+    if (stored === null) {
+      stored = 'true'; // default dark
+      localStorage.setItem('duskmanIsDark', stored);
+    }
+    applyTheme(stored === 'true');
+  })();
+  document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+
+  // Utility functions
+  function truncateNumber(num, decimals){
+    if (!num || isNaN(num)) return num;
+    let str = String(num);
+    const [integer, fraction = ''] = str.split('.');
+    if (fraction.length > decimals) {
+      return integer + '.' + fraction.substring(0, decimals);
+    }
+    return str;
+  }
+
+  function roundTo(num, decimals){
+    if(!num || isNaN(num)) return num;
+    const factor = Math.pow(10, decimals);
+    return Math.round(num * factor) / factor;
+  }
+
+  function formatHMS(seconds){
+    if(!seconds || isNaN(seconds)) return seconds;
+    const h = Math.floor(seconds / 3600);
+    const r = seconds % 3600;
+    const m = Math.floor(r / 60);
+    const s = r % 60;
+    const parts = [];
+    if(h > 0) parts.push(h + "h");
+    if(m > 0) parts.push(m + "m");
+    parts.push(s + "s");
+    return parts.join(" ");
+  }
+
+function parseLogEntry(rawText){
+  // Convert multiple blank lines into a single blank line:
+  rawText = rawText.replace(/\n\s*\n+/g, '\n\n').trim();
+
+  let lines = rawText.split(/\r?\n/).map(l => l.trim());
+
+  // Filter out lines that are entirely '====' or empty
+  lines = lines.filter(l => l && !/^=+$/.test(l));
+  if(!lines.length){
+    return '<div class="log-entry-card"><h5>Empty Log</h5></div>';
+  }
+
+  let activityLine = lines.shift();
+  let activityTitle = activityLine
+    .replace(/^====\s*Activity\s*@/i, "")
+    .replace(/====$/, "")
+    .trim()
+    .replace(/^\d{4}-/, "");  // remove leading year
+
+  let blockNumber = null;
+  const filtered = [];
+  lines.forEach(l => {
+    if(l.toLowerCase().startsWith("current block")){
+      const parts = l.split(":", 2);
+      if(parts.length === 2){
+        blockNumber = parts[1].trim();
+      }
+    } else {
+      filtered.push(l);
+    }
+  });
+
+  const itemLines = filtered.filter(l => l.includes(":"));
+
+  let itemsHtml = "";
+  itemLines.forEach(line => {
+    const [label, val] = line.split(":", 2);
+    if(val !== undefined){
+      itemsHtml += `<li><span class="label-col">${label.trim()}:</span><span class="value-col">${val.trim()}</span></li>`;
+    }
+  });
+  if(!itemsHtml){
+    itemsHtml = "<li>[No valid lines in this entry]</li>";
+  }
+
+  const heading = blockNumber
+    ? `Activity @ Block ${blockNumber} - ${activityTitle}`
+    : `Activity @ ${activityTitle}`;
+
+  // Single-line return to avoid accidental extra whitespace:
+  return `<div class="log-entry-card"><h5>${heading}</h5><ul>${itemsHtml}</ul></div>`;
+}
+
+
+  async function fetchDataAndUpdate(){
+    try{
+      const response = await fetch('/api/data');
+      if(!response.ok){
+        console.error("Error fetching data:", response.statusText);
+        return;
+      }
+      const jsonData = await response.json();
+      const data = jsonData.data;
+      const logs = jsonData.log_entries;
+
+      // Build stats HTML
+      let statsHtml = `<h4>Real-Time Stats</h4>`;
+
+      // Basic stats
+      const blockHeight = '#' + data.block_height;
+      const peerCount = data.peer_count;
+      const remainTime = formatHMS(data.remain_time);
+      const completionTime = data.completion_time;
+
+      statsHtml += `
+        <p>
+          <span class="label-col" style="width:auto;">Block:</span> ${blockHeight}
+          &nbsp; &nbsp;
+          <span class="label-col" style="width:auto;">Peers:</span> ${peerCount}
+        </p>
+        <p>
+          <span class="label-col" style="width:auto;">Next Check:</span>
+          ${remainTime} (${completionTime})
+        </p>
+      `;
+
+      // Balances
+      const balPublic = truncateNumber(data.balances_public, 4);
+      const balShielded = truncateNumber(data.balances_shielded, 4);
+      const balTotal = truncateNumber(data.balances_total, 4);
+
+      // Price and 24h change
+      const price = truncateNumber(data.price, 3); // 3 decimals, no rounding
+      const change24h = roundTo(data.usd_24h_change, 2); // 2 decimals, rounding
+      let changeColor = "white";
+      if(change24h > 0) changeColor = "green";
+      else if(change24h < 0) changeColor = "red";
+
+      statsHtml += `<hr><h5>Balances</h5>`;
+      let balanceList = `
+        <li>
+          <span class="label-col">Public:</span>
+          <span class="value-col">${balPublic} DUSK ($${(balPublic * price).toFixed(2)})</span>
+        </li>
+        <li>
+          <span class="label-col">Shielded:</span>
+          <span class="value-col">${balShielded} DUSK ($${(balShielded * price).toFixed(2)})</span>
+        </li>
+        <li class="total-balance">
+          <span class="label-col">Total:</span>
+          <span class="value-col">${balTotal} DUSK ($${(balTotal * price).toFixed(2)})</span>
+        </li>
+      `;
+      let priceLine = `
+        <p style="text-align:center;">
+          Price: $${price} USD
+          (<span style="color:${changeColor};">${change24h}%</span> 24h)
+        </p>
+      `;
+      statsHtml += `<ul>${balanceList}</ul>${priceLine}`;
+
+      // Staking
+      statsHtml += `<hr><h5>Staking Info</h5>`;
+      const s = data.stake_info || {};
+      const stake = truncateNumber(s.stake_amount || 0, 4);
+      const rewards = truncateNumber(s.rewards_amount || 0, 4);
+      const reclaimable = truncateNumber(s.reclaimable_slashed_stake || 0, 4);
+
+      let stakeList = `
+        <li>
+          <span class="label-col">Stake Amount:</span>
+          <span class="value-col">${stake} DUSK</span>
+        </li>
+        <li>
+          <span class="label-col">Rewards:</span>
+          <span class="value-col">${rewards} DUSK</span>
+        </li>
+        <li>
+          <span class="label-col">Reclaimable:</span>
+          <span class="value-col">${reclaimable} DUSK</span>
+        </li>
+      `;
+      statsHtml += `<ul>${stakeList}</ul>`;
+
+      document.getElementById('stats-card').innerHTML = statsHtml;
+
+      // Build logs
+      let logsHtml = `<h4>Recent Logs</h4>`;
+      if(logs.length === 0){
+        logsHtml += `
+          <div class="log-entry-card">
+            <h5>No log entries yet</h5>
+          </div>
+        `;
+      } else {
+        logs.forEach(rawLog => {
+          logsHtml += parseLogEntry(rawLog);
+        });
+      }
+      document.getElementById('logs-card').innerHTML = logsHtml;
+
+    } catch(e){
+      console.error("Fetch error:", e);
+    }
+  }
+
+  // Fetch data every second
+  setInterval(fetchDataAndUpdate, 1000);
+  // Initial load
+  fetchDataAndUpdate();
+</script>
+
+</body>
+</html>

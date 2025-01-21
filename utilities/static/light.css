@@ -1,0 +1,284 @@
+/* ================= Desktop pinned layout ============== */
+html,
+body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    /* pinned on desktop */
+    font-family: "Fira Code", "Consolas", "Courier New", monospace;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    background: #f7f7f7;
+    color: #222;
+}
+
+.header {
+    background: linear-gradient(135deg, #efefef 0%, #dcdcdc 100%);
+    padding: 1.2em 1em;
+    border-bottom: 1px solid #ccc;
+    text-align: center;
+    flex: 0 0 auto;
+}
+
+.header h1 {
+    margin: 0;
+    font-size: 1.6rem;
+    font-weight: 600;
+    color: #111;
+}
+
+.footer {
+    background: linear-gradient(135deg, #efefef 0%, #dcdcdc 100%);
+    padding: 0.7em 1em;
+    border-top: 1px solid #ccc;
+    text-align: center;
+    flex: 0 0 auto;
+    font-size: 0.85em;
+    color: #444;
+}
+
+.container-wrapper {
+    flex: 1 1 auto;
+    width: 100%;
+    display: flex;
+    flex-direction: row;
+    height: 100%;
+}
+
+.sidebar-left,
+.sidebar-right {
+    flex: 0 0 5%;
+    background-color: #f7f7f7;
+}
+
+.main-container {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: row;
+    overflow: hidden;
+    height: 100%;
+}
+
+/* about=20%, left=35%, right=45% pinned on desktop */
+.about-panel {
+    flex: 0 0 20%;
+    padding: 1em;
+    overflow-y: auto;
+    background: #fafafa;
+    height: 100%;
+}
+
+.left-panel {
+    flex: 0 0 35%;
+    padding: 1em;
+    border-left: 1px solid #ccc;
+    border-right: 1px solid #ccc;
+    overflow-y: auto;
+    background: #fafafa;
+    height: 100%;
+}
+
+.right-panel {
+    /* Instead of flex: 0 0 45%, try something more flexible, for example: */
+    flex: 1 1 0;
+    /* Let it expand or shrink automatically */
+    /* If you still want a pinned feel, do: flex: 0 0 40%; or 35%, etc. */
+
+    display: flex;
+    flex-direction: column;
+    padding: 1em;
+    /* Keep overflow hidden only if you want to avoid scrolling within the panel itself */
+    overflow: hidden;
+    height: 100%;
+    min-width: 0;
+    /* important so flex can shrink this column */
+}
+
+#logs-card {
+    flex: 1;
+    overflow-y: scroll;
+    scrollbar-width: thin;
+    scrollbar-color: #999 #fff;
+}
+
+#logs-card::-webkit-scrollbar {
+    width: 8px;
+}
+
+#logs-card::-webkit-scrollbar-track {
+    background: #fff;
+}
+
+#logs-card::-webkit-scrollbar-thumb {
+    background-color: #999;
+    border-radius: 4px;
+}
+
+#logs-card::-webkit-scrollbar-thumb:hover {
+    background-color: #777;
+}
+
+/* Cards etc. */
+.card {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 0 6px rgba(0, 0, 0, 0.1);
+    margin-bottom: 1.2em;
+    padding: 1em;
+}
+
+.card h4 {
+    margin-top: 0;
+    margin-bottom: 0.5em;
+    color: #3077c9;
+    font-size: 1.15rem;
+}
+
+.card h5 {
+    margin-top: 0.6em;
+    margin-bottom: 0.2em;
+    color: #e69b00;
+    font-size: 1rem;
+}
+
+hr {
+    border: none;
+    border-top: 1px dashed #aaa;
+    margin: 1em 0;
+}
+
+ul {
+    list-style: none;
+    margin: 0.5em 0 1em 0;
+    padding: 0;
+    color: #333;
+}
+
+li {
+    display: flex;
+    flex-direction: row;
+    align-items: baseline;
+    margin-bottom: 0.3em;
+}
+
+.label-col {
+    width: 11em;
+    text-align: left;
+    margin-right: 1em;
+    font-weight: 600;
+}
+
+.value-col {
+    flex: 1;
+    text-align: left;
+}
+
+li.total-balance {
+    margin-top: 0.8em;
+    font-weight: bold;
+}
+
+strong {
+    color: #576710;
+}
+
+.about-card {
+    background: #fefefe;
+    border-radius: 8px;
+    box-shadow: 0 0 6px rgba(0, 0, 0, 0.1);
+    padding: 1em;
+    margin-bottom: 1.2em;
+    font-size: 0.95rem;
+    line-height: 1.4;
+}
+
+.about-card h3 {
+    margin-top: 0;
+    margin-bottom: 0.4em;
+    color: #c78100;
+    font-weight: 600;
+}
+
+.log-entry-card {
+    background: #FFFFFF;
+    border-radius: 8px;
+    padding: 0.6em 0.8em;
+    margin-bottom: 1em;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+
+    /* If you want to preserve single line breaks but not big blank ones: */
+    white-space: pre-line;
+    /* or 'normal' if you don't want any newlines from logs */
+    word-wrap: break-word;
+    /* ensures long lines wrap */
+    overflow-x: hidden;
+}
+
+.log-entry-card h5 {
+    margin-top: 0;
+    margin-bottom: 0.4em;
+    font-size: 1rem;
+    color: #f57c00;
+    font-weight: 600;
+}
+
+.log-entry-card ul {
+    margin: 0.2em 0 0.2em 0;
+    padding: 0;
+    color: #333;
+}
+
+.log-entry-card ul li {
+    display: flex;
+    align-items: baseline;
+    margin-bottom: 0.2em;
+}
+
+/* THEME TOGGLE button top-right */
+#theme-toggle {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: #FFFF;
+    color: #333;
+    border: 1px solid #999;
+    padding: 0.4em 0.8em;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3em;
+}
+
+/* ===================== MOBILE: let entire page scroll, hide about ============= */
+@media (max-width:768px) {
+
+    html,
+    body {
+        overflow: auto;
+        height: auto;
+    }
+
+    .main-container {
+        flex-direction: column;
+        height: auto;
+    }
+
+    .about-panel {
+        display: none;
+        /* hide on mobile */
+    }
+
+    .left-panel,
+    .right-panel {
+        width: 100%;
+        border: none;
+        height: auto;
+        overflow: visible;
+        margin-bottom: 1em;
+    }
+}

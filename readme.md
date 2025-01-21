@@ -1,38 +1,40 @@
-Please try the Beta branch for most current
+# DuskMan: The Dusk Network stake management system
+![image](https://github.com/user-attachments/assets/b56a80ec-122d-440a-a8d8-0c1fcaeee3bc)
+![image](https://github.com/user-attachments/assets/a780feed-e0fe-46f2-9713-44bcbed0eb5c)
 
-# DUSK Monitoring and Notification Script
-![image](https://github.com/user-attachments/assets/bf465066-8637-45b7-91d2-b77b77d211f9)
 
-This Python script automates the monitoring, and management of **DUSK blockchain staking**, balances, compounding, epochs and system health. It efficiently handles claiming and restaking rewards, sends notifications via multiple services, and optionally updates the TMUX status bar with real-time information.
+DuskMan automates the monitoring, and management, of **DUSK Network** staking, balances, compounding, and monitoring system health. It efficiently handles claiming and restaking rewards, notifications via multiple services, and optionally updates the TMUX status bar with real-time information.
 
-NOTE: The Auto Staking of rewards and/or Auto Restakes for reclaiming slashes CAN be disabled via the config. 
+**NOTE:** The Auto Staking of rewards and/or Auto Restakes for reclaiming slashes CAN be disabled via the config.
 
 ---
 
+**Dusk wallet for Tips:** 
 
-Dusk wallet for Tips: `eox326D2m1ohpBUFVgiF885yV7aN4sg4caA6UkAg7UUhB6JWystDE7t2bdvstBHKTGYrF1oEhYZEd4Bqh4Uhoer`
+`eox326D2m1ohpBUFVgiF885yV7aN4sg4caA6UkAg7UUhB6JWystDE7t2bdvstBHKTGYrF1oEhYZEd4Bqh4Uhoer`
 
-## 🚀 Features
+## 🚀 Features:
+
 
 - **Staking Management**:
   - Monitors staking rewards, reclaimable slashed stakes, and eligible stakes.
   - Automatically claims and stakes rewards when profitable.
   - Unstakes and restakes reclaimable slashed amounts when optimal.
-    
+
+- **Web Dashboard**:
+  - View analytics through your favorite browser. Defaults to `http://localhost:5000`
+  - Enables API access to pull data via deafult of `http://localhost:5000/api/data` 
+
 - **Notification Support**:
   - Sends alerts via:
-    - **Discord**
-    - **Pushbullet**
-    - **Telegram**
-    - **Pushover**
-    - **Webhook**
+    - **Discord**, **Pushbullet**, **Telegram**, **Pushover**, **Webhook**
 
 - **Efficient Execution**:
   - Calculates sleep times based on epochs to minimize unnecessary processing.
   - Prevents redundant or runaway actions.
 
-- **TMUX Integration (Optional)**:
-  - Updates the TMUX status bar with real-time staking and balance data.
+- **TMUX Integration**:
+  - Can update the TMUX status bar with real-time staking and balance data.
 
 ---
 
@@ -91,11 +93,11 @@ In the same directory as the script:
 8. **Run the Script in Foreground**:
 
     ```bash
-    python dusk_manager.py
+    python duskman.py
     ```  
 9. **Or Run script in the background**:
     ```bash
-    screen -dmS duskman python dusk_manager.py
+    screen -dmS dusk_manager python duskman.py
     ```
 10. **Or run as a service**:
     Instructions coming later
