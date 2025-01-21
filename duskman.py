@@ -329,7 +329,7 @@ def parse_stake_info(output):
         if (eligible_stake is None or
             reclaimable_slashed_stake is None or
             accumulated_rewards is None):
-            logging.warning("Incomplete stake-info values. Could not parse fully.")
+            logging.error("Incomplete stake-info values. Could not parse fully.")
             return None, None, None
 
         return eligible_stake, reclaimable_slashed_stake, accumulated_rewards
