@@ -563,7 +563,7 @@ async def frequent_update_loop():
         if consecutive_no_change >= 10:
             message = f"WARNING! Block height has not changed for {consecutive_no_change * 10} seconds.\nLast height: {last_known_block_height}"
             log_action("Block Height Error!", message,"error")
-            notifier.notify(message, shared_state)
+            
             consecutive_no_change = 0  # Reset after notifying to avoid spamming
             await asyncio.sleep(1)
             continue # Need to double check this
@@ -611,7 +611,7 @@ async def frequent_update_loop():
         if consecutive_low_peers >= 240:
             message = f"WARNING! Low peer count for {consecutive_low_peers * 10} seconds.\nCurrent Count: {peer_count}"
             log_action("Low peer count!", message, "error")
-            notifier.notify(message, shared_state)
+            
             consecutive_low_peers = 0  # Reset after notifying to avoid spamming
 
         loopcnt += 1
