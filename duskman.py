@@ -337,6 +337,8 @@ def log_action(action="Action", details="No Details", type='info'):
     elif type == 'error':
         if isDebug:
             write_to_log(DEBUG_LOG_FILE, formatted_message)
+            
+        notifier.notify(formatted_message, shared_state)    
         write_to_log(ERROR_LOG_FILE, formatted_message)
     else:
         write_to_log(INFO_LOG_FILE, formatted_message)
@@ -998,7 +1000,7 @@ async def realtime_display(enable_tmux=False):
 
                         subprocess.check_call(["tmux", "set-option", "-g", "status-left", remove_ansi(tmux_status)])
                     except subprocess.CalledProcessError:
-                        log_action("tmux Error", "Failed to update tmux status bar. Is tmux running?", "error")
+                        log_action("tmux Error", "Failed to update tmux status bar. Is tmux running?", "debug")
                         enable_tmux = False
 
                 await asyncio.sleep(1)
