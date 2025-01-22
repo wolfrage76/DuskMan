@@ -2,7 +2,6 @@ import os
 import sys
 import subprocess
 import re
-import logging
 import yaml
 import asyncio
 import aiohttp
@@ -268,7 +267,6 @@ async def fetch_dusk_data():
                     shared_state["ath_change_percentage"] = dusk_data.get("ath_change_percentage", 0.0)
                     shared_state["price_change_percentage_1h"] = dusk_data.get("price_change_percentage_1h_in_currency", 0.0)
                     shared_state["last_updated"] = dusk_data.get("last_updated", "N/A")
-                    shared_state["last_updated"] = dusk_data.get("last_updated", "N/A")
                     shared_state["fully_diluted_valuation"] = dusk_data.get("fully_diluted_valuation", 0.0)
                     shared_state["high_24h"] = dusk_data.get("high_24h", 0.0)
                     shared_state["low_24h"] = dusk_data.get("low_24h", 0.0)
@@ -285,6 +283,8 @@ async def fetch_dusk_data():
                     shared_state["price_change_percentage_24h_in_currency"] = dusk_data.get("price_change_percentage_24h_in_currency", 0.0)
                     shared_state["price_change_percentage_30d_in_currency"] = dusk_data.get("price_change_percentage_30d_in_currency", 0.0)
                     shared_state["price_change_percentage_7d_in_currency"] = dusk_data.get("price_change_percentage_7d_in_currency", 0.0)
+                    shared_state["price_change_percentage_1h_in_currency"] = dusk_data.get("price_change_percentage_1h_in_currency", 0.0)
+                    
                 else:
                     log_action("Failed to fetch DUSK data", f"HTTP Status: {response.status}", 'debug')
     except Exception as e:
@@ -690,26 +690,17 @@ async def stake_management_loop():
                 if total_restake < min_stake_amount:
                     shared_state["last_action_taken"] = "Unstake/Restake Skipped (Below Min)"
                     log_action(
-                        f"Balance Info (#{block_height})", 
-                        f"Rwd: {format_float(rewards_amount)}, Stk: {format_float(stake_amount)}, Rcl: {format_float(reclaimable_slashed_stake)}"
+                        f"Unstake/Restake Skipped (Block #{block_height})",
+                        f"Total restake ({format_float(total_restake)} DUSK) < {min_stake_amount} DUSK.\nRwd: {format_float(rewards_amount)}, Stk: {format_float(stake_amount)}, Rcl: {format_float(reclaimable_slashed_stake)}"
                     )
                     
-                    log_action(
-                        f"Unstake/Restake Skipped (Block #{block_height})",
-                        f"Total restake ({format_float(total_restake)} DUSK) < {min_stake_amount} DUSK."
-                    )
                 else:
                     # Unstake & Restake
                     act_msg = f"Unstake/Restake @ Block #{block_height}"
                     shared_state["last_action_taken"] = act_msg
-
-                    log_action(
-                        f"Balance Info (#{block_height})",
-                        f"Rwd: {format_float(rewards_amount)}, Stake: {format_float(stake_amount)}, Rcl: {format_float(reclaimable_slashed_stake)}"
-                    )
-                    log_action(
-                        act_msg,
-                        f"Reclaimable: {format_float(reclaimable_slashed_stake)}, Downtime Loss: {format_float(downtime_loss)}"
+                    
+                    log_action(act_msg,
+                        f"Rwd: {format_float(rewards_amount)}, Stake: {format_float(stake_amount)}, Rcl: {format_float(reclaimable_slashed_stake)}\nReclaimable: {format_float(reclaimable_slashed_stake)}, Downtime Loss: {format_float(downtime_loss)}"
                     )
                     
                     # 1) Withdraw
@@ -756,10 +747,9 @@ async def stake_management_loop():
                 # Claim & Stake
                 shared_state["last_action_taken"] = f"Claim/Stake @ Block {block_height}"
                 log_action(
-                    f"Balance Info (#{block_height})",
+                    shared_state["last_action_taken"],
                     f"Rwd: {format_float(rewards_amount)}, Stk: {format_float(stake_amount)}, Rcl: {format_float(reclaimable_slashed_stake)}"
                 )
-                log_action("Claim and Stake", f"Rewards: {format_float(rewards_amount)}")
 
                 # 1) Withdraw
                 
@@ -957,14 +947,31 @@ async def realtime_display(enable_tmux=False):
                     when_active = (datetime.now() + timedelta(seconds=active_secs)).strftime('%H:%M')
                     is_active = f"{LIGHT_RED}\n\tActive @ {when_active} - #{active_block} (E: {int(active_block/2160)}){DEFAULT}\n"               
                 
+                chg7d = shared_state["price_change_percentage_7d_in_currency"]
+                chg14d = shared_state["price_change_percentage_14d_in_currency"]
+                chg30d = shared_state["price_change_percentage_30d_in_currency"]
+                chg1y = shared_state["price_change_percentage_1y_in_currency"]
+                chg1hr = shared_state["price_change_percentage_1h_in_currency"]
+                mkt_cap = shared_state["market_cap"]
+                mkt_cap_change = shared_state["market_cap_change_percentage_24h"]
+                ath = shared_state["ath"]
+                ath_change = shared_state["ath_change_percentage"]
+                ath_date = shared_state["ath_date"]
+                atl = shared_state["atl"]
+                
+                atl_date = shared_state["atl_date"]
+                volume = shared_state["volume"]
+                
+                
                 allocation_bar = display_wallet_distribution_bar(b['public'],b['shielded'],8)
                 # Real-time display content (no surrounding panel)
                 realtime_content = (
-                    f" {LIGHT_WHITE}====={DEFAULT} {currenttime} Block: {LIGHT_BLUE}#{blk} {DEFAULT}(E: {LIGHT_BLUE}{epoch_num}{DEFAULT}) Peers: {peercolor}{shared_state['peer_count']}{DEFAULT} {LIGHT_WHITE}=====\n"
+                    f" {LIGHT_WHITE}======={DEFAULT} {currenttime} Block: {LIGHT_BLUE}#{blk} {DEFAULT}(E: {LIGHT_BLUE}{epoch_num}{DEFAULT}) Peers: {peercolor}{shared_state['peer_count']}{DEFAULT} {LIGHT_WHITE}=======\n"
                     f"    {CYAN}Last Action{DEFAULT}   | {CYAN}{last_act}{DEFAULT}\n"
                     f"    {LIGHT_GREEN}Next Check    {DEFAULT}| {charclr}{disp_time}{DEFAULT} ({donetime}){DEFAULT}\n"
                     f"                  |\n"
                     f"    {LIGHT_WHITE}Price USD{DEFAULT}     | {LIGHT_WHITE}${format_float(price,3)}{DEFAULT} {chg24}\n"
+                    f"                  | 7d: {chg7d:.2f}% 30d: {chg30d:.2f}% 1y: {chg1y:.2f}%\n"
                     f"                  |\n"
                     f"    {LIGHT_WHITE}Balance{DEFAULT}       | {LIGHT_WHITE}{allocation_bar}\n"
                     f"      {LIGHT_WHITE}├─ {YELLOW}Public   {DEFAULT}| {YELLOW}{format_float(b['public'])} (${format_float(b['public'] * price, 2)}){DEFAULT}\n"
@@ -974,7 +981,8 @@ async def realtime_display(enable_tmux=False):
                     f"    {LIGHT_WHITE}Staked{DEFAULT}        | {LIGHT_WHITE}{format_float(st_info['stake_amount'])} (${format_float(st_info['stake_amount'] * price, 2)}){DEFAULT}{is_active}\n"
                     f"    {YELLOW}Rewards{DEFAULT}       | {YELLOW}{format_float(st_info['rewards_amount'])} (${format_float(st_info['rewards_amount'] * price, 2)}){DEFAULT}\n"
                     f"    {LIGHT_RED}Reclaimable{DEFAULT}   | {LIGHT_RED}{format_float(st_info['reclaimable_slashed_stake'])} (${format_float(st_info['reclaimable_slashed_stake'] * price, 2)}){DEFAULT}\n"
-                    f" ===============================================\n"
+                    f" =======================================================\n"
+                    
                 )
                 
                 if include_rendered:
@@ -1071,6 +1079,7 @@ async def main():
     if enable_dashboard and dash_port and dash_ip:
         from utilities.web_dashboard import start_dashboard
         await start_dashboard(shared_state, log_entries,  host=dash_ip, port=dash_port)
+        
     #console.clear()
     await asyncio.gather(
         stake_management_loop(),
