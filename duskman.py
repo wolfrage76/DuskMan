@@ -71,7 +71,7 @@ log_entries = []
 END_UNDERLINE = "\033[0m"
 UNDERLINE = "\033[4m"
 
-byline = f"DuskMan Stake Management System: By Wolfrage"
+byline = f"DuskMan Stake Management System: by Wolfrage"
 if not config.get('display_options', True):
     byline = f"{UNDERLINE}{byline}{END_UNDERLINE}\n"
     
@@ -828,15 +828,6 @@ async def stake_management_loop():
             log_entries.append(Log_info)
             notifier.notify(Log_info, shared_state) # 
             
-            
-                # Display logs above the real-time display
-                
-                #if not first_run:
-                #    for entry in log_entries:
-                #        console.print(entry)
-
-            # Mark first run as completed after the first iteration 
-            
             first_run = False
         except Exception as e:
                 log_action("Error in stake management loop", e, "error")
@@ -878,33 +869,27 @@ async def realtime_display(enable_tmux=False):
                     first_run = False
                     await asyncio.sleep(1)  # Pause briefly before switching to real-time display
                     continue 
-                charclr =str()
                 
-                if remain_seconds <= 3600: # red <1hr
-                    charclr = RED
-                elif remain_seconds <= 7200: # yellow <2hr
-                    charclr = YELLOW
-                elif remain_seconds <= 10800: # green <3hr
-                    charclr = GREEN
-                else:
-                    charclr = LIGHT_WHITE
+                charclr =str()
+                charclr = (
+                    RED if remain_seconds <= 3600 else
+                    YELLOW if remain_seconds <= 7200 else
+                    GREEN if remain_seconds <= 10800 else
+                    LIGHT_WHITE
+                )
                     
                 timer = f"Next:{charclr} {disp_time} "
-                chg24=""
-                if shared_state["usd_24h_change"] > 0:
-                    chg24 = f"({GREEN}+{shared_state["usd_24h_change"]:.2f}%{DEFAULT} 24h)"
-                elif shared_state["usd_24h_change"] < 0:
-                    chg24= f"({RED}{shared_state["usd_24h_change"]:.2f}%{DEFAULT} 24h)"
-                else:
-                    chg24= f"({DEFAULT}{shared_state["usd_24h_change"]:.2f}% 24h)"
-                usd = f"$USD: {format_float(shared_state["price"],3)} {chg24} | "
+                chg24 = f"{GREEN if shared_state['usd_24h_change'] > 0 else RED if shared_state['usd_24h_change'] < 0 else DEFAULT}{shared_state['usd_24h_change']:.2f}% 24h"
+                usd = f"$USD: {format_float(shared_state['price'],3)} {chg24} | "
                 
-                peercolor = RED
-                if int(shared_state['peer_count']) > 40:
-                    peercolor = LIGHT_GREEN
-                elif int(shared_state['peer_count']) > 16:
-                    peercolor = YELLOW    
-                
+                peercolor = next(
+                    color for color, condition in {
+                        RED: lambda x: x <= 16,
+                        YELLOW: lambda x: 16 < x <= 40,
+                        LIGHT_GREEN: lambda x: x > 40
+                    }.items() if condition(int(shared_state['peer_count']))
+)
+
                 currenttime = datetime.now().strftime('%H:%M:%S')
                 epoch_num = int(blk / 2160)
                 
@@ -947,7 +932,7 @@ async def realtime_display(enable_tmux=False):
                     f"    {LIGHT_GREEN}Next Check    {DEFAULT}| {charclr}{disp_time}{DEFAULT} ({donetime}){DEFAULT}\n"
                     f"                  |\n"
                     f"    {LIGHT_WHITE}Price USD{DEFAULT}     | {LIGHT_WHITE}${format_float(price,3)}{DEFAULT} {chg24}\n"
-                    f"                  |{DEFAULT} 7d: {chg7d:.2f}% 30d: {chg30d:.2f}% 1y: {chg1y:.2f}%\n"
+                    f"                  {DEFAULT}| 7d: {chg7d:.2f}% 30d: {chg30d:.2f}% 1y: {chg1y:.2f}%\n"
                     f"                  |\n"
                     f"    {LIGHT_WHITE}Balance{DEFAULT}       | {LIGHT_WHITE}{allocation_bar}\n"
                     f"      {LIGHT_WHITE}├─ {YELLOW}Public   {DEFAULT}| {YELLOW}{format_float(b['public'])} (${format_float(b['public'] * price, 2)}){DEFAULT}\n"
@@ -970,8 +955,6 @@ async def realtime_display(enable_tmux=False):
                 live.update(Text(realtime_content), refresh=True)
 
                 # Update TMUX status bar
-                
-                
 
                 if enable_tmux:
                     try:
@@ -983,46 +966,38 @@ async def realtime_display(enable_tmux=False):
                         p = f"P:{format_float(b['public'])}"
                         s = f"S:{format_float(b['shielded'])}"
                         
-                        if not status_bar.get('show_current_block', True):
-                            curblk = str()
-                        if not status_bar.get('show_staked', True):
-                            stk = str()
-                        if not status_bar.get('show_public', True):
-                            p = str()
-                        if not status_bar.get('show_shielded', True):
-                            s = str()
-                        if not status_bar.get('show_total', True):
-                            bal = str()
-                        if not status_bar.get('show_rewards', True):
-                            rwd = str()
-                        if not status_bar.get('show_reclaimable', True):
-                            rcl = str()
-                        if not status_bar.get('show_price', True):
-                            usd = str()
-                        if not status_bar.get('show_timer', True):
-                            timer = str()
-                        if not status_bar.get('show_trigger_time', True):
-                            donetime = str()
-                        if not status_bar.get('show_peer_count', True):
-                            peercnt = str()
-                        if not status_bar.get('show_public', True) and not status_bar.get('show_shielded', True):
-                            bal = str()
-                            splitter = str()
-                        if status_bar.get('show_public', True) and status_bar.get('show_shielded', True):
+                        fields = {
+                            'curblk': status_bar.get('show_current_block', True),
+                            'stk': status_bar.get('show_staked', True),
+                            'p': status_bar.get('show_public', True),
+                            's': status_bar.get('show_shielded', True),
+                            'bal': status_bar.get('show_total', True),
+                            'rwd': status_bar.get('show_rewards', True),
+                            'rcl': status_bar.get('show_reclaimable', True),
+                            'usd': status_bar.get('show_price', True),
+                            'timer': status_bar.get('show_timer', True),
+                            'donetime': status_bar.get('show_trigger_time', True),
+                            'peercnt': status_bar.get('show_peer_count', True)
+                        }
+
+                        for key, show in fields.items():
+                            if not show:
+                                locals()[key] = str()
+
+                        if not fields['p'] and not fields['s']:
+                            bal = splitter = str()
+                        if fields['p'] and fields['s']:
                             spacer = "  "
 
-                        
-                        if errored:  # TODO: add visual alerts
-                            error_txt = "- !ERROR DETECTED!"
-                        else:
-                            error_txt = str()
-                        last_txt = str() #last_act
-                        
-                        donetime = f"{DEFAULT}({shared_state["completion_time"]}) "
-
-                        peercnt = f"Peers: {shared_state["peer_count"]}"
-                        splitter= " | "
-                        tmux_status = f"\r> {curblk}{stk}{rcl}{rwd}{bal}{p}{spacer}{s}{splitter}{usd}{last_txt}{timer}{donetime}{peercnt} {error_txt}"
+                        error_txt = "- !ERROR DETECTED!" if errored else str()
+                        last_txt = str()  # last_act
+                        donetime = f"{DEFAULT}({shared_state['completion_time']}) "
+                        peercnt = f"Peers: {shared_state['peer_count']}"
+                        splitter = " | "
+                        tmux_status = (
+                            f"\r> {curblk}{stk}{rcl}{rwd}{bal}{p}{spacer}{s}{splitter}"
+                            f"{usd}{last_txt}{timer}{donetime}{peercnt} {error_txt}"
+                        )
 
                         subprocess.check_call(["tmux", "set-option", "-g", "status-left", remove_ansi(tmux_status)])
                     except subprocess.CalledProcessError:
@@ -1089,19 +1064,17 @@ async def main():
         shared_state["options"] = byline 
     
 
-        
-    #console.clear()
+    if enable_webdash:
+        from utilities.web_dashboard import start_dashboard
+    await start_dashboard(shared_state, log_entries, host=dash_ip, port=dash_port) 
+    
     await asyncio.gather(
-        stake_management_loop(),
-        realtime_display(enable_tmux),
         frequent_update_loop(),
+        realtime_display(enable_tmux),
+        stake_management_loop(),
+        
         
         )
-
-                        # Start the dashboard if enabled and configured
-    if enable_dashboard and dash_port and dash_ip:
-        from utilities.web_dashboard import start_dashboard
-        await start_dashboard(shared_state, log_entries, host=dash_ip, port=dash_port)    
 
 if __name__ == "__main__":
     try:
