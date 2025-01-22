@@ -71,8 +71,10 @@ log_entries = []
 END_UNDERLINE = "\033[0m"
 UNDERLINE = "\033[4m"
 
-byline = f"{UNDERLINE} DuskMan Stake Management System: By Wolfrage{END_UNDERLINE}"
-
+byline = f"DuskMan Stake Management System: By Wolfrage"
+if not config.get('display_options', True):
+    byline = f"{UNDERLINE}{byline}{END_UNDERLINE}\n"
+    
 # If user passes "tmux" as first argument, override enable_tmux
 if config.get('enable_tmux', False) or (len(sys.argv) > 1 and sys.argv[1].lower() == 'tmux'):
     enable_tmux = True
@@ -933,7 +935,7 @@ async def realtime_display(enable_tmux=False):
                 top_bar = f" {LIGHT_WHITE}======={DEFAULT} {currenttime} Block: {LIGHT_BLUE}#{blk} {DEFAULT}(E: {LIGHT_BLUE}{epoch_num}{DEFAULT}) Peers: {peercolor}{shared_state['peer_count']}{DEFAULT} {LIGHT_WHITE}=======\n"
                 title_spaces = int((len(remove_ansi(top_bar)) - 44) / 2)
 
-                opts = '\n' + (' ' * title_spaces) + BLUE  + shared_state["options"] + '\n'
+                opts = '\n' + (' ' * title_spaces) + BLUE  + shared_state["options"]
                 
                 allocation_bar = display_wallet_distribution_bar(b['public'],b['shielded'],8)
                 # Real-time display content (no surrounding panel)
@@ -943,7 +945,7 @@ async def realtime_display(enable_tmux=False):
                     f"{top_bar}"
                     f"    {CYAN}Last Action{DEFAULT}   | {CYAN}{last_act}{DEFAULT}\n"
                     f"    {LIGHT_GREEN}Next Check    {DEFAULT}| {charclr}{disp_time}{DEFAULT} ({donetime}){DEFAULT}\n"
-                    f"                  |\n"
+                    f"                  \n"
                     f"    {LIGHT_WHITE}Price USD{DEFAULT}     | {LIGHT_WHITE}${format_float(price,3)}{DEFAULT} {chg24}\n"
                     f"                  | 7d: {chg7d:.2f}% 30d: {chg30d:.2f}% 1y: {chg1y:.2f}%\n"
                     f"                  |\n"
@@ -1076,14 +1078,14 @@ async def main():
         f'\n\t{LIGHT_WHITE}Auto Restake to Reclaim:{DEFAULT} {colorize_bool(auto_reclaim_full_restakes)}'
         f'\n\t{LIGHT_WHITE}{notification_status}'
     )
-    separator = f"  {LIGHT_WHITE}{("=" * 47)}{DEFAULT}"
+    separator = f"      {LIGHT_WHITE}{("=" * 46)}{DEFAULT}"
 
     # Update shared state with options display
     
     if config.get('display_options', True):
-        shared_state["options"] = byline + separator + auto_status
+        shared_state["options"] = byline + '\n'+ separator + auto_status
     else:
-        shared_state["options"] = byline
+        shared_state["options"] = byline 
     
 
         
