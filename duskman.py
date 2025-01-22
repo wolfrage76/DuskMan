@@ -68,6 +68,11 @@ else:
 errored = False
 log_entries = []
 
+END_UNDERLINE = "\033[0m"
+UNDERLINE = "\033[4m"
+
+byline = f"{UNDERLINE} DuskMan Stake Management System: By Wolfrage{END_UNDERLINE}"
+
 # If user passes "tmux" as first argument, override enable_tmux
 if config.get('enable_tmux', False) or (len(sys.argv) > 1 and sys.argv[1].lower() == 'tmux'):
     enable_tmux = True
@@ -94,7 +99,10 @@ LIGHT_BLUE = "\033[1;34m"
 LIGHT_PURPLE = "\033[1;35m"
 LIGHT_CYAN = "\033[1;36m"
 LIGHT_WHITE = "\033[1;37m"
+
 DEFAULT = "\033[1;39m"
+
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SHARED STATE
@@ -908,9 +916,10 @@ async def realtime_display(enable_tmux=False):
                     is_active = f"{LIGHT_RED}\n\tActive @ {when_active} - #{active_block} (E: {int(active_block/2160)}){DEFAULT}\n"               
                 
                 chg7d = shared_state["price_change_percentage_7d_in_currency"]
-                chg14d = shared_state["price_change_percentage_14d_in_currency"]
                 chg30d = shared_state["price_change_percentage_30d_in_currency"]
                 chg1y = shared_state["price_change_percentage_1y_in_currency"]
+                
+                chg14d = shared_state["price_change_percentage_14d_in_currency"]
                 chg1hr = shared_state["price_change_percentage_1h_in_currency"]
                 mkt_cap = shared_state["market_cap"]
                 mkt_cap_change = shared_state["market_cap_change_percentage_24h"]
@@ -918,16 +927,20 @@ async def realtime_display(enable_tmux=False):
                 ath_change = shared_state["ath_change_percentage"]
                 ath_date = shared_state["ath_date"]
                 atl = shared_state["atl"]
-                
                 atl_date = shared_state["atl_date"]
                 volume = shared_state["volume"]
                 
+                top_bar = f" {LIGHT_WHITE}======={DEFAULT} {currenttime} Block: {LIGHT_BLUE}#{blk} {DEFAULT}(E: {LIGHT_BLUE}{epoch_num}{DEFAULT}) Peers: {peercolor}{shared_state['peer_count']}{DEFAULT} {LIGHT_WHITE}=======\n"
+                title_spaces = int((len(remove_ansi(top_bar)) - 44) / 2)
+
+                opts = '\n' + (' ' * title_spaces) + BLUE  + shared_state["options"] + '\n'
                 
                 allocation_bar = display_wallet_distribution_bar(b['public'],b['shielded'],8)
                 # Real-time display content (no surrounding panel)
+
                 realtime_content = (
-                    f"{shared_state["options"]}\n"
-                    f" {LIGHT_WHITE}======={DEFAULT} {currenttime} Block: {LIGHT_BLUE}#{blk} {DEFAULT}(E: {LIGHT_BLUE}{epoch_num}{DEFAULT}) Peers: {peercolor}{shared_state['peer_count']}{DEFAULT} {LIGHT_WHITE}=======\n"
+                    f"{opts}\n"
+                    f"{top_bar}"
                     f"    {CYAN}Last Action{DEFAULT}   | {CYAN}{last_act}{DEFAULT}\n"
                     f"    {LIGHT_GREEN}Next Check    {DEFAULT}| {charclr}{disp_time}{DEFAULT} ({donetime}){DEFAULT}\n"
                     f"                  |\n"
@@ -942,7 +955,7 @@ async def realtime_display(enable_tmux=False):
                     f"    {LIGHT_WHITE}Staked{DEFAULT}        | {LIGHT_WHITE}{format_float(st_info['stake_amount'])} (${format_float(st_info['stake_amount'] * price, 2)}){DEFAULT}{is_active}\n"
                     f"    {YELLOW}Rewards{DEFAULT}       | {YELLOW}{format_float(st_info['rewards_amount'])} (${format_float(st_info['rewards_amount'] * price, 2)}){DEFAULT}\n"
                     f"    {LIGHT_RED}Reclaimable{DEFAULT}   | {LIGHT_RED}{format_float(st_info['reclaimable_slashed_stake'])} (${format_float(st_info['reclaimable_slashed_stake'] * price, 2)}){DEFAULT}\n"
-                    f" =======================================================\n"  
+                    f" {LIGHT_WHITE}{('=' * (len(remove_ansi(top_bar)) - 2))}{DEFAULT}\n"  
                 )
                 
                 if include_rendered:
@@ -1055,7 +1068,7 @@ async def main():
 
     # Build the status messages
     notification_status = f'Enabled Notifications:{YELLOW}   {services}\n'
-    byline = f"\n  {BLUE}DuskMan Stake Management System: By Wolfrage{DEFAULT}\n"
+    
     auto_status = (
         f'\n\t{LIGHT_WHITE}Enable Web Dashboard:{DEFAULT}    {colorize_bool(enable_webdash)}'
         f'\n\t{LIGHT_WHITE}Enable tmux Support:{DEFAULT}     {colorize_bool(enable_tmux)}'
