@@ -268,7 +268,23 @@ async def fetch_dusk_data():
                     shared_state["ath_change_percentage"] = dusk_data.get("ath_change_percentage", 0.0)
                     shared_state["price_change_percentage_1h"] = dusk_data.get("price_change_percentage_1h_in_currency", 0.0)
                     shared_state["last_updated"] = dusk_data.get("last_updated", "N/A")
-                
+                    shared_state["last_updated"] = dusk_data.get("last_updated", "N/A")
+                    shared_state["fully_diluted_valuation"] = dusk_data.get("fully_diluted_valuation", 0.0)
+                    shared_state["high_24h"] = dusk_data.get("high_24h", 0.0)
+                    shared_state["low_24h"] = dusk_data.get("low_24h", 0.0)
+                    shared_state["price_change_24h"] = dusk_data.get("price_change_24h", 0.0)
+                    shared_state["market_cap_change_24h"] = dusk_data.get("market_cap_change_24h", 0.0)
+                    shared_state["market_cap_change_percentage_24h"] = dusk_data.get("market_cap_change_percentage_24h", 0.0)
+                    shared_state["max_supply"] = dusk_data.get("max_supply", 0.0)
+                    shared_state["ath_date"] = dusk_data.get("ath_date", 0.0)
+                    shared_state["atl"] = dusk_data.get("atl", 0.0)
+                    shared_state["atl_date"] = dusk_data.get("atl_date", 0.0)
+                    shared_state["price_change_percentage_14d_in_currency"] = dusk_data.get("price_change_percentage_14d_in_currency", 0.0)
+                    shared_state["price_change_percentage_1y_in_currency"] = dusk_data.get("price_change_percentage_1y_in_currency", 0.0)
+                    shared_state["price_change_percentage_200d_in_currency"] = dusk_data.get("price_change_percentage_200d_in_currency", 0.0)
+                    shared_state["price_change_percentage_24h_in_currency"] = dusk_data.get("price_change_percentage_24h_in_currency", 0.0)
+                    shared_state["price_change_percentage_30d_in_currency"] = dusk_data.get("price_change_percentage_30d_in_currency", 0.0)
+                    shared_state["price_change_percentage_7d_in_currency"] = dusk_data.get("price_change_percentage_7d_in_currency", 0.0)
                 else:
                     log_action("Failed to fetch DUSK data", f"HTTP Status: {response.status}", 'debug')
     except Exception as e:
@@ -308,6 +324,8 @@ def log_action(action="Action", details="No Details", type='info'):
         if isDebug:
             write_to_log(DEBUG_LOG_FILE, formatted_message)
     elif type == 'error':
+        if isDebug:
+            write_to_log(DEBUG_LOG_FILE, formatted_message)
         write_to_log(ERROR_LOG_FILE, formatted_message)
     else:
         write_to_log(INFO_LOG_FILE, formatted_message)
