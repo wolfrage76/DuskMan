@@ -220,7 +220,6 @@ async def execute_command_async(command, log_output=True):
             cmd2 = command
             if log_output:
                 log_action("Executing Command", cmd2.replace(password,'#####'), "debug")
-            #logging.debug(f"Executing command: {command}")
         process = await asyncio.create_subprocess_shell(
             command,
             stdout=asyncio.subprocess.PIPE,
@@ -238,7 +237,7 @@ async def execute_command_async(command, log_output=True):
                 log_action(f"Command output", stdout_str.replace(password,'#####'), 'debug')
             return stdout_str
     except Exception as e:
-        log_action(f"Error executing command: {command}", e, "error")
+        log_action(f"Error executing command: {command.replace(password,'#####')}", e, "error")
         return None
 
 async def fetch_dusk_data():
@@ -473,7 +472,7 @@ def format_hms(seconds):
         parts.append(f"{h}h")
     if m > 0:
         parts.append(f"{m}m")
-    parts.append(f"{s}s")  # always include seconds
+    parts.append(f"{s}s" if s > 9 else f"{s}s ")  # always include seconds
     return ' '.join(parts)
 
 
@@ -862,9 +861,7 @@ async def realtime_display(enable_tmux=False):
                     continue
                 tot_bal = b["public"] + b["shielded"]
                 price = shared_state["price"]
-                # now_ts = datetime.now().strftime('%m-%d %H:%M:%S')
-
-                # Display byline and settings on the first run
+                
                 if first_run:
                     first_run = False
                     await asyncio.sleep(1)  # Pause briefly before switching to real-time display
