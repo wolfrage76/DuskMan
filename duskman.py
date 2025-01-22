@@ -694,7 +694,7 @@ async def stake_management_loop():
             rewards_amount = a_rewards
 
             rewards_per_epoch = calculate_rewards_per_epoch(rewards_amount, last_claim_block, block_height)
-            downtime_loss = calculate_downtime_loss(rewards_per_epoch)
+            downtime_loss = calculate_downtime_loss(rewards_per_epoch, downtime_epochs=2)
             incremental_threshold = rewards_per_epoch
             total_restake = stake_amount + rewards_amount + reclaimable_slashed_stake
 
