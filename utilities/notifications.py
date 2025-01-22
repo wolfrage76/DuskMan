@@ -50,6 +50,15 @@ class NotificationService:
             self.send_slack_notification(message.replace(separator, ''))
 
     def send_shared_state_webhook(self, shared_state):
+        """
+        Sends the shared_state object as a JSON payload to the specified webhook URL.
+
+        Args:
+            shared_state (dict): The shared state object to send.
+
+        Returns:
+            bool: True if the webhook was sent successfully, False otherwise.
+        """
         try:
             headers = {'Content-Type': 'application/json'}
             payload = json.dumps(shared_state, indent=2)
@@ -68,7 +77,17 @@ class NotificationService:
             return False
 
 
-    """ def send_shared_state_webhook(self,shared_state):
+    def send_shared_state_webhook(self,shared_state):
+        """
+        Sends the shared_state object as a JSON payload to the specified webhook URL.
+
+        Args:
+            shared_state (dict): The shared state object to send.
+            webhook_url (str): The destination webhook URL.
+
+        Returns:
+            bool: True if the webhook was sent successfully, False otherwise.
+        """
         webhook_url = self.webhook_url
         try:
             headers = {'Content-Type': 'application/json'}
@@ -86,7 +105,7 @@ class NotificationService:
         except Exception as e:
             logging.error(f"Error sending webhook: {e}")
             return False
-    """
+
         
     def send_discord_notification(self, message):
         """

@@ -24,6 +24,9 @@ GENERAL:
   #                                    # Make sure you read the instructions on exporting the environment variable.
   #                                    # OPTIONAL.  See instructions for .env file instead
   
+  display_options: True                # Enable the Settings display at top of tool
+
+
 WEB_DASHBOARD: # Default at http://localhost:5000
   enable_dashboard: True
   dash_port: 5000         # Port the Dashboard and API should listen on. Defaults to 5000

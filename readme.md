@@ -114,6 +114,7 @@ To enable notifications for specific services, provide the required credentials 
 | Telegram     | `telegram_bot_token`, `telegram_chat_id`              |
 | Pushover     | `pushover_user_key`, `pushover_app_token`             |
 | Webhook      | `webhook_url`                                         |
+| Slack        | `slack_webhook`                                       |
 
 ---
 
@@ -127,3 +128,7 @@ To enable notifications for specific services, provide the required credentials 
 
 - **TMUX Integration**:  
   Displays real-time blockchain and balance data directly in the TMUX status bar if enabled.
+
+- **VIEWER ONLY SCRIPT**
+  Allows you to run the viewer from a separate machine than the main script is running on for a display.
+  

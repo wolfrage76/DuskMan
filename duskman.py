@@ -58,6 +58,7 @@ dash_port = web_dashboard.get('dash_port', '5000')
 dash_ip = web_dashboard.get('dash_ip', '0.0.0.0')
 include_rendered = web_dashboard.get('include_rendered', False)
 isDebug = logs_config.get('debug', False)
+display_options = config.get('display_options', True)
 
 if config.get('use_sudo', False):
     use_sudo = 'sudo'
@@ -122,6 +123,7 @@ shared_state = {
     "usd_24h_change": 0,
     "rendered":"",
     "stake_active_blk": 0,
+    "options":""
 }
 
 # Define log file paths
@@ -786,62 +788,20 @@ async def stake_management_loop():
                 # No action
                 shared_state["last_no_action_block"] = block_height
                 shared_state["last_action_taken"] = f"No Action @ Block {block_height}"
-
-                b = shared_state["balances"]
-                #totBal = b["public"] + b["shielded"]
                 
+                b = shared_state["balances"]
                 now_ts = datetime.now().strftime('%Y-%m-%d %H:%M')
                 
+                # block_height = shared_state["block_height"]
                 if first_run:
-                    
-                    byline = Text("\n  DuskMan Stake Management System: By Wolfrage", style="bold blue")
-
-                    notification_services = []
-                    if notification_config.get('discord_webhook', False):
-                        notification_services.append('Discord')
-                    if notification_config.get('pushbullet_token', False):
-                        notification_services.append('PushBullet')
-                    if notification_config.get('telegram_bot_token', False) and notification_config.get('telegram_chat_id', False):
-                        notification_services.append('Telegram')
-                    if notification_config.get('pushover_user_key', False) and notification_config.get('pushover_app_token', False):
-                        notification_services.append('Pushover')
-                    if notification_config.get('webhook_url', False):
-                        notification_services.append('Webhook')
-                    if notification_config.get('slack_webhook', False):
-                        notification_services.append('Slack')
-                    
-                    if len(notification_services) > 2 and notification_services:
-                        services = "\n\t  " + " ".join(notification_services)
-                    elif len(notification_services) <= 2 and notification_services:   
-                        services = " ".join(notification_services)
-                    else:
-                        services = "None"
-                        
-                    
-                    if dash_ip and dash_port and enable_dashboard: 
-                        enable_webdash = True
-                    else:
-                        enable_webdash = False
-                    
-                    notification_status = f'Enabled Notifications:[yellow]   {services}\n'
-                    
-                    auto_status = f'\n\tEnable Web Dashboard:    {enable_webdash}\n\tEnable tmux Support:     {enable_tmux}\n\tAuto Staking Rewards:    {auto_stake_rewards}\n\tAuto Restake to Reclaim: {auto_reclaim_full_restakes}\n\t{notification_status}'
-                    separator = "  [bold white]" + ("=" * 47) + "[/bold white]"
-                    
-                    console.print(byline)
-                    print(separator + auto_status)
-                    
-                    
-                    #shared_state["first_run"] = False
                     shared_state["last_action_taken"] = f"Startup @ Block #{block_height}"
-                    action = shared_state["last_action_taken"]
-                    block_height = shared_state["block_height"]
                     first_run = False
                 else:
                     # If no action, just wait and don't log sinc eno longer first run
                     await sleep_until_next_epoch(block_height, buffer_blocks=buffer_blocks)
                     continue    
-
+                
+            action = shared_state["last_action_taken"]
             Log_info = (
             f"\t==== Activity @{now_ts}====\n"
             f"  Action              :  {action}\n\n"
@@ -852,7 +812,7 @@ async def stake_management_loop():
             f"  Rewards           :  {format_float(shared_state.get('stake_info',{}).get('rewards_amount','0.0'))} (${format_float(shared_state.get('stake_info',{}).get('rewards_amount',{}) * float(shared_state["price"]))})\n"
             f"  Reclaimable    :  {format_float(shared_state.get('stake_info',{}).get('reclaimable_slashed_stake','0.0'))} (${format_float(shared_state.get('stake_info',{}).get('reclaimable_slashed_stake') * float(shared_state["price"]))})\n"
                 )
-            
+            #Log_info = shared_state.get("options", '') + Log_info
             if len(log_entries) > 15: # TODO: Make configurable
                 log_entries.pop(0)
             log_entries.append(Log_info)
@@ -966,6 +926,7 @@ async def realtime_display(enable_tmux=False):
                 allocation_bar = display_wallet_distribution_bar(b['public'],b['shielded'],8)
                 # Real-time display content (no surrounding panel)
                 realtime_content = (
+                    f"{shared_state["options"]}\n"
                     f" {LIGHT_WHITE}======={DEFAULT} {currenttime} Block: {LIGHT_BLUE}#{blk} {DEFAULT}(E: {LIGHT_BLUE}{epoch_num}{DEFAULT}) Peers: {peercolor}{shared_state['peer_count']}{DEFAULT} {LIGHT_WHITE}=======\n"
                     f"    {CYAN}Last Action{DEFAULT}   | {CYAN}{last_act}{DEFAULT}\n"
                     f"    {LIGHT_GREEN}Next Check    {DEFAULT}| {charclr}{disp_time}{DEFAULT} ({donetime}){DEFAULT}\n"
@@ -981,8 +942,7 @@ async def realtime_display(enable_tmux=False):
                     f"    {LIGHT_WHITE}Staked{DEFAULT}        | {LIGHT_WHITE}{format_float(st_info['stake_amount'])} (${format_float(st_info['stake_amount'] * price, 2)}){DEFAULT}{is_active}\n"
                     f"    {YELLOW}Rewards{DEFAULT}       | {YELLOW}{format_float(st_info['rewards_amount'])} (${format_float(st_info['rewards_amount'] * price, 2)}){DEFAULT}\n"
                     f"    {LIGHT_RED}Reclaimable{DEFAULT}   | {LIGHT_RED}{format_float(st_info['reclaimable_slashed_stake'])} (${format_float(st_info['reclaimable_slashed_stake'] * price, 2)}){DEFAULT}\n"
-                    f" =======================================================\n"
-                    
+                    f" =======================================================\n"  
                 )
                 
                 if include_rendered:
@@ -1064,21 +1024,55 @@ async def realtime_display(enable_tmux=False):
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def main():
-    """
-    Concurrently run:
-        - frequent_update_loop: refresh block height & balances
-        - stake_management_loop: performs staking logic and sleeps until next epoch
-        - realtime_display: shows real-time info in console
-    """
+
+    # Helper function to colorize boolean values
+    def colorize_bool(value):
+        return f"{GREEN}True{DEFAULT}" if value else f"{RED}False{DEFAULT}"
+
+    # Ensure balances are initialized for display
+    await init_balance()
+
+    # Collect enabled notification services
+    notification_services = [
+        service for service, enabled in {
+            "Discord": notification_config.get('discord_webhook', False),
+            "PushBullet": notification_config.get('pushbullet_token', False),
+            "Telegram": notification_config.get('telegram_bot_token', False) and notification_config.get('telegram_chat_id', False),
+            "Pushover": notification_config.get('pushover_user_key', False) and notification_config.get('pushover_app_token', False),
+            "Webhook": notification_config.get('webhook_url', False),
+            "Slack": notification_config.get('slack_webhook', False),
+        }.items() if enabled
+    ]
+
+    # Format the notification services display
+    if notification_services:
+        services = "\n\t  " + " ".join(notification_services) if len(notification_services) > 2 else " ".join(notification_services)
+    else:
+        services = "None"
+
+    # Determine dashboard status
+    enable_webdash = bool(dash_ip and dash_port and enable_dashboard)
+
+    # Build the status messages
+    notification_status = f'Enabled Notifications:{YELLOW}   {services}\n'
+    byline = f"\n  {BLUE}DuskMan Stake Management System: By Wolfrage{DEFAULT}\n"
+    auto_status = (
+        f'\n\t{LIGHT_WHITE}Enable Web Dashboard:{DEFAULT}    {colorize_bool(enable_webdash)}'
+        f'\n\t{LIGHT_WHITE}Enable tmux Support:{DEFAULT}     {colorize_bool(enable_tmux)}'
+        f'\n\t{LIGHT_WHITE}Auto Staking Rewards:{DEFAULT}    {colorize_bool(auto_stake_rewards)}'
+        f'\n\t{LIGHT_WHITE}Auto Restake to Reclaim:{DEFAULT} {colorize_bool(auto_reclaim_full_restakes)}'
+        f'\n\t{LIGHT_WHITE}{notification_status}'
+    )
+    separator = f"  {LIGHT_WHITE}{("=" * 47)}{DEFAULT}"
+
+    # Update shared state with options display
     
-    # console.clear()
+    if config.get('display_options', True):
+        shared_state["options"] = byline + separator + auto_status
+    else:
+        shared_state["options"] = byline
     
-        
-    
-    await init_balance() # Make sure balances are initialized for display
-    if enable_dashboard and dash_port and dash_ip:
-        from utilities.web_dashboard import start_dashboard
-        await start_dashboard(shared_state, log_entries,  host=dash_ip, port=dash_port)
+
         
     #console.clear()
     await asyncio.gather(
@@ -1088,7 +1082,10 @@ async def main():
         
         )
 
-        
+                        # Start the dashboard if enabled and configured
+    if enable_dashboard and dash_port and dash_ip:
+        from utilities.web_dashboard import start_dashboard
+        await start_dashboard(shared_state, log_entries, host=dash_ip, port=dash_port)    
 
 if __name__ == "__main__":
     try:
