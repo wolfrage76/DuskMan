@@ -933,7 +933,7 @@ async def realtime_display(enable_tmux=False):
                 volume = shared_state["volume"]
                 
                 top_bar = f" {LIGHT_WHITE}======={DEFAULT} {currenttime} Block: {LIGHT_BLUE}#{blk} {DEFAULT}(E: {LIGHT_BLUE}{epoch_num}{DEFAULT}) Peers: {peercolor}{shared_state['peer_count']}{DEFAULT} {LIGHT_WHITE}=======\n"
-                title_spaces = int((len(remove_ansi(top_bar)) - 44) / 2)
+                title_spaces = int((len(remove_ansi(top_bar)) - len(remove_ansi(byline))) / 2)
 
                 opts = '\n' + (' ' * title_spaces) + BLUE  + shared_state["options"]
                 
@@ -945,15 +945,15 @@ async def realtime_display(enable_tmux=False):
                     f"{top_bar}"
                     f"    {CYAN}Last Action{DEFAULT}   | {CYAN}{last_act}{DEFAULT}\n"
                     f"    {LIGHT_GREEN}Next Check    {DEFAULT}| {charclr}{disp_time}{DEFAULT} ({donetime}){DEFAULT}\n"
-                    f"                  \n"
+                    f"                  |\n"
                     f"    {LIGHT_WHITE}Price USD{DEFAULT}     | {LIGHT_WHITE}${format_float(price,3)}{DEFAULT} {chg24}\n"
-                    f"                  | 7d: {chg7d:.2f}% 30d: {chg30d:.2f}% 1y: {chg1y:.2f}%\n"
+                    f"                  |{DEFAULT} 7d: {chg7d:.2f}% 30d: {chg30d:.2f}% 1y: {chg1y:.2f}%\n"
                     f"                  |\n"
                     f"    {LIGHT_WHITE}Balance{DEFAULT}       | {LIGHT_WHITE}{allocation_bar}\n"
                     f"      {LIGHT_WHITE}├─ {YELLOW}Public   {DEFAULT}| {YELLOW}{format_float(b['public'])} (${format_float(b['public'] * price, 2)}){DEFAULT}\n"
                     f"      {LIGHT_WHITE}└─ {BLUE}Shielded {DEFAULT}| {BLUE}{format_float(b['shielded'])} (${format_float(b['shielded'] * price, 2)}){DEFAULT}\n"
                     f"         {LIGHT_WHITE}   Total {DEFAULT}| {LIGHT_WHITE}{format_float(tot_bal)} DUSK (${format_float((tot_bal) * price, 2)}){DEFAULT}\n"
-                    f"     \n"
+                    f"                  |\n"
                     f"    {LIGHT_WHITE}Staked{DEFAULT}        | {LIGHT_WHITE}{format_float(st_info['stake_amount'])} (${format_float(st_info['stake_amount'] * price, 2)}){DEFAULT}{is_active}\n"
                     f"    {YELLOW}Rewards{DEFAULT}       | {YELLOW}{format_float(st_info['rewards_amount'])} (${format_float(st_info['rewards_amount'] * price, 2)}){DEFAULT}\n"
                     f"    {LIGHT_RED}Reclaimable{DEFAULT}   | {LIGHT_RED}{format_float(st_info['reclaimable_slashed_stake'])} (${format_float(st_info['reclaimable_slashed_stake'] * price, 2)}){DEFAULT}\n"
@@ -971,16 +971,6 @@ async def realtime_display(enable_tmux=False):
 
                 # Update TMUX status bar
                 
-                if errored:  # TODO: add visual alerts
-                    error_txt = "- !ERROR DETECTED!"
-                else:
-                    error_txt = str()
-                last_txt = str()
-                
-                donetime = f"{DEFAULT}({shared_state["completion_time"]}) "
-
-                peercnt = f"Peers: {shared_state["peer_count"]}"
-                splitter= " | "
                 
 
                 if enable_tmux:
@@ -1021,6 +1011,17 @@ async def realtime_display(enable_tmux=False):
                         if status_bar.get('show_public', True) and status_bar.get('show_shielded', True):
                             spacer = "  "
 
+                        
+                        if errored:  # TODO: add visual alerts
+                            error_txt = "- !ERROR DETECTED!"
+                        else:
+                            error_txt = str()
+                        last_txt = str() #last_act
+                        
+                        donetime = f"{DEFAULT}({shared_state["completion_time"]}) "
+
+                        peercnt = f"Peers: {shared_state["peer_count"]}"
+                        splitter= " | "
                         tmux_status = f"\r> {curblk}{stk}{rcl}{rwd}{bal}{p}{spacer}{s}{splitter}{usd}{last_txt}{timer}{donetime}{peercnt} {error_txt}"
 
                         subprocess.check_call(["tmux", "set-option", "-g", "status-left", remove_ansi(tmux_status)])
@@ -1078,7 +1079,7 @@ async def main():
         f'\n\t{LIGHT_WHITE}Auto Restake to Reclaim:{DEFAULT} {colorize_bool(auto_reclaim_full_restakes)}'
         f'\n\t{LIGHT_WHITE}{notification_status}'
     )
-    separator = f"      {LIGHT_WHITE}{("=" * 46)}{DEFAULT}"
+    separator = f"       {LIGHT_WHITE}{("=" * len(byline))}{DEFAULT}"
 
     # Update shared state with options display
     
