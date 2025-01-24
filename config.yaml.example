@@ -16,6 +16,7 @@ GENERAL:
   min_peers: 8 # Minimum number of peers to be considered healthy
   use_sudo: True # ONLY needs to be set True if you NEED to use sudo to run your ruskquery and rusk-wallet commands.
   
+  ## These minimums are still checked to make sure it's worth doing vs missed potential rewards. 
   min_rewards: 1 # Minimum amount of rewards to consider claiming rewards to stake
   min_slashed: 1 # Minimum amount of slashed rewards from topoffs before considering restaking to reclaim
   

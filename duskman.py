@@ -464,11 +464,11 @@ def calculate_downtime_loss(rewards_per_epoch, downtime_epochs=1):
 
 def should_unstake_and_restake(reclaimable_slashed_stake, downtime_loss):
     """Determine if unstaking/restaking is worthwhile."""
-    return auto_reclaim_full_restakes and (reclaimable_slashed_stake > config.get('min_slashed',1) and reclaimable_slashed_stake >= downtime_loss)
+    return auto_reclaim_full_restakes and (reclaimable_slashed_stake >= config.get('min_slashed',1) and reclaimable_slashed_stake >= downtime_loss)
 
 def should_claim_and_stake(rewards, incremental_threshold):
     """Determine if claiming and staking rewards is worthwhile."""
-    return auto_stake_rewards and (rewards > config.get('min_rewards',1) and rewards >= incremental_threshold)
+    return auto_stake_rewards and (rewards >= config.get('min_rewards',1) and rewards >= incremental_threshold)
 
 def format_hms(seconds):
     """
@@ -931,7 +931,12 @@ async def realtime_display(enable_tmux=False):
                 
                 allocation_bar = display_wallet_distribution_bar(b['public'],b['shielded'],8)
                 # Real-time display content (no surrounding panel)
-
+                
+                per_epoch = str()
+                rpe = convert_to_float(st_info.get('rewards_per_epoch',0.0))
+                if  rpe > 0.0: # Check if we have a ~ rewards per epoch since last claim
+                    per_epoch = f"@ Epoch/claim: {format_float(rpe)}"
+                
                 realtime_content = (
                     f"{opts}\n"
                     f"{top_bar}"
@@ -947,7 +952,7 @@ async def realtime_display(enable_tmux=False):
                     f"         {LIGHT_WHITE}   Total {DEFAULT}| {LIGHT_WHITE}{format_float(tot_bal)} DUSK (${format_float((tot_bal) * price, 2)}){DEFAULT}\n"
                     f"                  |\n"
                     f"    {LIGHT_WHITE}Staked{DEFAULT}        | {LIGHT_WHITE}{format_float(st_info['stake_amount'])} (${format_float(st_info['stake_amount'] * price, 2)}){DEFAULT}{is_active}\n"
-                    f"    {YELLOW}Rewards{DEFAULT}       | {YELLOW}{format_float(st_info['rewards_amount'])} (${format_float(st_info['rewards_amount'] * price, 2)}) {LIGHT_WHITE}@ Epoch/claim: {format_float(st_info.get('rewards_per_epoch','0.0'))}{DEFAULT}\n"
+                    f"    {YELLOW}Rewards{DEFAULT}       | {YELLOW}{format_float(st_info['rewards_amount'])} (${format_float(st_info['rewards_amount'] * price, 2)}) {LIGHT_WHITE}{per_epoch}{DEFAULT}\n"
                     f"    {LIGHT_RED}Reclaimable{DEFAULT}   | {LIGHT_RED}{format_float(st_info['reclaimable_slashed_stake'])} (${format_float(st_info['reclaimable_slashed_stake'] * price, 2)}){DEFAULT}\n"
                     f" {LIGHT_WHITE}{('=' * (len(remove_ansi(top_bar)) - 2))}{DEFAULT}\n"  
                 )
