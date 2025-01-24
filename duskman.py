@@ -343,15 +343,17 @@ def log_action(action="Action", details="No Details", type='info'):
     if type == 'debug':
         if isDebug:
             write_to_log(DEBUG_LOG_FILE, formatted_message)
+            return
     elif type == 'error':
         if isDebug:
             write_to_log(DEBUG_LOG_FILE, formatted_message)
             
-        notifier.notify(formatted_message, shared_state)    
+        #notifier.notify(formatted_message, shared_state)    
         write_to_log(ERROR_LOG_FILE, formatted_message)
     else:
         write_to_log(INFO_LOG_FILE, formatted_message)
-        #notifier.notify(formatted_message, shared_state)
+        
+    notifier.notify(formatted_message, shared_state)
         
     
 
