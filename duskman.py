@@ -156,7 +156,6 @@ def get_env_variable(var_name='WALLET_PASSWORD', dotenv_key='WALLET_PASSWORD'):
     """
     value = os.getenv(var_name)
     if not value:
-        # logging.warning(f"Environment variable '{var_name}' not found. Checking .env file...")
         value = os.getenv(dotenv_key)
         if not value:
             log_action("Wallet Password Variable Error", f"Neither environment variable '{var_name}' nor .env key '{dotenv_key}' found for wallet password.", "error")
@@ -208,6 +207,16 @@ def display_wallet_distribution_bar(public_amount, shielded_amount, width=30):
     s_pct = f"{shd_pct:.2f}%"
     return f"{YELLOW}{p_pct} {bar_str} {s_pct}"
 
+def convert_to_float(value):
+    """
+    Tries to convert a string to a float. 
+    If successful, returns the float. Otherwise, returns 0.0.
+    """
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return 0.0
+    
 def remove_ansi(text):
     # Regular expression to match ANSI escape sequences
     ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
@@ -305,7 +314,7 @@ async def fetch_dusk_data():
 
 def format_float(value, places=4):
     """Convert float to a string with max 4 (default) decimal digits."""
-    parts = str(value).split('.')
+    parts = str(convert_to_float(value)).split('.')
     if len(parts) == 2:
         return f"{parts[0]}.{parts[1][:places]}" if len(parts[1]) > 0 else parts[0]
     return parts[0]
@@ -362,15 +371,15 @@ def parse_stake_info(output):
             if "Eligible stake:" in line:
                 match = re.search(r"Eligible stake:\s*([\d]+(?:\.\d+)?)\s*DUSK", line)
                 if match:
-                    eligible_stake = float(match.group(1))
+                    eligible_stake = convert_to_float(match.group(1))
             elif "Reclaimable slashed stake:" in line:
                 match = re.search(r"Reclaimable slashed stake:\s*([\d]+(?:\.\d+)?)\s*DUSK", line)
                 if match:
-                    reclaimable_slashed_stake = float(match.group(1))
+                    reclaimable_slashed_stake = convert_to_float(match.group(1))
             elif "Accumulated rewards is:" in line:
                 match = re.search(r"Accumulated rewards is:\s*([\d]+(?:\.\d+)?)\s*DUSK", line)
                 if match:
-                    accumulated_rewards = float(match.group(1))
+                    accumulated_rewards = convert_to_float(match.group(1))
             elif "Stake active from block #" in line:
                 match = re.search(r"#(\d+)", line)
                 if match:
@@ -425,11 +434,13 @@ async def get_wallet_balances(password):
         out = await execute_command_async(cmd_balance)
         if out:
             total_str = out.replace("Total: ", "")
+            #value = convert_to_float(total_str)
             try:
                 return float(total_str)
-            except:
+            except (ValueError, TypeError):
+                log_action(f"Error in get_spendable_for_address(): ",e,"error")
                 return 0.0
-        return 0.0
+        #return total_str
 
     tasks_public = [get_spendable_for_address(addr) for addr in addresses["public"]]
     tasks_shielded = [get_spendable_for_address(addr) for addr in addresses["shielded"]]
@@ -533,7 +544,6 @@ async def frequent_update_loop():
     Update the block height and balances every 20 seconds.
     Checks if the block height changes to ensure node responsiveness.
     """
-    # password = get_env_variable("MY_WALLET_VARIABLE", dotenv_key="WALLET_PASSWORD")
 
     loopcnt = 0
     consecutive_no_change = 0  # Counter for consecutive no-change in block height
@@ -628,15 +638,13 @@ async def init_balance():
     # Fetch block height
     block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height", False)
     if block_height_str:
-        shared_state["block_height"] = int(block_height_str)
-
+        shared_state["block_height"] = int(block_height_str)    
+    #shared_state["last_claim_block"] = int(block_height_str)
     # Fetch wallet balances
     pub_bal, shld_bal = await get_wallet_balances(password)
     shared_state["balances"]["public"] = pub_bal
     shared_state["balances"]["shielded"] = shld_bal
     
-
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # STAKE MANAGEMENT LOOP
@@ -808,7 +816,7 @@ async def stake_management_loop():
                     shared_state["last_action_taken"] = f"Startup @ Block #{block_height}"
                     first_run = False
                 else:
-                    # If no action, just wait and don't log sinc eno longer first run
+                    # If no action, just wait and don't log since it's no longer first run
                     await sleep_until_next_epoch(block_height, buffer_blocks=buffer_blocks)
                     continue    
                 
@@ -939,7 +947,7 @@ async def realtime_display(enable_tmux=False):
                     f"         {LIGHT_WHITE}   Total {DEFAULT}| {LIGHT_WHITE}{format_float(tot_bal)} DUSK (${format_float((tot_bal) * price, 2)}){DEFAULT}\n"
                     f"                  |\n"
                     f"    {LIGHT_WHITE}Staked{DEFAULT}        | {LIGHT_WHITE}{format_float(st_info['stake_amount'])} (${format_float(st_info['stake_amount'] * price, 2)}){DEFAULT}{is_active}\n"
-                    f"    {YELLOW}Rewards{DEFAULT}       | {YELLOW}{format_float(st_info['rewards_amount'])} (${format_float(st_info['rewards_amount'] * price, 2)}){DEFAULT}\n"
+                    f"    {YELLOW}Rewards{DEFAULT}       | {YELLOW}{format_float(st_info['rewards_amount'])} (${format_float(st_info['rewards_amount'] * price, 2)}) {LIGHT_WHITE}@ Epoch/claim: {format_float(st_info.get('rewards_per_epoch','0.0'))}{DEFAULT}\n"
                     f"    {LIGHT_RED}Reclaimable{DEFAULT}   | {LIGHT_RED}{format_float(st_info['reclaimable_slashed_stake'])} (${format_float(st_info['reclaimable_slashed_stake'] * price, 2)}){DEFAULT}\n"
                     f" {LIGHT_WHITE}{('=' * (len(remove_ansi(top_bar)) - 2))}{DEFAULT}\n"  
                 )
