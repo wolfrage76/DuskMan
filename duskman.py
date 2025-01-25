@@ -222,7 +222,7 @@ def remove_ansi(text):
     ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
     return ansi_escape.sub('', text)
 
-async def execute_command_async(command, log_output=True):
+async def execute_command_async(command=str(), log_output=False):
     """Execute a shell command asynchronously and return its output (stdout)."""
     try:
         if log_output:
@@ -239,12 +239,12 @@ async def execute_command_async(command, log_output=True):
         stderr_str = stderr.decode().strip()
 
         if process.returncode != 0:
-            log_action(f"Command failed with return code {process.returncode}: {command.replace(password,'#####')}", stderr_str,"error")
+            log_action(f"Command failed with return code {process.returncode}:\n {command.replace(password,'#####')}", stderr_str.replace(password,'#####'),"error")
             return None # Or raise an exception
         else:
             if log_output and stdout_str:
                 log_action(f"Command output", stdout_str.replace(password,'#####'), 'debug')
-            return stdout_str
+            return stdout_str.replace(password,'#####')
     except Exception as e:
         log_action(f"Error executing command: {command.replace(password,'#####')}", e, "error")
         return None
@@ -339,6 +339,10 @@ def log_action(action="Action", details="No Details", type='info'):
     # Format the message
     formatted_message = LOG_FORMAT.format(timestamp=timestamp, message=f"{action}: {details}")
     
+    if len(log_entries) > 15: # TODO: Make configurable
+                log_entries.pop(0)
+
+    
     # Write to the appropriate log file
     if type == 'debug':
         if isDebug:
@@ -348,10 +352,12 @@ def log_action(action="Action", details="No Details", type='info'):
         if isDebug:
             write_to_log(DEBUG_LOG_FILE, formatted_message)
             
-        #notifier.notify(formatted_message, shared_state)    
+        #notifier.notify(formatted_message, shared_state)
+        log_entries.append(formatted_message)    
         write_to_log(ERROR_LOG_FILE, formatted_message)
     else:
         write_to_log(INFO_LOG_FILE, formatted_message)
+        log_entries.append(formatted_message)
         
     notifier.notify(formatted_message, shared_state)
         
@@ -1076,7 +1082,6 @@ async def main():
         shared_state["options"] = byline + '\n'+ separator + auto_status
     else:
         shared_state["options"] = byline 
-    
 
     if enable_webdash:
         from utilities.web_dashboard import start_dashboard
@@ -1086,8 +1091,6 @@ async def main():
         frequent_update_loop(),
         realtime_display(enable_tmux),
         stake_management_loop(),
-        
-        
         )
 
 if __name__ == "__main__":
