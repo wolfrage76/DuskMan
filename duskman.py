@@ -2,7 +2,6 @@ import os
 import sys
 import subprocess
 import re
-import logging
 import yaml
 import asyncio
 import aiohttp
@@ -33,10 +32,10 @@ def load_config(section="GENERAL", file_path="config.yaml"):
             config = yaml.safe_load(file)
             return config.get(section, {})
     except FileNotFoundError:
-        logging.error(f"Configuration file {file_path} not found. Exiting.")
+        log_action("Config File error", f"Configuration file {file_path} not found. Exiting.", "error")
         sys.exit(1)
     except yaml.YAMLError as e:
-        logging.error(f"Error parsing YAML file {file_path}: {e}")
+        log_action("Config File Error", f"Error parsing YAML file {file_path}: {e}", "error")
         sys.exit(1)
 
 # Load configuration
@@ -58,6 +57,8 @@ enable_dashboard = web_dashboard.get('enable_dashboard', True)
 dash_port = web_dashboard.get('dash_port', '5000')
 dash_ip = web_dashboard.get('dash_ip', '0.0.0.0')
 include_rendered = web_dashboard.get('include_rendered', False)
+isDebug = logs_config.get('debug', False)
+display_options = config.get('display_options', True)
 
 if config.get('use_sudo', False):
     use_sudo = 'sudo'
@@ -67,6 +68,13 @@ else:
 errored = False
 log_entries = []
 
+END_UNDERLINE = "\033[0m"
+UNDERLINE = "\033[4m"
+
+byline = f"DuskMan Stake Management System: by Wolfrage"
+if not config.get('display_options', True):
+    byline = f"{UNDERLINE}{byline}{END_UNDERLINE}\n"
+    
 # If user passes "tmux" as first argument, override enable_tmux
 if config.get('enable_tmux', False) or (len(sys.argv) > 1 and sys.argv[1].lower() == 'tmux'):
     enable_tmux = True
@@ -93,7 +101,10 @@ LIGHT_BLUE = "\033[1;34m"
 LIGHT_PURPLE = "\033[1;35m"
 LIGHT_CYAN = "\033[1;36m"
 LIGHT_WHITE = "\033[1;37m"
+
 DEFAULT = "\033[1;39m"
+
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SHARED STATE
@@ -114,7 +125,6 @@ shared_state = {
         "shielded": 0.0
     },
     "last_action_taken": "Starting Up",
-    "first_run": True,
     "completion_time": "--:--",
     "peer_count": 0,
     "price":0.0,
@@ -123,6 +133,7 @@ shared_state = {
     "usd_24h_change": 0,
     "rendered":"",
     "stake_active_blk": 0,
+    "options":""
 }
 
 # Define log file paths
@@ -145,10 +156,9 @@ def get_env_variable(var_name='WALLET_PASSWORD', dotenv_key='WALLET_PASSWORD'):
     """
     value = os.getenv(var_name)
     if not value:
-        # logging.warning(f"Environment variable '{var_name}' not found. Checking .env file...")
         value = os.getenv(dotenv_key)
         if not value:
-            logging.error(f"Neither environment variable '{var_name}' nor .env key '{dotenv_key}' found for wallet password.")
+            log_action("Wallet Password Variable Error", f"Neither environment variable '{var_name}' nor .env key '{dotenv_key}' found for wallet password.", "error")
             sys.exit(1)
             
     return value
@@ -197,16 +207,28 @@ def display_wallet_distribution_bar(public_amount, shielded_amount, width=30):
     s_pct = f"{shd_pct:.2f}%"
     return f"{YELLOW}{p_pct} {bar_str} {s_pct}"
 
+def convert_to_float(value):
+    """
+    Tries to convert a string to a float. 
+    If successful, returns the float. Otherwise, returns 0.0.
+    """
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return 0.0
+    
 def remove_ansi(text):
     # Regular expression to match ANSI escape sequences
     ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
     return ansi_escape.sub('', text)
 
-async def execute_command_async(command, log_output=True):
+async def execute_command_async(command=str(), log_output=False):
     """Execute a shell command asynchronously and return its output (stdout)."""
     try:
         if log_output:
-            logging.debug(f"Executing command: {command}")
+            cmd2 = command
+            if log_output:
+                log_action("Executing Command", cmd2.replace(password,'#####'), "debug")
         process = await asyncio.create_subprocess_shell(
             command,
             stdout=asyncio.subprocess.PIPE,
@@ -217,49 +239,82 @@ async def execute_command_async(command, log_output=True):
         stderr_str = stderr.decode().strip()
 
         if process.returncode != 0:
-            logging.error(f"Command failed with return code {process.returncode}: {command}\n{stderr_str}")
+            log_action(f"Command failed with return code {process.returncode}:\n {command.replace(password,'#####')}", stderr_str.replace(password,'#####'),"error")
             return None # Or raise an exception
         else:
             if log_output and stdout_str:
-                logging.debug(f"Command output: {stdout_str}")
-            return stdout_str
+                log_action(f"Command output", stdout_str.replace(password,'#####'), 'debug')
+            return stdout_str.replace(password,'#####')
     except Exception as e:
-        logging.error(f"Error executing command: {command}\n{e}")
+        log_action(f"Error executing command: {command.replace(password,'#####')}", e, "error")
         return None
 
-
-async def fetch_dusk_data(): # TODO: change to full data call for more info
+async def fetch_dusk_data():
     """
-    Fetch DUSK token data from CoinGecko API.
-    Returns a dictionary with relevant data or logs an error if the request fails.
+    Fetch DUSK token data from CoinGecko's /coins/markets endpoint and update shared_state.
+    Logs an error if the request fails or data is incomplete.
     """
-    url = "https://api.coingecko.com/api/v3/simple/price"
+    url = "https://api.coingecko.com/api/v3/coins/markets"
     params = {
+        "vs_currency": "usd",  # Convert price to USD
         "ids": "dusk-network",  # CoinGecko's ID for DUSK
-        "vs_currencies": "usd",  # Fetch price in USD
-        "include_market_cap": "true",
-        "include_24hr_vol": "true",
-        "include_24hr_change": "true",
+        "order": "market_cap_desc",  # Sort by market cap
+        "per_page": 1,
+        "page": 1,
+        "sparkline": "false",  # Do not include sparkline data
+        "price_change_percentage": "1h,24h,7d,14d,30d,200d,1y",  # Include price change percentages
+        "locale": "en",
     }
-    
+
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url, params=params) as response:
                 if response.status == 200:
                     data = await response.json()
-                    dusk_data = data.get("dusk-network", {})
-                    return dusk_data
+                    dusk_data = {}
+                    if data:
+                        dusk_data = data[0]  # Extract the first result for "dusk-network"
+                        
+                    # Update shared_state directly
+                    shared_state["price"] = dusk_data.get("current_price", 0.0)
+                    shared_state["market_cap"] = dusk_data.get("market_cap", 0.0)
+                    shared_state["volume"] = dusk_data.get("total_volume", 0.0)
+                    shared_state["usd_24h_change"] = dusk_data.get("price_change_percentage_24h", 0.0)
+                    shared_state["market_cap_rank"] = dusk_data.get("market_cap_rank", None)
+                    shared_state["circulating_supply"] = dusk_data.get("circulating_supply", None)
+                    shared_state["total_supply"] = dusk_data.get("total_supply", None)
+                    shared_state["ath"] = dusk_data.get("ath", 0.0)
+                    shared_state["ath_change_percentage"] = dusk_data.get("ath_change_percentage", 0.0)
+                    shared_state["price_change_percentage_1h"] = dusk_data.get("price_change_percentage_1h_in_currency", 0.0)
+                    shared_state["last_updated"] = dusk_data.get("last_updated", "N/A")
+                    shared_state["fully_diluted_valuation"] = dusk_data.get("fully_diluted_valuation", 0.0)
+                    shared_state["high_24h"] = dusk_data.get("high_24h", 0.0)
+                    shared_state["low_24h"] = dusk_data.get("low_24h", 0.0)
+                    shared_state["price_change_24h"] = dusk_data.get("price_change_24h", 0.0)
+                    shared_state["market_cap_change_24h"] = dusk_data.get("market_cap_change_24h", 0.0)
+                    shared_state["market_cap_change_percentage_24h"] = dusk_data.get("market_cap_change_percentage_24h", 0.0)
+                    shared_state["max_supply"] = dusk_data.get("max_supply", 0.0)
+                    shared_state["ath_date"] = dusk_data.get("ath_date", 0.0)
+                    shared_state["atl"] = dusk_data.get("atl", 0.0)
+                    shared_state["atl_date"] = dusk_data.get("atl_date", 0.0)
+                    shared_state["price_change_percentage_14d_in_currency"] = dusk_data.get("price_change_percentage_14d_in_currency", 0.0)
+                    shared_state["price_change_percentage_1y_in_currency"] = dusk_data.get("price_change_percentage_1y_in_currency", 0.0)
+                    shared_state["price_change_percentage_200d_in_currency"] = dusk_data.get("price_change_percentage_200d_in_currency", 0.0)
+                    shared_state["price_change_percentage_24h_in_currency"] = dusk_data.get("price_change_percentage_24h_in_currency", 0.0)
+                    shared_state["price_change_percentage_30d_in_currency"] = dusk_data.get("price_change_percentage_30d_in_currency", 0.0)
+                    shared_state["price_change_percentage_7d_in_currency"] = dusk_data.get("price_change_percentage_7d_in_currency", 0.0)
+                    shared_state["price_change_percentage_1h_in_currency"] = dusk_data.get("price_change_percentage_1h_in_currency", 0.0)
+                    
                 else:
-                    logging.debug(f"Failed to fetch DUSK data. HTTP Status: {response.status}")
-                    return None
+                    log_action("Failed to fetch DUSK data", f"HTTP Status: {response.status}", 'debug')
     except Exception as e:
-        logging.debug(f"Error while fetching DUSK data: {e}")
-        return None
+        log_action("Error while fetching DUSK data", str(e), 'debug')
+
 
 
 def format_float(value, places=4):
     """Convert float to a string with max 4 (default) decimal digits."""
-    parts = str(value).split('.')
+    parts = str(convert_to_float(value)).split('.')
     if len(parts) == 2:
         return f"{parts[0]}.{parts[1][:places]}" if len(parts[1]) > 0 else parts[0]
     return parts[0]
@@ -275,7 +330,7 @@ def write_to_log(file_path, message):
         # Handle potential errors during file writing, if necessary
         log_action(f"Error writing to log file {file_path}",e,"error")
 
-def log_action(action, details, type='info'):
+def log_action(action="Action", details="No Details", type='info'):
     """
     Write log messages to specific files based on type.
     """
@@ -284,14 +339,27 @@ def log_action(action, details, type='info'):
     # Format the message
     formatted_message = LOG_FORMAT.format(timestamp=timestamp, message=f"{action}: {details}")
     
+    if len(log_entries) > 15: # TODO: Make configurable
+                log_entries.pop(0)
+
+    
     # Write to the appropriate log file
     if type == 'debug':
-        write_to_log(DEBUG_LOG_FILE, formatted_message)
+        if isDebug:
+            write_to_log(DEBUG_LOG_FILE, formatted_message)
+            return
     elif type == 'error':
+        if isDebug:
+            write_to_log(DEBUG_LOG_FILE, formatted_message)
+            
+        #notifier.notify(formatted_message, shared_state)
+        log_entries.append(formatted_message)    
         write_to_log(ERROR_LOG_FILE, formatted_message)
     else:
         write_to_log(INFO_LOG_FILE, formatted_message)
-        notifier.notify(formatted_message, shared_state)
+        log_entries.append(formatted_message)
+        
+    notifier.notify(formatted_message, shared_state)
         
     
 
@@ -311,15 +379,15 @@ def parse_stake_info(output):
             if "Eligible stake:" in line:
                 match = re.search(r"Eligible stake:\s*([\d]+(?:\.\d+)?)\s*DUSK", line)
                 if match:
-                    eligible_stake = float(match.group(1))
+                    eligible_stake = convert_to_float(match.group(1))
             elif "Reclaimable slashed stake:" in line:
                 match = re.search(r"Reclaimable slashed stake:\s*([\d]+(?:\.\d+)?)\s*DUSK", line)
                 if match:
-                    reclaimable_slashed_stake = float(match.group(1))
+                    reclaimable_slashed_stake = convert_to_float(match.group(1))
             elif "Accumulated rewards is:" in line:
                 match = re.search(r"Accumulated rewards is:\s*([\d]+(?:\.\d+)?)\s*DUSK", line)
                 if match:
-                    accumulated_rewards = float(match.group(1))
+                    accumulated_rewards = convert_to_float(match.group(1))
             elif "Stake active from block #" in line:
                 match = re.search(r"#(\d+)", line)
                 if match:
@@ -329,12 +397,12 @@ def parse_stake_info(output):
         if (eligible_stake is None or
             reclaimable_slashed_stake is None or
             accumulated_rewards is None):
-            logging.error("Incomplete stake-info values. Could not parse fully.")
+            log_action("Incomplete stake-info values.","Could not parse fully.", "error")
             return None, None, None
 
         return eligible_stake, reclaimable_slashed_stake, accumulated_rewards
     except Exception as e:
-        logging.error(f"Error parsing stake-info output: {e}")
+        log_action(f"Error parsing stake-info output: ",e,"error")
         return None, None, None
 
 async def get_wallet_balances(password):
@@ -366,7 +434,7 @@ async def get_wallet_balances(password):
                 if match:
                     addresses["public"].append(match.group(1))
     except Exception as e:
-                logging.error(f"Error in get_wallet_balances(): {e}")
+                log_action(f"Error in get_wallet_balances(): ",e,"error")
                 await asyncio.sleep(5)
     
     async def get_spendable_for_address(addr):
@@ -374,11 +442,13 @@ async def get_wallet_balances(password):
         out = await execute_command_async(cmd_balance)
         if out:
             total_str = out.replace("Total: ", "")
+            #value = convert_to_float(total_str)
             try:
                 return float(total_str)
-            except:
+            except (ValueError, TypeError):
+                log_action(f"Error in get_spendable_for_address(): ",e,"error")
                 return 0.0
-        return 0.0
+        #return total_str
 
     tasks_public = [get_spendable_for_address(addr) for addr in addresses["public"]]
     tasks_shielded = [get_spendable_for_address(addr) for addr in addresses["shielded"]]
@@ -402,11 +472,11 @@ def calculate_downtime_loss(rewards_per_epoch, downtime_epochs=1):
 
 def should_unstake_and_restake(reclaimable_slashed_stake, downtime_loss):
     """Determine if unstaking/restaking is worthwhile."""
-    return auto_reclaim_full_restakes and (reclaimable_slashed_stake > config.get('min_slashed',1) and reclaimable_slashed_stake >= downtime_loss)
+    return auto_reclaim_full_restakes and (reclaimable_slashed_stake >= config.get('min_slashed',1) and reclaimable_slashed_stake >= downtime_loss)
 
 def should_claim_and_stake(rewards, incremental_threshold):
     """Determine if claiming and staking rewards is worthwhile."""
-    return auto_stake_rewards and (rewards > config.get('min_rewards',1) and rewards >= incremental_threshold)
+    return auto_stake_rewards and (rewards >= config.get('min_rewards',1) and rewards >= incremental_threshold)
 
 def format_hms(seconds):
     """
@@ -423,7 +493,7 @@ def format_hms(seconds):
         parts.append(f"{h}h")
     if m > 0:
         parts.append(f"{m}m")
-    parts.append(f"{s}s")  # always include seconds
+    parts.append(f"{s}s" if s > 9 else f"{s}s ")  # always include seconds
     return ' '.join(parts)
 
 
@@ -482,7 +552,6 @@ async def frequent_update_loop():
     Update the block height and balances every 20 seconds.
     Checks if the block height changes to ensure node responsiveness.
     """
-    # password = get_env_variable("MY_WALLET_VARIABLE", dotenv_key="WALLET_PASSWORD")
 
     loopcnt = 0
     consecutive_no_change = 0  # Counter for consecutive no-change in block height
@@ -491,9 +560,9 @@ async def frequent_update_loop():
     
     while True:
         # 1) Fetch block height
-        block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height")
+        block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height", False)
         if not block_height_str:
-            logging.error("Failed to fetch block height. Retrying in 10s...")
+            log_action("Failed to fetch block height.", ' Retrying in 10s...', "error")
             await asyncio.sleep(10)
             continue
         
@@ -511,8 +580,8 @@ async def frequent_update_loop():
         # Log and notify if block height hasn't changed for 10 loops (100 seconds)
         if consecutive_no_change >= 10:
             message = f"WARNING! Block height has not changed for {consecutive_no_change * 10} seconds.\nLast height: {last_known_block_height}"
-            logging.error(message)
-            notifier.notify(message, shared_state)
+            log_action("Block Height Error!", message,"error")
+            
             consecutive_no_change = 0  # Reset after notifying to avoid spamming
             await asyncio.sleep(1)
             continue # Need to double check this
@@ -534,22 +603,16 @@ async def frequent_update_loop():
                 shared_state["stake_info"]["reclaimable_slashed_stake"] = r_slashed or 0.0
                 shared_state["stake_info"]["rewards_amount"] = a_rewards or 0.0
             
-            dusk_data = await fetch_dusk_data()
-            if dusk_data:
-                shared_state["price"] = dusk_data.get("usd", 0.0)
-                shared_state["market_cap"]  = dusk_data.get("usd_market_cap", 0.0)
-                shared_state["volume"]  = dusk_data.get("usd_24h_vol", 0.0)
-                shared_state["usd_24h_change"]  = dusk_data.get("usd_24h_change", 0.0)
-                
+            await fetch_dusk_data()  
                 
             loopcnt = 0  # Reset loop count after update
         
         
-        shared_state["peer_count"] = await execute_command_async(f"{use_sudo} ruskquery peers")
+        shared_state["peer_count"] = await execute_command_async(f"{use_sudo} ruskquery peers", False)
         peer_count = int(shared_state["peer_count"])
         
         if not peer_count:
-            logging.error("Failed to fetch peers. Retrying in 10s...")
+            log_action("Failed to fetch peers.", "Retrying in 10s...", "error")
             await asyncio.sleep(10)
             continue
         
@@ -565,8 +628,8 @@ async def frequent_update_loop():
         # Log and notify if low count for too long
         if consecutive_low_peers >= 240:
             message = f"WARNING! Low peer count for {consecutive_low_peers * 10} seconds.\nCurrent Count: {peer_count}"
-            logging.error(message)
-            notifier.notify(message, shared_state)
+            log_action("Low peer count!", message, "error")
+            
             consecutive_low_peers = 0  # Reset after notifying to avoid spamming
 
         loopcnt += 1
@@ -578,26 +641,18 @@ async def init_balance():
         Init display values
     """
     
-    dusk_data = await fetch_dusk_data()
-    if not dusk_data:
-        dusk_data = {}
-    shared_state["price"] = dusk_data.get("usd", "N/A")
-    shared_state["market_cap"]  = dusk_data.get("usd_market_cap", "N/A")
-    shared_state["volume"]  = dusk_data.get("usd_24h_vol", "N/A")
-    shared_state["usd_24h_change"]  = dusk_data.get("usd_24h_change", "N/A")
+    await fetch_dusk_data() # grab data from Coingecko
 
-    # 1) Fetch block height
-    block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height")
+    # Fetch block height
+    block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height", False)
     if block_height_str:
-        shared_state["block_height"] = int(block_height_str)
-
-    # 2) Fetch wallet balances
+        shared_state["block_height"] = int(block_height_str)    
+    #shared_state["last_claim_block"] = int(block_height_str)
+    # Fetch wallet balances
     pub_bal, shld_bal = await get_wallet_balances(password)
     shared_state["balances"]["public"] = pub_bal
     shared_state["balances"]["shielded"] = shld_bal
     
-
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # STAKE MANAGEMENT LOOP
@@ -608,23 +663,16 @@ async def stake_management_loop():
     Main staking logic. Sleeps until the next epoch after each action/no-action.
     Meanwhile, frequent_update_loop updates block height & balances for display.
     """
-    # password = get_env_variable("MY_WALLET_VARIABLE", dotenv_key="WALLET_PASSWORD")
 
     first_run = True
     
     while True:
         try:
-            try:    
-                dusk_info= await fetch_dusk_data() or {}
-                
-                shared_state["price"] = dusk_info.get('usd',0)
-            except Exception as e:
-                logging.error(f"Error fetching dusk in stake loop: {e}")
                 
             # For logic, we may want a fresh block height right before we do anything:
-            block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height")
+            block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height", False)
             if not block_height_str:
-                logging.error("Failed to fetch block height. Retrying in 60s...")
+                log_action("Failed to fetch block height", "Retrying in 30s...", "error")
                 await sleep_with_feedback(30, "retry block height fetch")
                 continue
 
@@ -633,20 +681,20 @@ async def stake_management_loop():
 
             # If we already saw 'No Action' for this block, wait a bit
             if shared_state["last_no_action_block"] == block_height:
-                msg = f"Already did 'No Action' at block {block_height}; sleeping 60s."
-                await sleep_with_feedback(60, msg)
+                msg = f"Already did 'No Action' at block {block_height}; sleeping 30s."
+                await sleep_with_feedback(30, msg)
                 continue
 
             # Fetch stake-info
             stake_output = await execute_command_async(f"{use_sudo} rusk-wallet --password {password} stake-info")
             if not stake_output:
-                logging.error("Failed to fetch stake-info. Retrying in 60s...")
+                log_action("Error", "Failed to fetch stake-info. Retrying in 60s...", "error")
                 await sleep_with_feedback(30, "retry stake-info fetch")
                 continue
 
             e_stake, r_slashed, a_rewards = parse_stake_info(stake_output)
             if e_stake is None or r_slashed is None or a_rewards is None:
-                logging.warning("Parsing stake info failed or incomplete. Skipping cycle...")
+                log_action("Skiping Cycle","Parsing stake info failed or incomplete. Skipping cycle...", 'debug')
                 await sleep_with_feedback(30, "skipping cycle")
                 continue
 
@@ -662,61 +710,61 @@ async def stake_management_loop():
             rewards_amount = a_rewards
 
             rewards_per_epoch = calculate_rewards_per_epoch(rewards_amount, last_claim_block, block_height)
-            downtime_loss = calculate_downtime_loss(rewards_per_epoch)
+            downtime_loss = calculate_downtime_loss(rewards_per_epoch, downtime_epochs=2)
             incremental_threshold = rewards_per_epoch
             total_restake = stake_amount + rewards_amount + reclaimable_slashed_stake
 
             # Should this check first run and wait till first epoch? need to test
-            if should_unstake_and_restake(reclaimable_slashed_stake, downtime_loss):
+            if should_unstake_and_restake(reclaimable_slashed_stake, downtime_loss) and not first_run:
                 if total_restake < min_stake_amount:
                     shared_state["last_action_taken"] = "Unstake/Restake Skipped (Below Min)"
                     log_action(
-                        f"Balance Info (#{block_height})", 
-                        f"Rwd: {format_float(rewards_amount)}, Stk: {format_float(stake_amount)}, Rcl: {format_float(reclaimable_slashed_stake)}"
+                        f"Unstake/Restake Skipped (Block #{block_height})",
+                        f"Total restake ({format_float(total_restake)} DUSK) < {min_stake_amount} DUSK.\nRwd: {format_float(rewards_amount)}, Stk: {format_float(stake_amount)}, Rcl: {format_float(reclaimable_slashed_stake)}"
                     )
                     
-                    log_action(
-                        f"Unstake/Restake Skipped (Block #{block_height})",
-                        f"Total restake ({format_float(total_restake)} DUSK) < {min_stake_amount} DUSK."
-                    )
                 else:
                     # Unstake & Restake
                     act_msg = f"Unstake/Restake @ Block #{block_height}"
                     shared_state["last_action_taken"] = act_msg
-
-                    log_action(
-                        f"Balance Info (#{block_height})",
-                        f"Rwd: {format_float(rewards_amount)}, Stake: {format_float(stake_amount)}, Rcl: {format_float(reclaimable_slashed_stake)}"
+                    
+                    log_action(act_msg,
+                        f"Rwd: {format_float(rewards_amount)}, Stake: {format_float(stake_amount)}, Rcl: {format_float(reclaimable_slashed_stake)}\nReclaimable: {format_float(reclaimable_slashed_stake)}, Downtime Loss: {format_float(downtime_loss)}"
                     )
-                    log_action(
-                        act_msg,
-                        f"Reclaimable: {format_float(reclaimable_slashed_stake)}, Downtime Loss: {format_float(downtime_loss)}"
-                    )
-
+                    
                     # 1) Withdraw
                 
                     curr_cmd = f"{use_sudo} rusk-wallet --password ####### withdraw"
+                    curr2 = curr_cmd
                     cmd_success = await execute_command_async(curr_cmd.replace('#######',password))
                     if not cmd_success:
-                        log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
+                        log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr2}", 'error')
                         raise Exception("CMD execution failed")
                     
                     # 2) Unstake
                 
                     curr_cmd =f"{use_sudo} rusk-wallet --password ####### unstake"
+                    curr2 = curr_cmd
                     cmd_success = await execute_command_async(curr_cmd.replace('#######',password))
                     if not cmd_success:
-                        log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
+                        log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr2}", 'error')
                         raise Exception("CMD execution failed")
                     
                     # 3) Stake
                 
                     curr_cmd = f"{use_sudo} rusk-wallet --password ####### stake --amt {total_restake}"
+                    curr2 = curr_cmd
                     cmd_success = await execute_command_async(curr_cmd.replace('#######', password))
                     if not cmd_success:
-                        log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
+                        log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr2}", 'error')
                         raise Exception("CMD execution failed")
 
+                    stake_output = await execute_command_async(f"{use_sudo} rusk-wallet --password {password} stake-info")
+                    if stake_output:
+                        e_stake, r_slashed, a_rewards = parse_stake_info(stake_output)
+                        shared_state["stake_info"]["stake_amount"] = e_stake or 0.0
+                        shared_state["stake_info"]["reclaimable_slashed_stake"] = r_slashed or 0.0
+                        shared_state["stake_info"]["rewards_amount"] = a_rewards or 0.0
                     log_action("Restake Completed", f"New Stake: {format_float(float(total_restake))}")
                     shared_state["last_claim_block"] = block_height
 
@@ -724,32 +772,40 @@ async def stake_management_loop():
                     await sleep_until_next_epoch(block_height + 2160, msg="2-epoch wait after restaking...")
                     continue
 
-            elif should_claim_and_stake(rewards_amount, incremental_threshold):
+            elif should_claim_and_stake(rewards_amount, incremental_threshold) and not first_run:
                 # Claim & Stake
                 shared_state["last_action_taken"] = f"Claim/Stake @ Block {block_height}"
                 log_action(
-                    f"Balance Info (#{block_height})",
+                    shared_state["last_action_taken"],
                     f"Rwd: {format_float(rewards_amount)}, Stk: {format_float(stake_amount)}, Rcl: {format_float(reclaimable_slashed_stake)}"
                 )
-                log_action("Claim and Stake", f"Rewards: {format_float(rewards_amount)}")
 
                 # 1) Withdraw
                 
                 curr_cmd =f"{use_sudo} rusk-wallet --password ####### withdraw"
+                curr2 = curr_cmd
                 cmd_success = await execute_command_async(curr_cmd.replace('#######',password))
                 if not cmd_success:
-                        log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
+                        log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr2}", 'error')
                         raise Exception("CMD execution failed")
                     
                 # 2) Stake
                 
                 curr_cmd = f"{use_sudo} rusk-wallet --password ####### stake --amt {rewards_amount}"
+                curr2 = curr_cmd
                 cmd_success = await execute_command_async(curr_cmd.replace('#######',password))
                 if not cmd_success:
-                        log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr_cmd}", 'error')
+                        log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr2}", 'error')
                         raise Exception("CMD execution failed")
                     
                 new_stake = stake_amount + rewards_amount
+                stake_output = await execute_command_async(f"{use_sudo} rusk-wallet --password {password} stake-info")
+                if stake_output:
+                    e_stake, r_slashed, a_rewards = parse_stake_info(stake_output)
+                    shared_state["stake_info"]["stake_amount"] = e_stake or 0.0
+                    shared_state["stake_info"]["reclaimable_slashed_stake"] = r_slashed or 0.0
+                    shared_state["stake_info"]["rewards_amount"] = a_rewards or 0.0
+                    
                 log_action("Stake Completed", f"New Stake: {format_float(new_stake)}")
                 shared_state["last_claim_block"] = block_height
                 
@@ -759,64 +815,20 @@ async def stake_management_loop():
                 # No action
                 shared_state["last_no_action_block"] = block_height
                 shared_state["last_action_taken"] = f"No Action @ Block {block_height}"
-
-                b = shared_state["balances"]
-                #totBal = b["public"] + b["shielded"]
                 
+                b = shared_state["balances"]
                 now_ts = datetime.now().strftime('%Y-%m-%d %H:%M')
                 
-                if shared_state["first_run"]:
-                    
-                    byline = Text("\n  DuskMan Stake Management System: By Wolfrage", style="bold blue")
-
-                    notification_services = []
-                    if notification_config.get('discord_webhook', False):
-                        notification_services.append('Discord')
-                    if notification_config.get('pushbullet_token', False):
-                        notification_services.append('PushBullet')
-                    if notification_config.get('telegram_bot_token', False) and notification_config.get('telegram_chat_id', False):
-                        notification_services.append('Telegram')
-                    if notification_config.get('pushover_user_key', False) and notification_config.get('pushover_app_token', False):
-                        notification_services.append('Pushover')
-                    if notification_config.get('webhook_url', False):
-                        notification_services.append('Webhook')
-                    if notification_config.get('slack_webhook', False):
-                        notification_services.append('Slack')
-                    
-                    if len(notification_services) > 2 and notification_services:
-                        services = "\n\t  " + " ".join(notification_services)
-                    elif len(notification_services) <= 2 and notification_services:   
-                        services = " ".join(notification_services)
-                    else:
-                        services = "None"
-                        
-                    
-                    if dash_ip and dash_port and enable_dashboard: 
-                        enable_webdash = True
-                    else:
-                        enable_webdash = False
-                    
-                    notification_status = f'Enabled Notifications:[yellow]   {services}\n'
-                    
-                    auto_status = f'\n\tEnable Web Dashboard:    {enable_webdash}\n\tEnable tmux Support:     {enable_tmux}\n\tAuto Staking Rewards:    {auto_stake_rewards}\n\tAuto Restake to Reclaim: {auto_reclaim_full_restakes}\n\t{notification_status}'
-                    separator = "  [bold white]" + ("=" * 47) + "[/bold white]"
-                    
-                    console.print(byline)
-                    print(separator + auto_status)
-                    
-                    
-                    shared_state["first_run"] = False
+                # block_height = shared_state["block_height"]
+                if first_run:
                     shared_state["last_action_taken"] = f"Startup @ Block #{block_height}"
-                    action = shared_state["last_action_taken"]
-                    # Fetch required data
-                    block_height = shared_state["block_height"]
                     first_run = False
-
-                    
                 else:
+                    # If no action, just wait and don't log since it's no longer first run
                     await sleep_until_next_epoch(block_height, buffer_blocks=buffer_blocks)
                     continue    
-
+                
+            action = shared_state["last_action_taken"]
             Log_info = (
             f"\t==== Activity @{now_ts}====\n"
             f"  Action              :  {action}\n\n"
@@ -827,23 +839,16 @@ async def stake_management_loop():
             f"  Rewards           :  {format_float(shared_state.get('stake_info',{}).get('rewards_amount','0.0'))} (${format_float(shared_state.get('stake_info',{}).get('rewards_amount',{}) * float(shared_state["price"]))})\n"
             f"  Reclaimable    :  {format_float(shared_state.get('stake_info',{}).get('reclaimable_slashed_stake','0.0'))} (${format_float(shared_state.get('stake_info',{}).get('reclaimable_slashed_stake') * float(shared_state["price"]))})\n"
                 )
-            
+            #Log_info = shared_state.get("options", '') + Log_info
             if len(log_entries) > 15: # TODO: Make configurable
                 log_entries.pop(0)
             log_entries.append(Log_info)
-            notifier.notify(Log_info, shared_state)
-                # Display logs above the real-time display
-                
-                #if not first_run:
-                #    for entry in log_entries:
-                #        console.print(entry)
-
-            # Mark first run as completed after the first iteration 
+            notifier.notify(Log_info, shared_state) # 
             
-            
+            first_run = False
         except Exception as e:
-                logging.error(f"Error in stake management loop: {e}")
                 log_action("Error in stake management loop", e, "error")
+                raise Exception("Error in stake management loop")
             # Sleep until near the next epoch
         await sleep_until_next_epoch(block_height, buffer_blocks=buffer_blocks)
 
@@ -874,40 +879,32 @@ async def realtime_display(enable_tmux=False):
                     continue
                 tot_bal = b["public"] + b["shielded"]
                 price = shared_state["price"]
-                # now_ts = datetime.now().strftime('%m-%d %H:%M:%S')
-
-                # Display byline and settings on the first run
+                
                 if first_run:
                     first_run = False
                     await asyncio.sleep(1)  # Pause briefly before switching to real-time display
                     continue 
-                charclr =str()
                 
-                if remain_seconds <= 3600: # red <1hr
-                    charclr = RED
-                elif remain_seconds <= 7200: # yellow <2hr
-                    charclr = YELLOW
-                elif remain_seconds <= 10800: # green <3hr
-                    charclr = GREEN
-                else:
-                    charclr = LIGHT_WHITE
+                charclr =str()
+                charclr = (
+                    RED if remain_seconds <= 3600 else
+                    YELLOW if remain_seconds <= 7200 else
+                    GREEN if remain_seconds <= 10800 else
+                    LIGHT_WHITE
+                )
                     
                 timer = f"Next:{charclr} {disp_time} "
-                chg24=""
-                if shared_state["usd_24h_change"] > 0:
-                    chg24 = f"({GREEN}+{shared_state["usd_24h_change"]:.2f}%{DEFAULT} 24h)"
-                elif shared_state["usd_24h_change"] < 0:
-                    chg24= f"({RED}{shared_state["usd_24h_change"]:.2f}%{DEFAULT} 24h)"
-                else:
-                    chg24= f"({DEFAULT}{shared_state["usd_24h_change"]:.2f}% 24h)"
-                usd = f"$USD: {format_float(shared_state["price"],3)} {chg24} | "
+                chg24 = f"{GREEN if shared_state['usd_24h_change'] > 0 else RED if shared_state['usd_24h_change'] < 0 else DEFAULT}{shared_state['usd_24h_change']:.2f}% 24h"
+                usd = f"$USD: {format_float(shared_state['price'],3)} {chg24} | "
                 
-                peercolor = RED
-                if int(shared_state['peer_count']) > 40:
-                    peercolor = LIGHT_GREEN
-                elif int(shared_state['peer_count']) > 16:
-                    peercolor = YELLOW    
-                
+                peercolor = next(
+                    color for color, condition in {
+                        RED: lambda x: x <= 16,
+                        YELLOW: lambda x: 16 < x <= 40,
+                        LIGHT_GREEN: lambda x: x > 40
+                    }.items() if condition(int(shared_state['peer_count']))
+)
+
                 currenttime = datetime.now().strftime('%H:%M:%S')
                 epoch_num = int(blk / 2160)
                 
@@ -920,24 +917,52 @@ async def realtime_display(enable_tmux=False):
                     when_active = (datetime.now() + timedelta(seconds=active_secs)).strftime('%H:%M')
                     is_active = f"{LIGHT_RED}\n\tActive @ {when_active} - #{active_block} (E: {int(active_block/2160)}){DEFAULT}\n"               
                 
+                chg7d = shared_state["price_change_percentage_7d_in_currency"]
+                chg30d = shared_state["price_change_percentage_30d_in_currency"]
+                chg1y = shared_state["price_change_percentage_1y_in_currency"]
+                
+                chg14d = shared_state["price_change_percentage_14d_in_currency"]
+                chg1hr = shared_state["price_change_percentage_1h_in_currency"]
+                mkt_cap = shared_state["market_cap"]
+                mkt_cap_change = shared_state["market_cap_change_percentage_24h"]
+                ath = shared_state["ath"]
+                ath_change = shared_state["ath_change_percentage"]
+                ath_date = shared_state["ath_date"]
+                atl = shared_state["atl"]
+                atl_date = shared_state["atl_date"]
+                volume = shared_state["volume"]
+                
+                top_bar = f" {LIGHT_WHITE}======={DEFAULT} {currenttime} Block: {LIGHT_BLUE}#{blk} {DEFAULT}(E: {LIGHT_BLUE}{epoch_num}{DEFAULT}) Peers: {peercolor}{shared_state['peer_count']}{DEFAULT} {LIGHT_WHITE}=======\n"
+                title_spaces = int((len(remove_ansi(top_bar)) - len(remove_ansi(byline))) / 2)
+
+                opts = '\n' + (' ' * title_spaces) + BLUE  + shared_state["options"]
+                
                 allocation_bar = display_wallet_distribution_bar(b['public'],b['shielded'],8)
                 # Real-time display content (no surrounding panel)
+                
+                per_epoch = str()
+                rpe = convert_to_float(st_info.get('rewards_per_epoch',0.0))
+                if  rpe > 0.0: # Check if we have a ~ rewards per epoch since last claim
+                    per_epoch = f"@ Epoch/claim: {format_float(rpe)}"
+                
                 realtime_content = (
-                    f" {LIGHT_WHITE}====={DEFAULT} {currenttime} Block: {LIGHT_BLUE}#{blk} {DEFAULT}(E: {LIGHT_BLUE}{epoch_num}{DEFAULT}) Peers: {peercolor}{shared_state['peer_count']}{DEFAULT} {LIGHT_WHITE}=====\n"
+                    f"{opts}\n"
+                    f"{top_bar}"
                     f"    {CYAN}Last Action{DEFAULT}   | {CYAN}{last_act}{DEFAULT}\n"
                     f"    {LIGHT_GREEN}Next Check    {DEFAULT}| {charclr}{disp_time}{DEFAULT} ({donetime}){DEFAULT}\n"
                     f"                  |\n"
                     f"    {LIGHT_WHITE}Price USD{DEFAULT}     | {LIGHT_WHITE}${format_float(price,3)}{DEFAULT} {chg24}\n"
+                    f"                  {DEFAULT}| 7d: {chg7d:.2f}% 30d: {chg30d:.2f}% 1y: {chg1y:.2f}%\n"
                     f"                  |\n"
                     f"    {LIGHT_WHITE}Balance{DEFAULT}       | {LIGHT_WHITE}{allocation_bar}\n"
                     f"      {LIGHT_WHITE}├─ {YELLOW}Public   {DEFAULT}| {YELLOW}{format_float(b['public'])} (${format_float(b['public'] * price, 2)}){DEFAULT}\n"
                     f"      {LIGHT_WHITE}└─ {BLUE}Shielded {DEFAULT}| {BLUE}{format_float(b['shielded'])} (${format_float(b['shielded'] * price, 2)}){DEFAULT}\n"
                     f"         {LIGHT_WHITE}   Total {DEFAULT}| {LIGHT_WHITE}{format_float(tot_bal)} DUSK (${format_float((tot_bal) * price, 2)}){DEFAULT}\n"
-                    f"     \n"
+                    f"                  |\n"
                     f"    {LIGHT_WHITE}Staked{DEFAULT}        | {LIGHT_WHITE}{format_float(st_info['stake_amount'])} (${format_float(st_info['stake_amount'] * price, 2)}){DEFAULT}{is_active}\n"
-                    f"    {YELLOW}Rewards{DEFAULT}       | {YELLOW}{format_float(st_info['rewards_amount'])} (${format_float(st_info['rewards_amount'] * price, 2)}){DEFAULT}\n"
+                    f"    {YELLOW}Rewards{DEFAULT}       | {YELLOW}{format_float(st_info['rewards_amount'])} (${format_float(st_info['rewards_amount'] * price, 2)}) {LIGHT_WHITE}{per_epoch}{DEFAULT}\n"
                     f"    {LIGHT_RED}Reclaimable{DEFAULT}   | {LIGHT_RED}{format_float(st_info['reclaimable_slashed_stake'])} (${format_float(st_info['reclaimable_slashed_stake'] * price, 2)}){DEFAULT}\n"
-                    f" ===============================================\n"
+                    f" {LIGHT_WHITE}{('=' * (len(remove_ansi(top_bar)) - 2))}{DEFAULT}\n"  
                 )
                 
                 if include_rendered:
@@ -950,18 +975,6 @@ async def realtime_display(enable_tmux=False):
                 live.update(Text(realtime_content), refresh=True)
 
                 # Update TMUX status bar
-                
-                if errored:  # TODO: add visual alerts
-                    error_txt = "- !ERROR DETECTED!"
-                else:
-                    error_txt = str()
-                last_txt = str()
-                
-                donetime = f"{DEFAULT}({shared_state["completion_time"]}) "
-
-                peercnt = f"Peers: {shared_state["peer_count"]}"
-                splitter= " | "
-                
 
                 if enable_tmux:
                     try:
@@ -973,45 +986,48 @@ async def realtime_display(enable_tmux=False):
                         p = f"P:{format_float(b['public'])}"
                         s = f"S:{format_float(b['shielded'])}"
                         
-                        if not status_bar.get('show_current_block', True):
-                            curblk = str()
-                        if not status_bar.get('show_staked', True):
-                            stk = str()
-                        if not status_bar.get('show_public', True):
-                            p = str()
-                        if not status_bar.get('show_shielded', True):
-                            s = str()
-                        if not status_bar.get('show_total', True):
-                            bal = str()
-                        if not status_bar.get('show_rewards', True):
-                            rwd = str()
-                        if not status_bar.get('show_reclaimable', True):
-                            rcl = str()
-                        if not status_bar.get('show_price', True):
-                            usd = str()
-                        if not status_bar.get('show_timer', True):
-                            timer = str()
-                        if not status_bar.get('show_trigger_time', True):
-                            donetime = str()
-                        if not status_bar.get('show_peer_count', True):
-                            peercnt = str()
-                        if not status_bar.get('show_public', True) and not status_bar.get('show_shielded', True):
-                            bal = str()
-                            splitter = str()
-                        if status_bar.get('show_public', True) and status_bar.get('show_shielded', True):
+                        fields = {
+                            'curblk': status_bar.get('show_current_block', True),
+                            'stk': status_bar.get('show_staked', True),
+                            'p': status_bar.get('show_public', True),
+                            's': status_bar.get('show_shielded', True),
+                            'bal': status_bar.get('show_total', True),
+                            'rwd': status_bar.get('show_rewards', True),
+                            'rcl': status_bar.get('show_reclaimable', True),
+                            'usd': status_bar.get('show_price', True),
+                            'timer': status_bar.get('show_timer', True),
+                            'donetime': status_bar.get('show_trigger_time', True),
+                            'peercnt': status_bar.get('show_peer_count', True)
+                        }
+
+                        for key, show in fields.items():
+                            if not show:
+                                locals()[key] = str()
+
+                        if not fields['p'] and not fields['s']:
+                            bal = splitter = str()
+                        if fields['p'] and fields['s']:
                             spacer = "  "
 
-                        tmux_status = f"\r> {curblk}{stk}{rcl}{rwd}{bal}{p}{spacer}{s}{splitter}{usd}{last_txt}{timer}{donetime}{peercnt} {error_txt}"
+                        error_txt = "- !ERROR DETECTED!" if errored else str()
+                        last_txt = str()  # last_act
+                        donetime = f"{DEFAULT}({shared_state['completion_time']}) "
+                        peercnt = f"Peers: {shared_state['peer_count']}"
+                        splitter = " | "
+                        tmux_status = (
+                            f"\r> {curblk}{stk}{rcl}{rwd}{bal}{p}{spacer}{s}{splitter}"
+                            f"{usd}{last_txt}{timer}{donetime}{peercnt} {error_txt}"
+                        )
 
                         subprocess.check_call(["tmux", "set-option", "-g", "status-left", remove_ansi(tmux_status)])
                     except subprocess.CalledProcessError:
-                        logging.error("Failed to update tmux status bar. Is tmux running?")
+                        log_action("tmux Error", "Failed to update tmux status bar. Is tmux running?", "debug")
                         enable_tmux = False
 
                 await asyncio.sleep(1)
 
             except Exception as e:
-                logging.error(f"Error in real-time display: {e}")
+                log_action(f"Error in real-time display", e, "error")
                 await asyncio.sleep(5)
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1019,31 +1035,63 @@ async def realtime_display(enable_tmux=False):
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def main():
-    """
-    Concurrently run:
-        - frequent_update_loop: refresh block height & balances
-        - stake_management_loop: performs staking logic and sleeps until next epoch
-        - realtime_display: shows real-time info in console
-    """
-    
-    # console.clear()
-    
-        
-    
-    await init_balance() # Make sure balances are initialized for display
-    if enable_dashboard and dash_port and dash_ip:
-        from utilities.web_dashboard import start_dashboard
-        await start_dashboard(shared_state, log_entries,  host=dash_ip, port=dash_port)
-        
-    #console.clear()
-    await asyncio.gather(
-        stake_management_loop(),
-        realtime_display(enable_tmux),
-        frequent_update_loop(),
-        
-        )
 
-        
+    # Helper function to colorize boolean values
+    def colorize_bool(value):
+        return f"{GREEN}True{DEFAULT}" if value else f"{RED}False{DEFAULT}"
+
+    # Ensure balances are initialized for display
+    await init_balance()
+
+    # Collect enabled notification services
+    notification_services = [
+        service for service, enabled in {
+            "Discord": notification_config.get('discord_webhook', False),
+            "PushBullet": notification_config.get('pushbullet_token', False),
+            "Telegram": notification_config.get('telegram_bot_token', False) and notification_config.get('telegram_chat_id', False),
+            "Pushover": notification_config.get('pushover_user_key', False) and notification_config.get('pushover_app_token', False),
+            "Webhook": notification_config.get('webhook_url', False),
+            "Slack": notification_config.get('slack_webhook', False),
+        }.items() if enabled
+    ]
+
+    # Format the notification services display
+    if notification_services:
+        services = "\n\t  " + " ".join(notification_services) if len(notification_services) > 2 else " ".join(notification_services)
+    else:
+        services = "None"
+
+    # Determine dashboard status
+    enable_webdash = bool(dash_ip and dash_port and enable_dashboard)
+
+    # Build the status messages
+    notification_status = f'Enabled Notifications:{YELLOW}   {services}\n'
+    
+    auto_status = (
+        f'\n\t{LIGHT_WHITE}Enable Web Dashboard:{DEFAULT}    {colorize_bool(enable_webdash)}'
+        f'\n\t{LIGHT_WHITE}Enable tmux Support:{DEFAULT}     {colorize_bool(enable_tmux)}'
+        f'\n\t{LIGHT_WHITE}Auto Staking Rewards:{DEFAULT}    {colorize_bool(auto_stake_rewards)}'
+        f'\n\t{LIGHT_WHITE}Auto Restake to Reclaim:{DEFAULT} {colorize_bool(auto_reclaim_full_restakes)}'
+        f'\n\t{LIGHT_WHITE}{notification_status}'
+    )
+    separator = f"       {LIGHT_WHITE}{("=" * len(byline))}{DEFAULT}"
+
+    # Update shared state with options display
+    
+    if config.get('display_options', True):
+        shared_state["options"] = byline + '\n'+ separator + auto_status
+    else:
+        shared_state["options"] = byline 
+
+    if enable_webdash:
+        from utilities.web_dashboard import start_dashboard
+    await start_dashboard(shared_state, log_entries, host=dash_ip, port=dash_port) 
+    
+    await asyncio.gather(
+        frequent_update_loop(),
+        realtime_display(enable_tmux),
+        stake_management_loop(),
+        )
 
 if __name__ == "__main__":
     try:

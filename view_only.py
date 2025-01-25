@@ -1,4 +1,5 @@
 ## Displays data from remote ##
+## Web Dashboard MUST be enabled on the system Viewer is connecting to
 
 import asyncio
 import logging

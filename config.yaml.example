@@ -1,9 +1,10 @@
 VIEWER: # ONLY needed if using this for the remote viewer script
-  viewer_ip:    # The remote IP/hostname to connect to. Defaults to localhost
+  viewer_ip: 127.0.0.1   # The remote IP/hostname to connect to.
   viewer_port: 5000  # The remote port to connect to. 
-### NOTE: STATUSBAR SECTION BELOW CAN ALSO (OPTIONALLY) USED FOR VIEWER SCRIPT TMUX  ###
-### Nothing else needed for Viewer only script                                       ###
- ######################################################################################
+  
+#   NOTE: STATUSBAR SECTION BELOW CAN ALSO (OPTIONALLY) USED FOR VIEWER SCRIPT TMUX     #
+#   Nothing else needed for Viewer only script. Will separate into its own file later   #
+ #######################################################################################
 
 GENERAL:
   buffer_blocks: 40 # How many blocks before Epoch to trigger (1 block = 10seconds)
@@ -15,6 +16,7 @@ GENERAL:
   min_peers: 8 # Minimum number of peers to be considered healthy
   use_sudo: True # ONLY needs to be set True if you NEED to use sudo to run your ruskquery and rusk-wallet commands.
   
+  ## These minimums are still checked to make sure it's worth doing vs missed potential rewards. 
   min_rewards: 1 # Minimum amount of rewards to consider claiming rewards to stake
   min_slashed: 1 # Minimum amount of slashed rewards from topoffs before considering restaking to reclaim
   
@@ -23,11 +25,16 @@ GENERAL:
   #                                    # Make sure you read the instructions on exporting the environment variable.
   #                                    # OPTIONAL.  See instructions for .env file instead
   
+  display_options: True                # Enable the Settings display at top of tool
+
+
 WEB_DASHBOARD: # Default at http://localhost:5000
   enable_dashboard: True
   dash_port: 5000         # Port the Dashboard and API should listen on. Defaults to 5000
   dash_ip: 0.0.0.0        # Defaults to 0.0.0.0 for any IP, otherwise specific IP
-  include_rendered: False # include a render text of the console display in the API response
+  
+  include_rendered: False # Include a render text of the console display in the API response
+                          # Allows grabbing the whole thing to display easily, vs parsing and building a display because I got bored
 
 
 NOTIFICATIONS:
@@ -41,9 +48,12 @@ NOTIFICATIONS:
   webhook_url:         # https://your-webhook-url.com/endpoint # For parsing with your own server/middleware
 
 LOG_FILES:
- action_log:           # Defaults to ./duskman_actions.log
- debug_log:            # Defaults to ./duskman_tmp_debug.log  :NOTE: Is deleted on each start!
- error_log:            # Defaults to ./duskman_errors.log
+  
+  action_log:           # Defaults to ./duskman_actions.log
+  error_log:            # Defaults to ./duskman_errors.log
+  debug_log:            # Defaults to ./duskman_tmp_debug.log  :NOTE: Debug log is deleted on each start!
+  
+  debug: False          # Enable the debugging log. Debug log is deleted on each start!
 
 STATUSBAR: # Determines what to show in bottom statusbar and tmux statusbar
 # Also for Viewer
@@ -59,3 +69,5 @@ STATUSBAR: # Determines what to show in bottom statusbar and tmux statusbar
   show_timer: True
   show_trigger_time: True
   show_peer_count: False
+
+
