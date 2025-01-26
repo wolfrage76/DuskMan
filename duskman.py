@@ -59,7 +59,7 @@ dash_ip = web_dashboard.get('dash_ip', '0.0.0.0')
 include_rendered = web_dashboard.get('include_rendered', False)
 isDebug = logs_config.get('debug', False)
 display_options = config.get('display_options', True)
-monitor_wallet = notification_config.get('monitor_balances', False)
+monitor_wallet = notification_config.get('monitor_balance', False)
 
 if config.get('use_sudo', False):
     use_sudo = 'sudo'
