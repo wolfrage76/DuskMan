@@ -59,6 +59,7 @@ dash_ip = web_dashboard.get('dash_ip', '0.0.0.0')
 include_rendered = web_dashboard.get('include_rendered', False)
 isDebug = logs_config.get('debug', False)
 display_options = config.get('display_options', True)
+monitor_wallet = notification_config.get('monitor_balances', False)
 
 if config.get('use_sudo', False):
     use_sudo = 'sudo'
@@ -463,7 +464,7 @@ async def get_wallet_balances(password, first_run=False):
     old_public_total = shared_state["balances"]["public"]
     old_shielded_total = shared_state["balances"]["shielded"]
 
-    if float(format_float(old_public_total  + old_shielded_total)) !=  float(format_float(new_public_total + new_shielded_total)) and not first_run:
+    if float(format_float(old_public_total  + old_shielded_total)) !=  float(format_float(new_public_total + new_shielded_total)) and monitor_wallet and not first_run:
         if new_public_total != old_public_total:
             log_action(
                 "Balance Change Detected",
