@@ -339,6 +339,7 @@ def log_action(action="Action", details="No Details", type='info'):
     # Format the message
     formatted_message = LOG_FORMAT.format(timestamp=timestamp, message=f"{action}: {details}")
     
+    formatted_message = formatted_message.replace(password, '#####').replace(password, '#####')
     if len(log_entries) > 15: # TODO: Make configurable
                 log_entries.pop(0)
 
@@ -405,11 +406,11 @@ def parse_stake_info(output):
         log_action(f"Error parsing stake-info output: ",e,"error")
         return None, None, None
 
-async def get_wallet_balances(password):
+async def get_wallet_balances(password, first_run=False):
     """
     1) Fetch addresses from 'rusk-wallet profiles'
     2) For each address, sum its spendable balances
-    Return (public_total, shielded_total).
+    Detect and notify if balances change for public or shielded amounts.
     """
     try:
         addresses = {
@@ -434,21 +435,20 @@ async def get_wallet_balances(password):
                 if match:
                     addresses["public"].append(match.group(1))
     except Exception as e:
-                log_action(f"Error in get_wallet_balances(): ",e,"error")
-                await asyncio.sleep(5)
-    
+        log_action(f"Error in get_wallet_balances(): ", str(e).replace(password, '#####'), "error")
+        await asyncio.sleep(5)
+        return 0.0, 0.0
+
     async def get_spendable_for_address(addr):
         cmd_balance = f"{use_sudo} rusk-wallet --password {password} balance --spendable --address {addr}"
-        out = await execute_command_async(cmd_balance)
-        if out:
-            total_str = out.replace("Total: ", "")
-            #value = convert_to_float(total_str)
-            try:
+        try:
+            out = await execute_command_async(cmd_balance)
+            if out:
+                total_str = out.replace("Total: ", "")
                 return float(total_str)
-            except (ValueError, TypeError):
-                log_action(f"Error in get_spendable_for_address(): ",e,"error")
-                return 0.0
-        #return total_str
+        except Exception as e:
+            log_action(f"Error in get_spendable_for_address(): {str(e).replace(password, '#####')}", "error")
+        return 0.0
 
     tasks_public = [get_spendable_for_address(addr) for addr in addresses["public"]]
     tasks_shielded = [get_spendable_for_address(addr) for addr in addresses["shielded"]]
@@ -456,7 +456,36 @@ async def get_wallet_balances(password):
     results_public = await asyncio.gather(*tasks_public)
     results_shielded = await asyncio.gather(*tasks_shielded)
 
-    return sum(results_public), sum(results_shielded)
+    new_public_total = sum(results_public)
+    new_shielded_total = sum(results_shielded)
+
+    # Check for balance changes
+    old_public_total = shared_state["balances"]["public"]
+    old_shielded_total = shared_state["balances"]["shielded"]
+
+    if float(format_float(old_public_total  + old_shielded_total)) !=  float(format_float(new_public_total + new_shielded_total)) and not first_run:
+        if new_public_total != old_public_total:
+            log_action(
+                "Balance Change Detected",
+                f"Public balance changed from {old_public_total:.4f} → {new_public_total:.4f} DUSK.",
+                "info"
+            )
+            #notifier.notify(f"Public balance changed: {old_public_total:.4f} → {new_public_total:.4f} DUSK.")
+
+        if new_shielded_total != old_shielded_total:
+            log_action(
+                "Balance Change Detected",
+                f"Shielded balance changed from {old_shielded_total:.4f} → {new_shielded_total:.4f} DUSK.",
+                "info"
+            )
+            #notifier.notify(f"Shielded balance changed: {old_shielded_total:.4f} → {new_shielded_total:.4f} DUSK.")
+
+    # Update shared_state
+    shared_state["balances"]["public"] = new_public_total
+    shared_state["balances"]["shielded"] = new_shielded_total
+
+    return new_public_total, new_shielded_total
+
 
 def calculate_rewards_per_epoch(rewards_amount, last_claim_block, current_block):
     """Estimate how many rewards are generated per epoch (2160 blocks) since last claim."""
@@ -649,7 +678,7 @@ async def init_balance():
         shared_state["block_height"] = int(block_height_str)    
     #shared_state["last_claim_block"] = int(block_height_str)
     # Fetch wallet balances
-    pub_bal, shld_bal = await get_wallet_balances(password)
+    pub_bal, shld_bal = await get_wallet_balances(password, True)
     shared_state["balances"]["public"] = pub_bal
     shared_state["balances"]["shielded"] = shld_bal
     
