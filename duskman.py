@@ -468,10 +468,9 @@ async def get_wallet_balances(password, first_run=False):
         if new_public_total != old_public_total:
             log_action(
                 "Balance Change Detected",
-                f"Public balance changed    \n{old_public_total:.4f} → {new_public_total:.4f} DUSK.",
+                f"Public balance changed\n{old_public_total:.4f} → {new_public_total:.4f} DUSK.",
                 "info"
             )
-            #notifier.notify(f"Public balance changed: {old_public_total:.4f} → {new_public_total:.4f} DUSK.")
 
         if new_shielded_total != old_shielded_total:
             log_action(
@@ -479,14 +478,12 @@ async def get_wallet_balances(password, first_run=False):
                 f"Shielded balance changed\n{old_shielded_total:.4f} → {new_shielded_total:.4f} DUSK.",
                 "info"
             )
-            #notifier.notify(f"Shielded balance changed: {old_shielded_total:.4f} → {new_shielded_total:.4f} DUSK.")
 
     # Update shared_state
     shared_state["balances"]["public"] = new_public_total
     shared_state["balances"]["shielded"] = new_shielded_total
 
     return new_public_total, new_shielded_total
-
 
 def calculate_rewards_per_epoch(rewards_amount, last_claim_block, current_block):
     """Estimate how many rewards are generated per epoch (2160 blocks) since last claim."""
