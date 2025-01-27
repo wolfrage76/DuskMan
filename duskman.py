@@ -618,7 +618,7 @@ async def frequent_update_loop():
             shared_state["block_height"] = current_block_height
             
             # Perform balance and stake-info updates every X  loops (e.g., 30 is 5 minutes)
-            if loopcnt >= 20:
+            if loopcnt >= 20 and not stake_checking:
                 pub_bal, shld_bal = await get_wallet_balances(password)
                 shared_state["balances"]["public"] = pub_bal
                 shared_state["balances"]["shielded"] = shld_bal
@@ -660,9 +660,9 @@ async def frequent_update_loop():
                 consecutive_low_peers = 0  # Reset after notifying to avoid spamming
 
             loopcnt += 1
-            await asyncio.sleep(10)  # Wait 10 seconds before the next loop
+            await asyncio.sleep(15)  # Wait 10 seconds before the next loop
         else:
-            await asyncio.sleep(5)
+            await asyncio.sleep(10)
 
 async def init_balance():
     """
