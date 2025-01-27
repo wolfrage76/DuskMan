@@ -461,21 +461,21 @@ async def get_wallet_balances(password, first_run=False):
     new_shielded_total = sum(results_shielded)
 
     # Check for balance changes
-    old_public_total = shared_state["balances"]["public"]
-    old_shielded_total = shared_state["balances"]["shielded"]
+    old_public_total = shared_state.get("balances",{}).get("public", 0.0)
+    old_shielded_total = shared_state.get("balances",{}).get("shielded", 0.0)
 
     if float(format_float(old_public_total  + old_shielded_total)) !=  float(format_float(new_public_total + new_shielded_total)) and monitor_wallet and not first_run:
         if new_public_total != old_public_total:
             log_action(
                 "Balance Change Detected",
-                f"Public balance changed\n{old_public_total:.4f} → {new_public_total:.4f} DUSK.",
+                f"Public balance changed from {old_public_total:.4f} → {new_public_total:.4f} DUSK.",
                 "info"
             )
 
         if new_shielded_total != old_shielded_total:
             log_action(
                 "Balance Change Detected",
-                f"Shielded balance changed\n{old_shielded_total:.4f} → {new_shielded_total:.4f} DUSK.",
+                f"Shielded balance changed from {old_shielded_total:.4f} → {new_shielded_total:.4f} DUSK.",
                 "info"
             )
 

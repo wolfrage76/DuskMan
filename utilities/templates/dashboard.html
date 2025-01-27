@@ -190,7 +190,7 @@ function parseLogEntry(rawText){
     }
   });
   if(!itemsHtml){
-    itemsHtml = "<li>[No valid lines in this entry]</li>";
+    itemsHtml = "<li></li>"; // itemsHtml = "<li>[No valid lines in this entry]</li>";
   }
 
   const heading = blockNumber
