@@ -372,7 +372,7 @@ def parse_stake_info(output):
         lines = output.splitlines()
         eligible_stake = None
         reclaimable_slashed_stake = None
-        accumulated_rewards = None
+        accumulated_rewards = 0.0
 
         for line in lines:
             line = line.strip()
@@ -395,15 +395,14 @@ def parse_stake_info(output):
                     shared_state["active_blk"] = stake_active_blk
 
         if (eligible_stake is None or
-            reclaimable_slashed_stake is None or
-            accumulated_rewards is None):
-            log_action("Incomplete stake-info values.","Could not parse fully.", "error")
-            return None, None, None
+            reclaimable_slashed_stake is None):
+            log_action("Incomplete stake-info values.",f"Could not parse fully.\n{lines}", "error")
+            return None, None, 0.0
 
         return eligible_stake, reclaimable_slashed_stake, accumulated_rewards
     except Exception as e:
         log_action(f"Error parsing stake-info output: ",e,"error")
-        return None, None, None
+        return None, None, 0.0
 
 async def get_wallet_balances(password, first_run=False):
     """
@@ -904,11 +903,6 @@ async def realtime_display(tmux=False):
                     continue
                 tot_bal = b["public"] + b["shielded"]
                 price = shared_state["price"]
-                
-                if first_run:
-                    first_run = False
-                    await asyncio.sleep(1)  # Pause briefly before switching to real-time display
-                    continue 
                 
                 charclr =str()
                 charclr = (
