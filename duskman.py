@@ -68,6 +68,7 @@ else:
 
 errored = False
 log_entries = []
+stake_checking = False
 
 END_UNDERLINE = "\033[0m"
 UNDERLINE = "\033[4m"
@@ -223,7 +224,7 @@ def remove_ansi(text):
     ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
     return ansi_escape.sub('', text)
 
-async def execute_command_async(command=str(), log_output=False):
+async def execute_command_async(command=str(), log_output=True):
     """Execute a shell command asynchronously and return its output (stdout)."""
     try:
         if log_output:
@@ -583,82 +584,85 @@ async def frequent_update_loop():
     consecutive_low_peers = 0 # Track loops of low peer counts
     
     while True:
-        # 1) Fetch block height
-        block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height", False)
-        if not block_height_str:
-            log_action("Failed to fetch block height.", ' Retrying in 10s...', "error")
-            await asyncio.sleep(10)
-            continue
-        
-        current_block_height = int(block_height_str)
-        
-        # Compare with last known block height
-        if last_known_block_height is not None:
-            if current_block_height == last_known_block_height:
-                consecutive_no_change += 1
+        if not stake_checking:
+            
+            # 1) Fetch block height
+            block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height", False)
+            if not block_height_str:
+                log_action("Failed to fetch block height.", ' Retrying in 10s...', "error")
+                await asyncio.sleep(10)
+                continue
+            
+            current_block_height = int(block_height_str)
+            
+            # Compare with last known block height
+            if last_known_block_height is not None:
+                if current_block_height == last_known_block_height:
+                    consecutive_no_change += 1
+                else:
+                    consecutive_no_change = 0  # Reset counter if block height changes
             else:
-                consecutive_no_change = 0  # Reset counter if block height changes
-        else:
-            consecutive_no_change = 0  # Reset counter on first valid block height
-        
-        # Log and notify if block height hasn't changed for 10 loops (100 seconds)
-        if consecutive_no_change >= 10:
-            message = f"WARNING! Block height has not changed for {consecutive_no_change * 10} seconds.\nLast height: {last_known_block_height}"
-            log_action("Block Height Error!", message,"error")
+                consecutive_no_change = 0  # Reset counter on first valid block height
             
-            consecutive_no_change = 0  # Reset after notifying to avoid spamming
-            await asyncio.sleep(1)
-            continue # Need to double check this
-
-        # Update last known block height and shared state
-        last_known_block_height = current_block_height
-        shared_state["block_height"] = current_block_height
-        
-        # Perform balance and stake-info updates every X  loops (e.g., 30 is 5 minutes)
-        if loopcnt >= 20:
-            pub_bal, shld_bal = await get_wallet_balances(password)
-            shared_state["balances"]["public"] = pub_bal
-            shared_state["balances"]["shielded"] = shld_bal
-            
-            stake_output = await execute_command_async(f"{use_sudo} rusk-wallet --password {password} stake-info")
-            if stake_output:
-                e_stake, r_slashed, a_rewards = parse_stake_info(stake_output)
-                shared_state["stake_info"]["stake_amount"] = e_stake or 0.0
-                shared_state["stake_info"]["reclaimable_slashed_stake"] = r_slashed or 0.0
-                shared_state["stake_info"]["rewards_amount"] = a_rewards or 0.0
-            
-            await fetch_dusk_data()  
+            # Log and notify if block height hasn't changed for 10 loops (100 seconds)
+            if consecutive_no_change >= 10:
+                message = f"WARNING! Block height has not changed for {consecutive_no_change * 10} seconds.\nLast height: {last_known_block_height}"
+                log_action("Block Height Error!", message,"error")
                 
-            loopcnt = 0  # Reset loop count after update
-        
-        
-        shared_state["peer_count"] = await execute_command_async(f"{use_sudo} ruskquery peers", False)
-        peer_count = int(shared_state["peer_count"])
-        
-        if not peer_count:
-            log_action("Failed to fetch peers.", "Retrying in 10s...", "error")
-            await asyncio.sleep(10)
-            continue
-        
-        # check peer count
-        if peer_count is not None:
-            if peer_count < min_peers or peer_count <=0:
-                consecutive_low_peers += 1
-            else:
-                consecutive_low_peers = 0  # Reset counter if block height changes
-        else:
-            consecutive_low_peers = 0  # Reset counter on first valid block height
-        
-        # Log and notify if low count for too long
-        if consecutive_low_peers >= 240:
-            message = f"WARNING! Low peer count for {consecutive_low_peers * 10} seconds.\nCurrent Count: {peer_count}"
-            log_action("Low peer count!", message, "error")
+                consecutive_no_change = 0  # Reset after notifying to avoid spamming
+                await asyncio.sleep(1)
+                continue # Need to double check this
+
+            # Update last known block height and shared state
+            last_known_block_height = current_block_height
+            shared_state["block_height"] = current_block_height
             
-            consecutive_low_peers = 0  # Reset after notifying to avoid spamming
+            # Perform balance and stake-info updates every X  loops (e.g., 30 is 5 minutes)
+            if loopcnt >= 20:
+                pub_bal, shld_bal = await get_wallet_balances(password)
+                shared_state["balances"]["public"] = pub_bal
+                shared_state["balances"]["shielded"] = shld_bal
+                
+                stake_output = await execute_command_async(f"{use_sudo} rusk-wallet --password {password} stake-info")
+                if stake_output:
+                    e_stake, r_slashed, a_rewards = parse_stake_info(stake_output)
+                    shared_state["stake_info"]["stake_amount"] = e_stake or 0.0
+                    shared_state["stake_info"]["reclaimable_slashed_stake"] = r_slashed or 0.0
+                    shared_state["stake_info"]["rewards_amount"] = a_rewards or 0.0
+                
+                await fetch_dusk_data()  
+                    
+                loopcnt = 0  # Reset loop count after update
+            
+            
+            shared_state["peer_count"] = await execute_command_async(f"{use_sudo} ruskquery peers", False)
+            peer_count = int(shared_state["peer_count"])
+            
+            if not peer_count:
+                log_action("Failed to fetch peers.", "Retrying in 10s...", "error")
+                await asyncio.sleep(10)
+                continue
+            
+            # check peer count
+            if peer_count is not None:
+                if peer_count < min_peers or peer_count <=0:
+                    consecutive_low_peers += 1
+                else:
+                    consecutive_low_peers = 0  # Reset counter if block height changes
+            else:
+                consecutive_low_peers = 0  # Reset counter on first valid block height
+            
+            # Log and notify if low count for too long
+            if consecutive_low_peers >= 240:
+                message = f"WARNING! Low peer count for {consecutive_low_peers * 10} seconds.\nCurrent Count: {peer_count}"
+                log_action("Low peer count!", message, "error")
+                
+                consecutive_low_peers = 0  # Reset after notifying to avoid spamming
 
-        loopcnt += 1
-        await asyncio.sleep(10)  # Wait 10 seconds before the next loop
-
+            loopcnt += 1
+            await asyncio.sleep(10)  # Wait 10 seconds before the next loop
+        else:
+            await asyncio.sleep(5)
 
 async def init_balance():
     """
@@ -688,15 +692,17 @@ async def stake_management_loop():
     """
 
     first_run = True
-    
+    # stake_checking = True
     while True:
         try:
-                
+            stake_checking = True     
             # For logic, we may want a fresh block height right before we do anything:
             block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height", False)
             if not block_height_str:
                 log_action("Failed to fetch block height", "Retrying in 30s...", "error")
+                stake_checking = False
                 await sleep_with_feedback(30, "retry block height fetch")
+                
                 continue
 
             block_height = int(block_height_str)
@@ -705,6 +711,7 @@ async def stake_management_loop():
             # If we already saw 'No Action' for this block, wait a bit
             if shared_state["last_no_action_block"] == block_height:
                 msg = f"Already did 'No Action' at block {block_height}; sleeping 30s."
+                stake_checking = False
                 await sleep_with_feedback(30, msg)
                 continue
 
@@ -712,12 +719,14 @@ async def stake_management_loop():
             stake_output = await execute_command_async(f"{use_sudo} rusk-wallet --password {password} stake-info")
             if not stake_output:
                 log_action("Error", "Failed to fetch stake-info. Retrying in 60s...", "error")
+                stake_checking = False
                 await sleep_with_feedback(30, "retry stake-info fetch")
                 continue
 
             e_stake, r_slashed, a_rewards = parse_stake_info(stake_output)
             if e_stake is None or r_slashed is None or a_rewards is None:
                 log_action("Skiping Cycle","Parsing stake info failed or incomplete. Skipping cycle...", 'debug')
+                stake_checking = False
                 await sleep_with_feedback(30, "skipping cycle")
                 continue
 
@@ -730,22 +739,29 @@ async def stake_management_loop():
             last_claim_block = shared_state["last_claim_block"]
             stake_amount = e_stake
             reclaimable_slashed_stake = r_slashed
-            rewards_amount = a_rewards
+            rewards_amount = a_rewards or 0.0
 
             rewards_per_epoch = calculate_rewards_per_epoch(rewards_amount, last_claim_block, block_height)
             downtime_loss = calculate_downtime_loss(rewards_per_epoch, downtime_epochs=2)
             incremental_threshold = rewards_per_epoch
             total_restake = stake_amount + rewards_amount + reclaimable_slashed_stake
-
+            
+            if convert_to_float(total_restake) > 0.0:
+                pass
+            else:
+                stake_checking = False
+                await sleep_until_next_epoch(block_height, "0 Total Restake")
+                continue
+            
             # Should this check first run and wait till first epoch? need to test
-            if should_unstake_and_restake(reclaimable_slashed_stake, downtime_loss) and not first_run:
+            if should_unstake_and_restake(reclaimable_slashed_stake, downtime_loss) and not first_run and reclaimable_slashed_stake and e_stake:
                 if total_restake < min_stake_amount:
                     shared_state["last_action_taken"] = "Unstake/Restake Skipped (Below Min)"
                     log_action(
                         f"Unstake/Restake Skipped (Block #{block_height})",
                         f"Total restake ({format_float(total_restake)} DUSK) < {min_stake_amount} DUSK.\nRwd: {format_float(rewards_amount)}, Stk: {format_float(stake_amount)}, Rcl: {format_float(reclaimable_slashed_stake)}"
                     )
-                    
+                    stake_checking = False
                 else:
                     # Unstake & Restake
                     act_msg = f"Unstake/Restake @ Block #{block_height}"
@@ -763,6 +779,8 @@ async def stake_management_loop():
                     if not cmd_success:
                         log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr2}", 'error')
                         raise Exception("CMD execution failed")
+                    if 'Withdrawing 0 reward is not allowed' in cmd_success:
+                        rewards_amount = 0.0
                     
                     # 2) Unstake
                 
@@ -774,7 +792,7 @@ async def stake_management_loop():
                         raise Exception("CMD execution failed")
                     
                     # 3) Stake
-                
+                    total_restake = stake_amount + rewards_amount + reclaimable_slashed_stake
                     curr_cmd = f"{use_sudo} rusk-wallet --password ####### stake --amt {total_restake}"
                     curr2 = curr_cmd
                     cmd_success = await execute_command_async(curr_cmd.replace('#######', password))
@@ -782,15 +800,10 @@ async def stake_management_loop():
                         log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr2}", 'error')
                         raise Exception("CMD execution failed")
 
-                    stake_output = await execute_command_async(f"{use_sudo} rusk-wallet --password {password} stake-info")
-                    if stake_output:
-                        e_stake, r_slashed, a_rewards = parse_stake_info(stake_output)
-                        shared_state["stake_info"]["stake_amount"] = e_stake or 0.0
-                        shared_state["stake_info"]["reclaimable_slashed_stake"] = r_slashed or 0.0
-                        shared_state["stake_info"]["rewards_amount"] = a_rewards or 0.0
                     log_action("Restake Completed", f"New Stake: {format_float(float(total_restake))}")
                     shared_state["last_claim_block"] = block_height
 
+                    stake_checking = False
                     # Sleep 2 epochs
                     await sleep_until_next_epoch(block_height + 2160, msg="2-epoch wait after restaking...")
                     continue
@@ -822,16 +835,10 @@ async def stake_management_loop():
                         raise Exception("CMD execution failed")
                     
                 new_stake = stake_amount + rewards_amount
-                stake_output = await execute_command_async(f"{use_sudo} rusk-wallet --password {password} stake-info")
-                if stake_output:
-                    e_stake, r_slashed, a_rewards = parse_stake_info(stake_output)
-                    shared_state["stake_info"]["stake_amount"] = e_stake or 0.0
-                    shared_state["stake_info"]["reclaimable_slashed_stake"] = r_slashed or 0.0
-                    shared_state["stake_info"]["rewards_amount"] = a_rewards or 0.0
-                    
+
                 log_action("Stake Completed", f"New Stake: {format_float(new_stake)}")
                 shared_state["last_claim_block"] = block_height
-                
+                stake_checking = False
                 await sleep_with_feedback(2160 * 10, "1 epoch wait after claiming")
                 continue
             else:
@@ -847,6 +854,7 @@ async def stake_management_loop():
                     shared_state["last_action_taken"] = f"Startup @ Block #{block_height}"
                     first_run = False
                 else:
+                    stake_checking = False
                     # If no action, just wait and don't log since it's no longer first run
                     await sleep_until_next_epoch(block_height, buffer_blocks=buffer_blocks)
                     continue    
@@ -869,6 +877,7 @@ async def stake_management_loop():
             notifier.notify(Log_info, shared_state) # 
             
             first_run = False
+            stake_checking = False
         except Exception as e:
                 log_action("Error in stake management loop", e, "error")
                 raise Exception("Error in stake management loop")
