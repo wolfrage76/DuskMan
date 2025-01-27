@@ -343,7 +343,6 @@ def log_action(action="Action", details="No Details", type='info'):
     formatted_message = formatted_message.replace(password, '#####').replace(password, '#####')
     if len(log_entries) > 15: # TODO: Make configurable
                 log_entries.pop(0)
-
     
     # Write to the appropriate log file
     if type == 'debug':
@@ -354,7 +353,6 @@ def log_action(action="Action", details="No Details", type='info'):
         if isDebug:
             write_to_log(DEBUG_LOG_FILE, formatted_message)
             
-        #notifier.notify(formatted_message, shared_state)
         log_entries.append(formatted_message)    
         write_to_log(ERROR_LOG_FILE, formatted_message)
     else:
@@ -464,18 +462,18 @@ async def get_wallet_balances(password, first_run=False):
     old_public_total = shared_state.get("balances",{}).get("public", 0.0)
     old_shielded_total = shared_state.get("balances",{}).get("shielded", 0.0)
 
-    if float(format_float(old_public_total  + old_shielded_total)) !=  float(format_float(new_public_total + new_shielded_total)) and monitor_wallet and not first_run:
+    if (float(format_float(old_public_total  + old_shielded_total)) !=  float(format_float(new_public_total + new_shielded_total))) and monitor_wallet and not first_run:
         if new_public_total != old_public_total:
             log_action(
                 "Balance Change Detected",
-                f"Public balance changed from {old_public_total:.4f} → {new_public_total:.4f} DUSK.",
+                f"Public balance changed from {format_float(old_public_total)} → {format_float(new_public_total)} DUSK.",
                 "info"
             )
 
         if new_shielded_total != old_shielded_total:
             log_action(
                 "Balance Change Detected",
-                f"Shielded balance changed from {old_shielded_total:.4f} → {new_shielded_total:.4f} DUSK.",
+                f"Shielded balance changed from {format_float(old_shielded_total)} → {format_float(new_shielded_total)} DUSK.",
                 "info"
             )
 
@@ -673,8 +671,7 @@ async def init_balance():
     # Fetch block height
     block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height", False)
     if block_height_str:
-        shared_state["block_height"] = int(block_height_str)    
-    #shared_state["last_claim_block"] = int(block_height_str)
+        shared_state["block_height"] = int(block_height_str)
     # Fetch wallet balances
     pub_bal, shld_bal = await get_wallet_balances(password, True)
     shared_state["balances"]["public"] = pub_bal
@@ -866,7 +863,7 @@ async def stake_management_loop():
             f"  Rewards           :  {format_float(shared_state.get('stake_info',{}).get('rewards_amount','0.0'))} (${format_float(shared_state.get('stake_info',{}).get('rewards_amount',{}) * float(shared_state["price"]))})\n"
             f"  Reclaimable    :  {format_float(shared_state.get('stake_info',{}).get('reclaimable_slashed_stake','0.0'))} (${format_float(shared_state.get('stake_info',{}).get('reclaimable_slashed_stake') * float(shared_state["price"]))})\n"
                 )
-            #Log_info = shared_state.get("options", '') + Log_info
+            
             if len(log_entries) > 15: # TODO: Make configurable
                 log_entries.pop(0)
             log_entries.append(Log_info)
@@ -884,12 +881,13 @@ async def stake_management_loop():
 # REAL-TIME DISPLAY
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def realtime_display(enable_tmux=False):
+async def realtime_display(tmux=False):
     """
     Continuously display real-time info in the console.
     Initially shows configuration and byline, then switches to real-time stats.
     """
     first_run = True
+    enable_tmux = tmux
 
     with Live(console=console, refresh_per_second=4, auto_refresh=False) as live:
         while True:
@@ -948,16 +946,23 @@ async def realtime_display(enable_tmux=False):
                 chg30d = shared_state["price_change_percentage_30d_in_currency"]
                 chg1y = shared_state["price_change_percentage_1y_in_currency"]
                 
+                ## Currently unused ##
                 chg14d = shared_state["price_change_percentage_14d_in_currency"]
                 chg1hr = shared_state["price_change_percentage_1h_in_currency"]
+                
+                volume = shared_state["volume"]
+                
                 mkt_cap = shared_state["market_cap"]
                 mkt_cap_change = shared_state["market_cap_change_percentage_24h"]
+                
                 ath = shared_state["ath"]
                 ath_change = shared_state["ath_change_percentage"]
                 ath_date = shared_state["ath_date"]
+                
                 atl = shared_state["atl"]
                 atl_date = shared_state["atl_date"]
-                volume = shared_state["volume"]
+                
+                ######################
                 
                 top_bar = f" {LIGHT_WHITE}======={DEFAULT} {currenttime} Block: {LIGHT_BLUE}#{blk} {DEFAULT}(E: {LIGHT_BLUE}{epoch_num}{DEFAULT}) Peers: {peercolor}{shared_state['peer_count']}{DEFAULT} {LIGHT_WHITE}=======\n"
                 title_spaces = int((len(remove_ansi(top_bar)) - len(remove_ansi(byline))) / 2)
@@ -965,7 +970,6 @@ async def realtime_display(enable_tmux=False):
                 opts = '\n' + (' ' * title_spaces) + BLUE  + shared_state["options"]
                 
                 allocation_bar = display_wallet_distribution_bar(b['public'],b['shielded'],8)
-                # Real-time display content (no surrounding panel)
                 
                 per_epoch = str()
                 rpe = convert_to_float(st_info.get('rewards_per_epoch',0.0))
