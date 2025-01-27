@@ -468,7 +468,7 @@ async def get_wallet_balances(password, first_run=False):
         if new_public_total != old_public_total:
             log_action(
                 "Balance Change Detected",
-                f"Public balance changed from {old_public_total:.4f} → {new_public_total:.4f} DUSK.",
+                f"Public balance changed    \n{old_public_total:.4f} → {new_public_total:.4f} DUSK.",
                 "info"
             )
             #notifier.notify(f"Public balance changed: {old_public_total:.4f} → {new_public_total:.4f} DUSK.")
@@ -476,7 +476,7 @@ async def get_wallet_balances(password, first_run=False):
         if new_shielded_total != old_shielded_total:
             log_action(
                 "Balance Change Detected",
-                f"Shielded balance changed from {old_shielded_total:.4f} → {new_shielded_total:.4f} DUSK.",
+                f"Shielded balance changed\n{old_shielded_total:.4f} → {new_shielded_total:.4f} DUSK.",
                 "info"
             )
             #notifier.notify(f"Shielded balance changed: {old_shielded_total:.4f} → {new_shielded_total:.4f} DUSK.")
