@@ -1,6 +1,5 @@
 3rd column in console for logs
-Better colorization
-Themes
+Better colorization/Themes
 Improved Web Dashboard
 Auth info for web dashboard
 Add commands for manually forcing claims/stakes
@@ -8,3 +7,4 @@ More notification systems integrated
 Marketcap and other coingecko info
 Rewards tracking
 Banner system
+Improve Tmux statusbar display

@@ -1000,6 +1000,10 @@ async def realtime_display(tmux=False):
                 if  rpe > 0.0: # Check if we have a ~ rewards per epoch since last claim
                     per_epoch = f"@ Epoch/claim: {format_float(rpe)}"
                 
+                reward_percent = 0.0
+                if st_info.get('rewards_amount',0.0) > 0.0 and st_info.get('stake_amount', 0.0) > 0.0:
+                    reward_percent = (st_info.get('rewards_amount',0.0) / st_info.get('stake_amount', 0.0)) * 100
+                
                 realtime_content = (
                     f"{opts}\n"
                     f"{top_bar}"
@@ -1015,7 +1019,7 @@ async def realtime_display(tmux=False):
                     f"         {LIGHT_WHITE}   Total {DEFAULT}| {LIGHT_WHITE}{format_float(tot_bal)} DUSK (${format_float((tot_bal) * price, 2)}){DEFAULT}\n"
                     f"                  |\n"
                     f"    {LIGHT_WHITE}Staked{DEFAULT}        | {LIGHT_WHITE}{format_float(st_info['stake_amount'])} (${format_float(st_info['stake_amount'] * price, 2)}){DEFAULT}{is_active}\n"
-                    f"    {YELLOW}Rewards{DEFAULT}       | {YELLOW}{format_float(st_info['rewards_amount'])} (${format_float(st_info['rewards_amount'] * price, 2)}) {LIGHT_WHITE}{per_epoch}{DEFAULT}\n"
+                    f"    {YELLOW}Rewards{DEFAULT}       | {YELLOW}{format_float(st_info['rewards_amount'])} ({LIGHT_BLUE}{reward_percent:.4f}%{DEFAULT}) (${format_float(st_info['rewards_amount'] * price, 2)}) {LIGHT_WHITE}{per_epoch}{DEFAULT}\n"
                     f"    {LIGHT_RED}Reclaimable{DEFAULT}   | {LIGHT_RED}{format_float(st_info['reclaimable_slashed_stake'])} (${format_float(st_info['reclaimable_slashed_stake'] * price, 2)}){DEFAULT}\n"
                     f" {LIGHT_WHITE}{('=' * (len(remove_ansi(top_bar)) - 2))}{DEFAULT}\n"  
                 )
