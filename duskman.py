@@ -70,6 +70,13 @@ errored = False
 log_entries = []
 stake_checking = False
 
+INFO_LOG_FILE = logs_config.get("action_log","duskman_actions.log")
+ERROR_LOG_FILE =  logs_config.get("error_log","duskman_errors.log")
+DEBUG_LOG_FILE =  logs_config.get("debug_log","duskman_tmp_debug.log")
+
+if os.path.exists(DEBUG_LOG_FILE):
+    os.remove(DEBUG_LOG_FILE)
+
 END_UNDERLINE = "\033[0m"
 UNDERLINE = "\033[4m"
 
@@ -139,12 +146,7 @@ shared_state = {
 }
 
 # Define log file paths
-INFO_LOG_FILE = logs_config.get("action_log","duskman_actions.log")
-ERROR_LOG_FILE =  logs_config.get("error_log","duskman_errors.log")
-DEBUG_LOG_FILE =  logs_config.get("debug_log","duskman_tmp_debug.log")
 
-if os.path.exists(DEBUG_LOG_FILE):
-    os.remove(DEBUG_LOG_FILE)
 
 # Log format
 LOG_FORMAT = "{timestamp} - {message}"
@@ -170,15 +172,17 @@ password = get_env_variable(config.get('pwd_var_name', 'WALLET_PASSWORD'), doten
 
 def display_wallet_distribution_bar(public_amount, shielded_amount, width=30):
     """
-    Displays a single horizontal bar (ASCII blocks) with two colored segments:
+    Displays a single horizontal bar (ASCII blocks) with two colored segments
+    to visualize the distribution of funds between public and shielded balances.
 
     :param public_amount: float, the public balance
     :param shielded_amount: float, the shielded balance
     :param width: int, total number of blocks in the bar
+    :return: str, the rendered bar
     """
     total = public_amount + shielded_amount
     if total <= 0:
-        #console.print("[bold yellow]No funds found (total=0).[/bold yellow]")
+        # No funds, return empty string
         return str()
 
     # Calculate ratio
@@ -195,18 +199,23 @@ def display_wallet_distribution_bar(public_amount, shielded_amount, width=30):
         # Add leftover to shielded or whichever you prefer
         shd_blocks += (width - used)
 
-    
+    # Construct the bar string
     bar_str = (
+        # Public block color
         f"{YELLOW}{'▅' * pub_blocks}"
+        # Shielded block color
         f"{BLUE}{'▅' * shd_blocks}"
     )
 
-    # Display the percentages
+    # Calculate and display the percentages
     pub_pct = public_ratio * 100
     shd_pct = shielded_ratio * 100
-    
+
+    # Format the percentages
     p_pct = f"{pub_pct:.2f}%"
     s_pct = f"{shd_pct:.2f}%"
+
+    # Return the rendered bar with percentages
     return f"{YELLOW}{p_pct} {bar_str} {s_pct}"
 
 def convert_to_float(value):
@@ -366,30 +375,37 @@ def log_action(action="Action", details="No Details", type='info'):
 
 def parse_stake_info(output):
     """
-    Parse 'stake-info' output and return (eligible_stake, reclaimable_slashed_stake, accumulated_rewards).
-    If any is missing, return (None, None, None).
+    Parse the output of the 'rusk-wallet --password <password> stake-info' command and
+    return a tuple containing the eligible stake, reclaimable slashed stake, and
+    accumulated rewards.
+
+    If any of the values are missing from the output, return a tuple of (None, None, 0.0).
     """
     try:
         lines = output.splitlines()
-        eligible_stake = None
-        reclaimable_slashed_stake = None
-        accumulated_rewards = 0.0
+        eligible_stake = None  # Eligible stake for staking
+        reclaimable_slashed_stake = None  # Reclaimable slashed stake (from penalties)
+        accumulated_rewards = 0.0  # Accumulated rewards from staking
 
         for line in lines:
             line = line.strip()
             if "Eligible stake:" in line:
+                # Example: "Eligible stake: 100.0 DUSK"
                 match = re.search(r"Eligible stake:\s*([\d]+(?:\.\d+)?)\s*DUSK", line)
                 if match:
                     eligible_stake = convert_to_float(match.group(1))
             elif "Reclaimable slashed stake:" in line:
+                # Example: "Reclaimable slashed stake: 50.0 DUSK"
                 match = re.search(r"Reclaimable slashed stake:\s*([\d]+(?:\.\d+)?)\s*DUSK", line)
                 if match:
                     reclaimable_slashed_stake = convert_to_float(match.group(1))
             elif "Accumulated rewards is:" in line:
+                # Example: "Accumulated rewards is: 10.0 DUSK"
                 match = re.search(r"Accumulated rewards is:\s*([\d]+(?:\.\d+)?)\s*DUSK", line)
                 if match:
                     accumulated_rewards = convert_to_float(match.group(1))
             elif "Stake active from block #" in line:
+                # Example: "Stake active from block #123456"
                 match = re.search(r"#(\d+)", line)
                 if match:
                     stake_active_blk = int(match.group(1))
@@ -397,9 +413,11 @@ def parse_stake_info(output):
 
         if (eligible_stake is None or
             reclaimable_slashed_stake is None):
+            # If we couldn't parse the stake-info output fully, log an error
             log_action("Incomplete stake-info values.",f"Could not parse fully.\n{lines}", "error")
             return None, None, 0.0
 
+        # Return the parsed values
         return eligible_stake, reclaimable_slashed_stake, accumulated_rewards
     except Exception as e:
         log_action(f"Error parsing stake-info output: ",e,"error")
@@ -407,11 +425,14 @@ def parse_stake_info(output):
 
 async def get_wallet_balances(password, first_run=False):
     """
-    1) Fetch addresses from 'rusk-wallet profiles'
-    2) For each address, sum its spendable balances
-    Detect and notify if balances change for public or shielded amounts.
+    Fetches the wallet balances for public and shielded addresses.
+
+    1. Fetches addresses from 'rusk-wallet profiles'
+    2. For each address, sums its spendable balances
+    3. Detects and notifies if balances change for public or shielded amounts.
     """
     try:
+        # Fetch address from 'rusk-wallet profiles'
         addresses = {
             "public": [],
             "shielded": []
@@ -434,11 +455,18 @@ async def get_wallet_balances(password, first_run=False):
                 if match:
                     addresses["public"].append(match.group(1))
     except Exception as e:
-        log_action(f"Error in get_wallet_balances(): ", str(e).replace(password, '#####'), "error")
+        log_action(
+            f"Error in get_wallet_balances(): ",
+            str(e).replace(password, '#####'),
+            "error"
+        )
         await asyncio.sleep(5)
         return 0.0, 0.0
 
     async def get_spendable_for_address(addr):
+        """
+        Fetches the spendable balance for the given address
+        """
         cmd_balance = f"{use_sudo} rusk-wallet --password {password} balance --spendable --address {addr}"
         try:
             out = await execute_command_async(cmd_balance)
@@ -446,7 +474,10 @@ async def get_wallet_balances(password, first_run=False):
                 total_str = out.replace("Total: ", "")
                 return float(total_str)
         except Exception as e:
-            log_action(f"Error in get_spendable_for_address(): {str(e).replace(password, '#####')}", "error")
+            log_action(
+                f"Error in get_spendable_for_address(): {str(e).replace(password, '#####')}",
+                "error"
+            )
         return 0.0
 
     tasks_public = [get_spendable_for_address(addr) for addr in addresses["public"]]
@@ -459,10 +490,10 @@ async def get_wallet_balances(password, first_run=False):
     new_shielded_total = sum(results_shielded)
 
     # Check for balance changes
-    old_public_total = shared_state.get("balances",{}).get("public", 0.0)
-    old_shielded_total = shared_state.get("balances",{}).get("shielded", 0.0)
+    old_public_total = shared_state.get("balances", {}).get("public", 0.0)
+    old_shielded_total = shared_state.get("balances", {}).get("shielded", 0.0)
 
-    if (float(format_float(old_public_total  + old_shielded_total)) !=  float(format_float(new_public_total + new_shielded_total))) and monitor_wallet and not first_run:
+    if (float(format_float(old_public_total + old_shielded_total)) != float(format_float(new_public_total + new_shielded_total))) and monitor_wallet and not first_run:
         if new_public_total != old_public_total:
             log_action(
                 "Balance Change Detected",
@@ -545,7 +576,7 @@ async def sleep_until_next_epoch(block_height, buffer_blocks=60, msg=None):
     """
     Sleep until near the end of the current epoch.
     Each epoch is 2160 blocks, 10s each. Subtract buffer_blocks from remainder.
-    If result <= 0, do a minimal sleep of 300s.
+    If result <= 0, do a minimal sleep of buffer blocks * 11.
     """
     if not msg:
         msg = "until closer to next epoch..."
@@ -554,7 +585,7 @@ async def sleep_until_next_epoch(block_height, buffer_blocks=60, msg=None):
     sleep_time = blocks_left * 10  # 10s per block
 
     if sleep_time <= 0:
-        sleep_time = 300
+        sleep_time = buffer_blocks * 11
         msg = "Epoch boundary reached; forcing minimal sleep."
 
     await sleep_with_feedback(sleep_time, msg)
@@ -584,7 +615,6 @@ async def frequent_update_loop():
     consecutive_low_peers = 0 # Track loops of low peer counts
     
     while True:
-        if not stake_checking:
             
             # 1) Fetch block height
             block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height", False)
@@ -620,8 +650,8 @@ async def frequent_update_loop():
             # Perform balance and stake-info updates every X  loops (e.g., 30 is 5 minutes)
             if loopcnt >= 20 and not stake_checking:
                 pub_bal, shld_bal = await get_wallet_balances(password)
-                shared_state["balances"]["public"] = pub_bal
-                shared_state["balances"]["shielded"] = shld_bal
+                shared_state["balances"]["public"] = pub_bal or 0.0
+                shared_state["balances"]["shielded"] = shld_bal or 0.0
                 
                 stake_output = await execute_command_async(f"{use_sudo} rusk-wallet --password {password} stake-info")
                 if stake_output:
@@ -661,8 +691,6 @@ async def frequent_update_loop():
 
             loopcnt += 1
             await asyncio.sleep(15)  # Wait 10 seconds before the next loop
-        else:
-            await asyncio.sleep(10)
 
 async def init_balance():
     """
@@ -727,7 +755,7 @@ async def stake_management_loop():
             if e_stake is None or r_slashed is None or a_rewards is None:
                 log_action("Skiping Cycle","Parsing stake info failed or incomplete. Skipping cycle...", 'debug')
                 stake_checking = False
-                await sleep_with_feedback(30, "skipping cycle")
+                await sleep_with_feedback(60, "skipping cycle")
                 continue
 
             # Update in shared state
@@ -737,8 +765,8 @@ async def stake_management_loop():
 
             # For logic thresholds
             last_claim_block = shared_state["last_claim_block"]
-            stake_amount = e_stake
-            reclaimable_slashed_stake = r_slashed
+            stake_amount = e_stake or 0.0
+            reclaimable_slashed_stake = r_slashed or 0.0
             rewards_amount = a_rewards or 0.0
 
             rewards_per_epoch = calculate_rewards_per_epoch(rewards_amount, last_claim_block, block_height)
@@ -746,15 +774,8 @@ async def stake_management_loop():
             incremental_threshold = rewards_per_epoch
             total_restake = stake_amount + rewards_amount + reclaimable_slashed_stake
             
-            if convert_to_float(total_restake) > 0.0:
-                pass
-            else:
-                stake_checking = False
-                await sleep_until_next_epoch(block_height, "0 Total Restake")
-                continue
-            
             # Should this check first run and wait till first epoch? need to test
-            if should_unstake_and_restake(reclaimable_slashed_stake, downtime_loss) and not first_run and reclaimable_slashed_stake and e_stake:
+            if should_unstake_and_restake(reclaimable_slashed_stake, downtime_loss) and not first_run and reclaimable_slashed_stake and e_stake > 0:
                 if total_restake < min_stake_amount:
                     shared_state["last_action_taken"] = "Unstake/Restake Skipped (Below Min)"
                     log_action(
@@ -787,7 +808,7 @@ async def stake_management_loop():
                     curr_cmd =f"{use_sudo} rusk-wallet --password ####### unstake"
                     curr2 = curr_cmd
                     cmd_success = await execute_command_async(curr_cmd.replace('#######',password))
-                    if not cmd_success:
+                    if not cmd_success or 'rror' in cmd_success:
                         log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr2}", 'error')
                         raise Exception("CMD execution failed")
                     
@@ -796,7 +817,7 @@ async def stake_management_loop():
                     curr_cmd = f"{use_sudo} rusk-wallet --password ####### stake --amt {total_restake}"
                     curr2 = curr_cmd
                     cmd_success = await execute_command_async(curr_cmd.replace('#######', password))
-                    if not cmd_success:
+                    if not cmd_success or 'rror' in cmd_success:
                         log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr2}", 'error')
                         raise Exception("CMD execution failed")
 
@@ -821,7 +842,7 @@ async def stake_management_loop():
                 curr_cmd =f"{use_sudo} rusk-wallet --password ####### withdraw"
                 curr2 = curr_cmd
                 cmd_success = await execute_command_async(curr_cmd.replace('#######',password))
-                if not cmd_success:
+                if not cmd_success or 'rror' in cmd_success:
                         log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr2}", 'error')
                         raise Exception("CMD execution failed")
                     
@@ -830,7 +851,7 @@ async def stake_management_loop():
                 curr_cmd = f"{use_sudo} rusk-wallet --password ####### stake --amt {rewards_amount}"
                 curr2 = curr_cmd
                 cmd_success = await execute_command_async(curr_cmd.replace('#######',password))
-                if not cmd_success:
+                if not cmd_success or 'rror' in cmd_success:
                         log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr2}", 'error')
                         raise Exception("CMD execution failed")
                     
