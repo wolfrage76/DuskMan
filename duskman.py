@@ -59,6 +59,7 @@ dash_ip = web_dashboard.get('dash_ip', '0.0.0.0')
 include_rendered = web_dashboard.get('include_rendered', False)
 isDebug = logs_config.get('debug', False)
 display_options = config.get('display_options', True)
+monitor_wallet = notification_config.get('monitor_balance', False)
 
 if config.get('use_sudo', False):
     use_sudo = 'sudo'
@@ -67,6 +68,14 @@ else:
 
 errored = False
 log_entries = []
+stake_checking = False
+
+INFO_LOG_FILE = logs_config.get("action_log","duskman_actions.log")
+ERROR_LOG_FILE =  logs_config.get("error_log","duskman_errors.log")
+DEBUG_LOG_FILE =  logs_config.get("debug_log","duskman_tmp_debug.log")
+
+if os.path.exists(DEBUG_LOG_FILE):
+    os.remove(DEBUG_LOG_FILE)
 
 END_UNDERLINE = "\033[0m"
 UNDERLINE = "\033[4m"
@@ -137,12 +146,7 @@ shared_state = {
 }
 
 # Define log file paths
-INFO_LOG_FILE = logs_config.get("action_log","duskman_actions.log")
-ERROR_LOG_FILE =  logs_config.get("error_log","duskman_errors.log")
-DEBUG_LOG_FILE =  logs_config.get("debug_log","duskman_tmp_debug.log")
 
-if os.path.exists(DEBUG_LOG_FILE):
-    os.remove(DEBUG_LOG_FILE)
 
 # Log format
 LOG_FORMAT = "{timestamp} - {message}"
@@ -168,15 +172,17 @@ password = get_env_variable(config.get('pwd_var_name', 'WALLET_PASSWORD'), doten
 
 def display_wallet_distribution_bar(public_amount, shielded_amount, width=30):
     """
-    Displays a single horizontal bar (ASCII blocks) with two colored segments:
+    Displays a single horizontal bar (ASCII blocks) with two colored segments
+    to visualize the distribution of funds between public and shielded balances.
 
     :param public_amount: float, the public balance
     :param shielded_amount: float, the shielded balance
     :param width: int, total number of blocks in the bar
+    :return: str, the rendered bar
     """
     total = public_amount + shielded_amount
     if total <= 0:
-        #console.print("[bold yellow]No funds found (total=0).[/bold yellow]")
+        # No funds, return empty string
         return str()
 
     # Calculate ratio
@@ -193,18 +199,23 @@ def display_wallet_distribution_bar(public_amount, shielded_amount, width=30):
         # Add leftover to shielded or whichever you prefer
         shd_blocks += (width - used)
 
-    
+    # Construct the bar string
     bar_str = (
+        # Public block color
         f"{YELLOW}{'▅' * pub_blocks}"
+        # Shielded block color
         f"{BLUE}{'▅' * shd_blocks}"
     )
 
-    # Display the percentages
+    # Calculate and display the percentages
     pub_pct = public_ratio * 100
     shd_pct = shielded_ratio * 100
-    
+
+    # Format the percentages
     p_pct = f"{pub_pct:.2f}%"
     s_pct = f"{shd_pct:.2f}%"
+
+    # Return the rendered bar with percentages
     return f"{YELLOW}{p_pct} {bar_str} {s_pct}"
 
 def convert_to_float(value):
@@ -222,7 +233,7 @@ def remove_ansi(text):
     ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
     return ansi_escape.sub('', text)
 
-async def execute_command_async(command=str(), log_output=False):
+async def execute_command_async(command=str(), log_output=True):
     """Execute a shell command asynchronously and return its output (stdout)."""
     try:
         if log_output:
@@ -339,9 +350,9 @@ def log_action(action="Action", details="No Details", type='info'):
     # Format the message
     formatted_message = LOG_FORMAT.format(timestamp=timestamp, message=f"{action}: {details}")
     
+    formatted_message = formatted_message.replace(password, '#####').replace(password, '#####')
     if len(log_entries) > 15: # TODO: Make configurable
                 log_entries.pop(0)
-
     
     # Write to the appropriate log file
     if type == 'debug':
@@ -352,7 +363,6 @@ def log_action(action="Action", details="No Details", type='info'):
         if isDebug:
             write_to_log(DEBUG_LOG_FILE, formatted_message)
             
-        #notifier.notify(formatted_message, shared_state)
         log_entries.append(formatted_message)    
         write_to_log(ERROR_LOG_FILE, formatted_message)
     else:
@@ -365,53 +375,64 @@ def log_action(action="Action", details="No Details", type='info'):
 
 def parse_stake_info(output):
     """
-    Parse 'stake-info' output and return (eligible_stake, reclaimable_slashed_stake, accumulated_rewards).
-    If any is missing, return (None, None, None).
+    Parse the output of the 'rusk-wallet --password <password> stake-info' command and
+    return a tuple containing the eligible stake, reclaimable slashed stake, and
+    accumulated rewards.
+
+    If any of the values are missing from the output, return a tuple of (None, None, 0.0).
     """
     try:
         lines = output.splitlines()
-        eligible_stake = None
-        reclaimable_slashed_stake = None
-        accumulated_rewards = None
+        eligible_stake = None  # Eligible stake for staking
+        reclaimable_slashed_stake = None  # Reclaimable slashed stake (from penalties)
+        accumulated_rewards = 0.0  # Accumulated rewards from staking
 
         for line in lines:
             line = line.strip()
             if "Eligible stake:" in line:
+                # Example: "Eligible stake: 100.0 DUSK"
                 match = re.search(r"Eligible stake:\s*([\d]+(?:\.\d+)?)\s*DUSK", line)
                 if match:
                     eligible_stake = convert_to_float(match.group(1))
             elif "Reclaimable slashed stake:" in line:
+                # Example: "Reclaimable slashed stake: 50.0 DUSK"
                 match = re.search(r"Reclaimable slashed stake:\s*([\d]+(?:\.\d+)?)\s*DUSK", line)
                 if match:
                     reclaimable_slashed_stake = convert_to_float(match.group(1))
             elif "Accumulated rewards is:" in line:
+                # Example: "Accumulated rewards is: 10.0 DUSK"
                 match = re.search(r"Accumulated rewards is:\s*([\d]+(?:\.\d+)?)\s*DUSK", line)
                 if match:
                     accumulated_rewards = convert_to_float(match.group(1))
             elif "Stake active from block #" in line:
+                # Example: "Stake active from block #123456"
                 match = re.search(r"#(\d+)", line)
                 if match:
                     stake_active_blk = int(match.group(1))
                     shared_state["active_blk"] = stake_active_blk
 
         if (eligible_stake is None or
-            reclaimable_slashed_stake is None or
-            accumulated_rewards is None):
-            log_action("Incomplete stake-info values.","Could not parse fully.", "error")
-            return None, None, None
+            reclaimable_slashed_stake is None):
+            # If we couldn't parse the stake-info output fully, log an error
+            log_action("Incomplete stake-info values.",f"Could not parse fully.\n{lines}", "error")
+            return None, None, 0.0
 
+        # Return the parsed values
         return eligible_stake, reclaimable_slashed_stake, accumulated_rewards
     except Exception as e:
         log_action(f"Error parsing stake-info output: ",e,"error")
-        return None, None, None
+        return None, None, 0.0
 
-async def get_wallet_balances(password):
+async def get_wallet_balances(password, first_run=False):
     """
-    1) Fetch addresses from 'rusk-wallet profiles'
-    2) For each address, sum its spendable balances
-    Return (public_total, shielded_total).
+    Fetches the wallet balances for public and shielded addresses.
+
+    1. Fetches addresses from 'rusk-wallet profiles'
+    2. For each address, sums its spendable balances
+    3. Detects and notifies if balances change for public or shielded amounts.
     """
     try:
+        # Fetch address from 'rusk-wallet profiles'
         addresses = {
             "public": [],
             "shielded": []
@@ -434,21 +455,30 @@ async def get_wallet_balances(password):
                 if match:
                     addresses["public"].append(match.group(1))
     except Exception as e:
-                log_action(f"Error in get_wallet_balances(): ",e,"error")
-                await asyncio.sleep(5)
-    
+        log_action(
+            f"Error in get_wallet_balances(): ",
+            str(e).replace(password, '#####'),
+            "error"
+        )
+        await asyncio.sleep(5)
+        return 0.0, 0.0
+
     async def get_spendable_for_address(addr):
+        """
+        Fetches the spendable balance for the given address
+        """
         cmd_balance = f"{use_sudo} rusk-wallet --password {password} balance --spendable --address {addr}"
-        out = await execute_command_async(cmd_balance)
-        if out:
-            total_str = out.replace("Total: ", "")
-            #value = convert_to_float(total_str)
-            try:
+        try:
+            out = await execute_command_async(cmd_balance)
+            if out:
+                total_str = out.replace("Total: ", "")
                 return float(total_str)
-            except (ValueError, TypeError):
-                log_action(f"Error in get_spendable_for_address(): ",e,"error")
-                return 0.0
-        #return total_str
+        except Exception as e:
+            log_action(
+                f"Error in get_spendable_for_address(): {str(e).replace(password, '#####')}",
+                "error"
+            )
+        return 0.0
 
     tasks_public = [get_spendable_for_address(addr) for addr in addresses["public"]]
     tasks_shielded = [get_spendable_for_address(addr) for addr in addresses["shielded"]]
@@ -456,7 +486,33 @@ async def get_wallet_balances(password):
     results_public = await asyncio.gather(*tasks_public)
     results_shielded = await asyncio.gather(*tasks_shielded)
 
-    return sum(results_public), sum(results_shielded)
+    new_public_total = sum(results_public)
+    new_shielded_total = sum(results_shielded)
+
+    # Check for balance changes
+    old_public_total = shared_state.get("balances", {}).get("public", 0.0)
+    old_shielded_total = shared_state.get("balances", {}).get("shielded", 0.0)
+
+    if (float(format_float(old_public_total + old_shielded_total)) != float(format_float(new_public_total + new_shielded_total))) and monitor_wallet and not first_run:
+        if new_public_total != old_public_total:
+            log_action(
+                "Balance Change Detected",
+                f"Public balance changed from {format_float(old_public_total)} → {format_float(new_public_total)} DUSK.",
+                "info"
+            )
+
+        if new_shielded_total != old_shielded_total:
+            log_action(
+                "Balance Change Detected",
+                f"Shielded balance changed from {format_float(old_shielded_total)} → {format_float(new_shielded_total)} DUSK.",
+                "info"
+            )
+
+    # Update shared_state
+    shared_state["balances"]["public"] = new_public_total
+    shared_state["balances"]["shielded"] = new_shielded_total
+
+    return new_public_total, new_shielded_total
 
 def calculate_rewards_per_epoch(rewards_amount, last_claim_block, current_block):
     """Estimate how many rewards are generated per epoch (2160 blocks) since last claim."""
@@ -520,7 +576,7 @@ async def sleep_until_next_epoch(block_height, buffer_blocks=60, msg=None):
     """
     Sleep until near the end of the current epoch.
     Each epoch is 2160 blocks, 10s each. Subtract buffer_blocks from remainder.
-    If result <= 0, do a minimal sleep of 300s.
+    If result <= 0, do a minimal sleep of buffer blocks * 11.
     """
     if not msg:
         msg = "until closer to next epoch..."
@@ -529,7 +585,7 @@ async def sleep_until_next_epoch(block_height, buffer_blocks=60, msg=None):
     sleep_time = blocks_left * 10  # 10s per block
 
     if sleep_time <= 0:
-        sleep_time = 300
+        sleep_time = buffer_blocks * 11
         msg = "Epoch boundary reached; forcing minimal sleep."
 
     await sleep_with_feedback(sleep_time, msg)
@@ -559,82 +615,82 @@ async def frequent_update_loop():
     consecutive_low_peers = 0 # Track loops of low peer counts
     
     while True:
-        # 1) Fetch block height
-        block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height", False)
-        if not block_height_str:
-            log_action("Failed to fetch block height.", ' Retrying in 10s...', "error")
-            await asyncio.sleep(10)
-            continue
-        
-        current_block_height = int(block_height_str)
-        
-        # Compare with last known block height
-        if last_known_block_height is not None:
-            if current_block_height == last_known_block_height:
-                consecutive_no_change += 1
+            
+            # 1) Fetch block height
+            block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height", False)
+            if not block_height_str:
+                log_action("Failed to fetch block height.", ' Retrying in 10s...', "error")
+                await asyncio.sleep(10)
+                continue
+            
+            current_block_height = int(block_height_str)
+            
+            # Compare with last known block height
+            if last_known_block_height is not None:
+                if current_block_height == last_known_block_height:
+                    consecutive_no_change += 1
+                else:
+                    consecutive_no_change = 0  # Reset counter if block height changes
             else:
-                consecutive_no_change = 0  # Reset counter if block height changes
-        else:
-            consecutive_no_change = 0  # Reset counter on first valid block height
-        
-        # Log and notify if block height hasn't changed for 10 loops (100 seconds)
-        if consecutive_no_change >= 10:
-            message = f"WARNING! Block height has not changed for {consecutive_no_change * 10} seconds.\nLast height: {last_known_block_height}"
-            log_action("Block Height Error!", message,"error")
+                consecutive_no_change = 0  # Reset counter on first valid block height
             
-            consecutive_no_change = 0  # Reset after notifying to avoid spamming
-            await asyncio.sleep(1)
-            continue # Need to double check this
-
-        # Update last known block height and shared state
-        last_known_block_height = current_block_height
-        shared_state["block_height"] = current_block_height
-        
-        # Perform balance and stake-info updates every X  loops (e.g., 30 is 5 minutes)
-        if loopcnt >= 20:
-            pub_bal, shld_bal = await get_wallet_balances(password)
-            shared_state["balances"]["public"] = pub_bal
-            shared_state["balances"]["shielded"] = shld_bal
-            
-            stake_output = await execute_command_async(f"{use_sudo} rusk-wallet --password {password} stake-info")
-            if stake_output:
-                e_stake, r_slashed, a_rewards = parse_stake_info(stake_output)
-                shared_state["stake_info"]["stake_amount"] = e_stake or 0.0
-                shared_state["stake_info"]["reclaimable_slashed_stake"] = r_slashed or 0.0
-                shared_state["stake_info"]["rewards_amount"] = a_rewards or 0.0
-            
-            await fetch_dusk_data()  
+            # Log and notify if block height hasn't changed for 10 loops (100 seconds)
+            if consecutive_no_change >= 10:
+                message = f"WARNING! Block height has not changed for {consecutive_no_change * 10} seconds.\nLast height: {last_known_block_height}"
+                log_action("Block Height Error!", message,"error")
                 
-            loopcnt = 0  # Reset loop count after update
-        
-        
-        shared_state["peer_count"] = await execute_command_async(f"{use_sudo} ruskquery peers", False)
-        peer_count = int(shared_state["peer_count"])
-        
-        if not peer_count:
-            log_action("Failed to fetch peers.", "Retrying in 10s...", "error")
-            await asyncio.sleep(10)
-            continue
-        
-        # check peer count
-        if peer_count is not None:
-            if peer_count < min_peers or peer_count <=0:
-                consecutive_low_peers += 1
-            else:
-                consecutive_low_peers = 0  # Reset counter if block height changes
-        else:
-            consecutive_low_peers = 0  # Reset counter on first valid block height
-        
-        # Log and notify if low count for too long
-        if consecutive_low_peers >= 240:
-            message = f"WARNING! Low peer count for {consecutive_low_peers * 10} seconds.\nCurrent Count: {peer_count}"
-            log_action("Low peer count!", message, "error")
+                consecutive_no_change = 0  # Reset after notifying to avoid spamming
+                await asyncio.sleep(1)
+                continue # Need to double check this
+
+            # Update last known block height and shared state
+            last_known_block_height = current_block_height
+            shared_state["block_height"] = current_block_height
             
-            consecutive_low_peers = 0  # Reset after notifying to avoid spamming
+            # Perform balance and stake-info updates every X  loops (e.g., 30 is 5 minutes)
+            if loopcnt >= 20 and not stake_checking:
+                pub_bal, shld_bal = await get_wallet_balances(password)
+                shared_state["balances"]["public"] = pub_bal or 0.0
+                shared_state["balances"]["shielded"] = shld_bal or 0.0
+                
+                stake_output = await execute_command_async(f"{use_sudo} rusk-wallet --password {password} stake-info")
+                if stake_output:
+                    e_stake, r_slashed, a_rewards = parse_stake_info(stake_output)
+                    shared_state["stake_info"]["stake_amount"] = e_stake or 0.0
+                    shared_state["stake_info"]["reclaimable_slashed_stake"] = r_slashed or 0.0
+                    shared_state["stake_info"]["rewards_amount"] = a_rewards or 0.0
+                
+                await fetch_dusk_data()  
+                    
+                loopcnt = 0  # Reset loop count after update
+            
+            
+            shared_state["peer_count"] = await execute_command_async(f"{use_sudo} ruskquery peers", False)
+            peer_count = int(shared_state["peer_count"])
+            
+            if not peer_count:
+                log_action("Failed to fetch peers.", "Retrying in 10s...", "error")
+                await asyncio.sleep(10)
+                continue
+            
+            # check peer count
+            if peer_count is not None:
+                if peer_count < min_peers or peer_count <=0:
+                    consecutive_low_peers += 1
+                else:
+                    consecutive_low_peers = 0  # Reset counter if block height changes
+            else:
+                consecutive_low_peers = 0  # Reset counter on first valid block height
+            
+            # Log and notify if low count for too long
+            if consecutive_low_peers >= 240:
+                message = f"WARNING! Low peer count for {consecutive_low_peers * 10} seconds.\nCurrent Count: {peer_count}"
+                log_action("Low peer count!", message, "error")
+                
+                consecutive_low_peers = 0  # Reset after notifying to avoid spamming
 
-        loopcnt += 1
-        await asyncio.sleep(10)  # Wait 10 seconds before the next loop
-
+            loopcnt += 1
+            await asyncio.sleep(15)  # Wait 10 seconds before the next loop
 
 async def init_balance():
     """
@@ -646,10 +702,9 @@ async def init_balance():
     # Fetch block height
     block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height", False)
     if block_height_str:
-        shared_state["block_height"] = int(block_height_str)    
-    #shared_state["last_claim_block"] = int(block_height_str)
+        shared_state["block_height"] = int(block_height_str)
     # Fetch wallet balances
-    pub_bal, shld_bal = await get_wallet_balances(password)
+    pub_bal, shld_bal = await get_wallet_balances(password, True)
     shared_state["balances"]["public"] = pub_bal
     shared_state["balances"]["shielded"] = shld_bal
     
@@ -665,15 +720,17 @@ async def stake_management_loop():
     """
 
     first_run = True
-    
+    # stake_checking = True
     while True:
         try:
-                
+            stake_checking = True     
             # For logic, we may want a fresh block height right before we do anything:
             block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height", False)
             if not block_height_str:
                 log_action("Failed to fetch block height", "Retrying in 30s...", "error")
+                stake_checking = False
                 await sleep_with_feedback(30, "retry block height fetch")
+                
                 continue
 
             block_height = int(block_height_str)
@@ -682,6 +739,7 @@ async def stake_management_loop():
             # If we already saw 'No Action' for this block, wait a bit
             if shared_state["last_no_action_block"] == block_height:
                 msg = f"Already did 'No Action' at block {block_height}; sleeping 30s."
+                stake_checking = False
                 await sleep_with_feedback(30, msg)
                 continue
 
@@ -689,13 +747,15 @@ async def stake_management_loop():
             stake_output = await execute_command_async(f"{use_sudo} rusk-wallet --password {password} stake-info")
             if not stake_output:
                 log_action("Error", "Failed to fetch stake-info. Retrying in 60s...", "error")
+                stake_checking = False
                 await sleep_with_feedback(30, "retry stake-info fetch")
                 continue
 
             e_stake, r_slashed, a_rewards = parse_stake_info(stake_output)
             if e_stake is None or r_slashed is None or a_rewards is None:
                 log_action("Skiping Cycle","Parsing stake info failed or incomplete. Skipping cycle...", 'debug')
-                await sleep_with_feedback(30, "skipping cycle")
+                stake_checking = False
+                await sleep_with_feedback(60, "skipping cycle")
                 continue
 
             # Update in shared state
@@ -705,24 +765,24 @@ async def stake_management_loop():
 
             # For logic thresholds
             last_claim_block = shared_state["last_claim_block"]
-            stake_amount = e_stake
-            reclaimable_slashed_stake = r_slashed
-            rewards_amount = a_rewards
+            stake_amount = e_stake or 0.0
+            reclaimable_slashed_stake = r_slashed or 0.0
+            rewards_amount = a_rewards or 0.0
 
             rewards_per_epoch = calculate_rewards_per_epoch(rewards_amount, last_claim_block, block_height)
             downtime_loss = calculate_downtime_loss(rewards_per_epoch, downtime_epochs=2)
             incremental_threshold = rewards_per_epoch
             total_restake = stake_amount + rewards_amount + reclaimable_slashed_stake
-
+            
             # Should this check first run and wait till first epoch? need to test
-            if should_unstake_and_restake(reclaimable_slashed_stake, downtime_loss) and not first_run:
+            if should_unstake_and_restake(reclaimable_slashed_stake, downtime_loss) and not first_run and reclaimable_slashed_stake and e_stake > 0:
                 if total_restake < min_stake_amount:
                     shared_state["last_action_taken"] = "Unstake/Restake Skipped (Below Min)"
                     log_action(
                         f"Unstake/Restake Skipped (Block #{block_height})",
                         f"Total restake ({format_float(total_restake)} DUSK) < {min_stake_amount} DUSK.\nRwd: {format_float(rewards_amount)}, Stk: {format_float(stake_amount)}, Rcl: {format_float(reclaimable_slashed_stake)}"
                     )
-                    
+                    stake_checking = False
                 else:
                     # Unstake & Restake
                     act_msg = f"Unstake/Restake @ Block #{block_height}"
@@ -740,34 +800,31 @@ async def stake_management_loop():
                     if not cmd_success:
                         log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr2}", 'error')
                         raise Exception("CMD execution failed")
+                    if 'Withdrawing 0 reward is not allowed' in cmd_success:
+                        rewards_amount = 0.0
                     
                     # 2) Unstake
                 
                     curr_cmd =f"{use_sudo} rusk-wallet --password ####### unstake"
                     curr2 = curr_cmd
                     cmd_success = await execute_command_async(curr_cmd.replace('#######',password))
-                    if not cmd_success:
+                    if not cmd_success or 'rror' in cmd_success:
                         log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr2}", 'error')
                         raise Exception("CMD execution failed")
                     
                     # 3) Stake
-                
+                    total_restake = stake_amount + rewards_amount + reclaimable_slashed_stake
                     curr_cmd = f"{use_sudo} rusk-wallet --password ####### stake --amt {total_restake}"
                     curr2 = curr_cmd
                     cmd_success = await execute_command_async(curr_cmd.replace('#######', password))
-                    if not cmd_success:
+                    if not cmd_success or 'rror' in cmd_success:
                         log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr2}", 'error')
                         raise Exception("CMD execution failed")
 
-                    stake_output = await execute_command_async(f"{use_sudo} rusk-wallet --password {password} stake-info")
-                    if stake_output:
-                        e_stake, r_slashed, a_rewards = parse_stake_info(stake_output)
-                        shared_state["stake_info"]["stake_amount"] = e_stake or 0.0
-                        shared_state["stake_info"]["reclaimable_slashed_stake"] = r_slashed or 0.0
-                        shared_state["stake_info"]["rewards_amount"] = a_rewards or 0.0
                     log_action("Restake Completed", f"New Stake: {format_float(float(total_restake))}")
                     shared_state["last_claim_block"] = block_height
 
+                    stake_checking = False
                     # Sleep 2 epochs
                     await sleep_until_next_epoch(block_height + 2160, msg="2-epoch wait after restaking...")
                     continue
@@ -785,7 +842,7 @@ async def stake_management_loop():
                 curr_cmd =f"{use_sudo} rusk-wallet --password ####### withdraw"
                 curr2 = curr_cmd
                 cmd_success = await execute_command_async(curr_cmd.replace('#######',password))
-                if not cmd_success:
+                if not cmd_success or 'rror' in cmd_success:
                         log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr2}", 'error')
                         raise Exception("CMD execution failed")
                     
@@ -794,21 +851,15 @@ async def stake_management_loop():
                 curr_cmd = f"{use_sudo} rusk-wallet --password ####### stake --amt {rewards_amount}"
                 curr2 = curr_cmd
                 cmd_success = await execute_command_async(curr_cmd.replace('#######',password))
-                if not cmd_success:
+                if not cmd_success or 'rror' in cmd_success:
                         log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr2}", 'error')
                         raise Exception("CMD execution failed")
                     
                 new_stake = stake_amount + rewards_amount
-                stake_output = await execute_command_async(f"{use_sudo} rusk-wallet --password {password} stake-info")
-                if stake_output:
-                    e_stake, r_slashed, a_rewards = parse_stake_info(stake_output)
-                    shared_state["stake_info"]["stake_amount"] = e_stake or 0.0
-                    shared_state["stake_info"]["reclaimable_slashed_stake"] = r_slashed or 0.0
-                    shared_state["stake_info"]["rewards_amount"] = a_rewards or 0.0
-                    
+
                 log_action("Stake Completed", f"New Stake: {format_float(new_stake)}")
                 shared_state["last_claim_block"] = block_height
-                
+                stake_checking = False
                 await sleep_with_feedback(2160 * 10, "1 epoch wait after claiming")
                 continue
             else:
@@ -824,6 +875,7 @@ async def stake_management_loop():
                     shared_state["last_action_taken"] = f"Startup @ Block #{block_height}"
                     first_run = False
                 else:
+                    stake_checking = False
                     # If no action, just wait and don't log since it's no longer first run
                     await sleep_until_next_epoch(block_height, buffer_blocks=buffer_blocks)
                     continue    
@@ -839,13 +891,14 @@ async def stake_management_loop():
             f"  Rewards           :  {format_float(shared_state.get('stake_info',{}).get('rewards_amount','0.0'))} (${format_float(shared_state.get('stake_info',{}).get('rewards_amount',{}) * float(shared_state["price"]))})\n"
             f"  Reclaimable    :  {format_float(shared_state.get('stake_info',{}).get('reclaimable_slashed_stake','0.0'))} (${format_float(shared_state.get('stake_info',{}).get('reclaimable_slashed_stake') * float(shared_state["price"]))})\n"
                 )
-            #Log_info = shared_state.get("options", '') + Log_info
+            
             if len(log_entries) > 15: # TODO: Make configurable
                 log_entries.pop(0)
             log_entries.append(Log_info)
             notifier.notify(Log_info, shared_state) # 
             
             first_run = False
+            stake_checking = False
         except Exception as e:
                 log_action("Error in stake management loop", e, "error")
                 raise Exception("Error in stake management loop")
@@ -857,12 +910,13 @@ async def stake_management_loop():
 # REAL-TIME DISPLAY
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def realtime_display(enable_tmux=False):
+async def realtime_display(tmux=False):
     """
     Continuously display real-time info in the console.
     Initially shows configuration and byline, then switches to real-time stats.
     """
     first_run = True
+    enable_tmux = tmux
 
     with Live(console=console, refresh_per_second=4, auto_refresh=False) as live:
         while True:
@@ -879,11 +933,6 @@ async def realtime_display(enable_tmux=False):
                     continue
                 tot_bal = b["public"] + b["shielded"]
                 price = shared_state["price"]
-                
-                if first_run:
-                    first_run = False
-                    await asyncio.sleep(1)  # Pause briefly before switching to real-time display
-                    continue 
                 
                 charclr =str()
                 charclr = (
@@ -921,16 +970,23 @@ async def realtime_display(enable_tmux=False):
                 chg30d = shared_state["price_change_percentage_30d_in_currency"]
                 chg1y = shared_state["price_change_percentage_1y_in_currency"]
                 
+                ## Currently unused ##
                 chg14d = shared_state["price_change_percentage_14d_in_currency"]
                 chg1hr = shared_state["price_change_percentage_1h_in_currency"]
+                
+                volume = shared_state["volume"]
+                
                 mkt_cap = shared_state["market_cap"]
                 mkt_cap_change = shared_state["market_cap_change_percentage_24h"]
+                
                 ath = shared_state["ath"]
                 ath_change = shared_state["ath_change_percentage"]
                 ath_date = shared_state["ath_date"]
+                
                 atl = shared_state["atl"]
                 atl_date = shared_state["atl_date"]
-                volume = shared_state["volume"]
+                
+                ######################
                 
                 top_bar = f" {LIGHT_WHITE}======={DEFAULT} {currenttime} Block: {LIGHT_BLUE}#{blk} {DEFAULT}(E: {LIGHT_BLUE}{epoch_num}{DEFAULT}) Peers: {peercolor}{shared_state['peer_count']}{DEFAULT} {LIGHT_WHITE}=======\n"
                 title_spaces = int((len(remove_ansi(top_bar)) - len(remove_ansi(byline))) / 2)
@@ -938,12 +994,15 @@ async def realtime_display(enable_tmux=False):
                 opts = '\n' + (' ' * title_spaces) + BLUE  + shared_state["options"]
                 
                 allocation_bar = display_wallet_distribution_bar(b['public'],b['shielded'],8)
-                # Real-time display content (no surrounding panel)
                 
                 per_epoch = str()
                 rpe = convert_to_float(st_info.get('rewards_per_epoch',0.0))
                 if  rpe > 0.0: # Check if we have a ~ rewards per epoch since last claim
                     per_epoch = f"@ Epoch/claim: {format_float(rpe)}"
+                
+                reward_percent = 0.0
+                if st_info.get('rewards_amount',0.0) > 0.0 and st_info.get('stake_amount', 0.0) > 0.0:
+                    reward_percent = (st_info.get('rewards_amount',0.0) / st_info.get('stake_amount', 0.0)) * 100
                 
                 realtime_content = (
                     f"{opts}\n"
@@ -960,7 +1019,7 @@ async def realtime_display(enable_tmux=False):
                     f"         {LIGHT_WHITE}   Total {DEFAULT}| {LIGHT_WHITE}{format_float(tot_bal)} DUSK (${format_float((tot_bal) * price, 2)}){DEFAULT}\n"
                     f"                  |\n"
                     f"    {LIGHT_WHITE}Staked{DEFAULT}        | {LIGHT_WHITE}{format_float(st_info['stake_amount'])} (${format_float(st_info['stake_amount'] * price, 2)}){DEFAULT}{is_active}\n"
-                    f"    {YELLOW}Rewards{DEFAULT}       | {YELLOW}{format_float(st_info['rewards_amount'])} (${format_float(st_info['rewards_amount'] * price, 2)}) {LIGHT_WHITE}{per_epoch}{DEFAULT}\n"
+                    f"    {YELLOW}Rewards{DEFAULT}       | {YELLOW}{format_float(st_info['rewards_amount'])} ({LIGHT_BLUE}{reward_percent:.4f}%{DEFAULT}) (${format_float(st_info['rewards_amount'] * price, 2)}) {LIGHT_WHITE}{per_epoch}{DEFAULT}\n"
                     f"    {LIGHT_RED}Reclaimable{DEFAULT}   | {LIGHT_RED}{format_float(st_info['reclaimable_slashed_stake'])} (${format_float(st_info['reclaimable_slashed_stake'] * price, 2)}){DEFAULT}\n"
                     f" {LIGHT_WHITE}{('=' * (len(remove_ansi(top_bar)) - 2))}{DEFAULT}\n"  
                 )

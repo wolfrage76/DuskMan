@@ -47,9 +47,14 @@ body {
     height: 100%;
 }
 
-.sidebar-left,
+.sidebar-left {
+    flex: 0 0 auto;
+    min-width: auto;
+    background-color: #1e1e1e;
+ }
+
 .sidebar-right {
-    flex: 0 0 5%;
+    flex: 0 0 auto;
     background-color: #1e1e1e;
 }
 
@@ -64,6 +69,8 @@ body {
 /* about=20%, left=35%, right=45% */
 .about-panel {
     flex: 0 0 20%;
+    min-width: 25%;
+    max-width: 35%;
     padding: 1em;
     overflow-y: auto;
     background: #1e1e1e;

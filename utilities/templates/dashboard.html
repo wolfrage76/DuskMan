@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
   <title>DuskMan: The Dusk Network Stake Manager</title>
   <!-- We'll inject the theme CSS dynamically via JS below -->
   <style id="theme-style"></style>
@@ -27,7 +28,8 @@
         <h3>About DuskMan</h3>
         <p>
           DuskMan is a stake management dashboard for
-          the <strong>Dusk Network</strong>. 
+          the <strong>Dusk Network</strong>. </p>
+        <p>
           It monitors your node status, balances, and staking rewards 
           in near real time.
         </p>
@@ -35,22 +37,22 @@
           Author: <strong>Wolfrage</strong><br>
           Source: 
           <a href="https://github.com/wolfrage76" target="_blank"
-             style="color:#42a5f5; text-decoration:none;">
+            style="color:#42a5f5; text-decoration:none;">
             https://github.com/wolfrage76
           </a>
         </p>
         <p>
           Official Dusk Network Site:
           <a href="https://dusk.network" target="_blank"
-             style="color:#42a5f5; text-decoration:none;">
-             https://dusk.network
+            style="color:#42a5f5; text-decoration:none;">
+            https://dusk.network
           </a>
         </p>
         <p>
           Official Dusk Discord:
           <a href="https://discord.gg/dusk-official" target="_blank"
-             style="color:#42a5f5; text-decoration:none;">
-             https://discord.gg/dusk-official
+            style="color:#42a5f5; text-decoration:none;">
+            https://discord.gg/dusk-official
           </a>
         </p>
       </div>
@@ -79,8 +81,8 @@
   <p>© {{ year }} Wolfrage’s Dusk Dashboard. All rights reserved.
     <a href="https://github.com/wolfrage76" target="_blank" style="margin-left:8px;">
       <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" 
-           alt="GitHub" 
-           style="width:20px; height:20px; vertical-align:middle;" />
+          alt="GitHub" 
+          style="width:20px; height:20px; vertical-align:middle;" />
     </a>
   </p>
 </div>
@@ -190,7 +192,7 @@ function parseLogEntry(rawText){
     }
   });
   if(!itemsHtml){
-    itemsHtml = "<li>[No valid lines in this entry]</li>";
+    itemsHtml = "<li> </li>"; // itemsHtml = "<li>[No valid lines in this entry]</li>";
   }
 
   const heading = blockNumber

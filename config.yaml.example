@@ -38,6 +38,8 @@ WEB_DASHBOARD: # Default at http://localhost:5000
 
 
 NOTIFICATIONS:
+  monitor_balance: True # Get notifications when balances change for Public or Shielded
+  
   discord_webhook:     # Insert webhook to activate. Example: https://discord.com/api/webhooks/xxxxxxxxxx/XXXXXXXXX
   pushbullet_token:    # Leave Blank to Disable
   telegram_bot_token:  # Leave Blank to Disable
