@@ -57,7 +57,7 @@ LOG_FILES:
   
   debug: False          # Enable the debugging log. Debug log is deleted on each start!
 
-STATUSBAR: # Determines what to show in bottom statusbar and tmux statusbar
+STATUSBAR: # Determines what to show in tmux statusbar
 # Also for Viewer
   show_current_block: True
   show_balance: True
