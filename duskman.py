@@ -142,7 +142,8 @@ shared_state = {
     "usd_24h_change": 0,
     "rendered":"",
     "stake_active_blk": 0,
-    "options":""
+    "options":"",
+    "rewards_per_epoch":0.0,
 }
 
 # Define log file paths
@@ -590,13 +591,13 @@ async def sleep_until_next_epoch(block_height, buffer_blocks=60, msg=None):
 
     await sleep_with_feedback(sleep_time, msg)
 
-def minutes_until_next_epoch(block_height, buffer_blocks=60):
-    """
-    Return how many whole minutes remain until next epoch minus buffer_blocks.
-    """
-    blocks_left = 2160 - (block_height % 2160) - buffer_blocks
-    total_seconds = max(blocks_left * 10, 0)
-    return total_seconds // 60
+# def minutes_until_next_epoch(block_height, buffer_blocks=60):
+#     """
+#     Return how many whole minutes remain until next epoch minus buffer_blocks.
+#     """
+#     blocks_left = 2160 - (block_height % 2160) - buffer_blocks
+#     total_seconds = max(blocks_left * 10, 0)
+#     return total_seconds // 60
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -690,7 +691,7 @@ async def frequent_update_loop():
                 consecutive_low_peers = 0  # Reset after notifying to avoid spamming
 
             loopcnt += 1
-            await asyncio.sleep(15)  # Wait 10 seconds before the next loop
+            await asyncio.sleep(10)  # Wait 10 seconds before the next loop
 
 async def init_balance():
     """
@@ -770,6 +771,7 @@ async def stake_management_loop():
             rewards_amount = a_rewards or 0.0
 
             rewards_per_epoch = calculate_rewards_per_epoch(rewards_amount, last_claim_block, block_height)
+            shared_state["rewards_per_epoch"] = rewards_per_epoch
             downtime_loss = calculate_downtime_loss(rewards_per_epoch, downtime_epochs=2)
             incremental_threshold = rewards_per_epoch
             total_restake = stake_amount + rewards_amount + reclaimable_slashed_stake
@@ -996,8 +998,8 @@ async def realtime_display(tmux=False):
                 allocation_bar = display_wallet_distribution_bar(b['public'],b['shielded'],8)
                 
                 per_epoch = str()
-                rpe = convert_to_float(st_info.get('rewards_per_epoch',0.0))
-                if  rpe > 0.0: # Check if we have a ~ rewards per epoch since last claim
+                rpe = convert_to_float(shared_state.get('rewards_per_epoch',0.0))
+                if  rpe > 0.0 and int(shared_state.get("last_claim_block", 0)) > 0: # Check if we have a ~ rewards per epoch since last claim
                     per_epoch = f"@ Epoch/claim: {format_float(rpe)}"
                 
                 reward_percent = 0.0
