@@ -95,12 +95,12 @@ In the same directory as the script:
     ```bash
     python duskman.py
     ```  
-9. **Or Run script in the background**:
+9. **Or Run script in the background (-d disables the display)**:
     ```bash
-    screen -dmS dusk_manager python duskman.py
+    screen -dmS dusk_manager python duskman.py -d
     ```
 10. **Or run as a service**:
-    Instructions coming later
+    Instructions coming later but ```python duskman.py -d``` will run with no interface
 ---
 
 ## Notification Configuration

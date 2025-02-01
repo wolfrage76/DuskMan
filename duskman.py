@@ -68,7 +68,7 @@ parser = argparse.ArgumentParser(description="Process command line arguments")
 parser.add_argument('-d', action='store_true', help="Run without GUI display, for background usage")
 
 # Parse arguments
-args = parser.parse_args()
+args = parser.parse_args() or {}
 
 # Store it as a boolean variable
 display_gui = not args.d
