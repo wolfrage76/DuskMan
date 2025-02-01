@@ -13,19 +13,15 @@ GENERAL:
   auto_stake_rewards: True
   auto_reclaim_full_restakes: True
 
-  min_peers: 8 # Minimum number of peers to be considered healthy
-  use_sudo: True # ONLY needs to be set True if you NEED to use sudo to run your ruskquery and rusk-wallet commands.
-  
+  min_peers: 8              # Minimum number of peers to be considered healthy
+  use_sudo: True            # ONLY needs to be set True if you NEED to use sudo to run your ruskquery and rusk-wallet commands.
+  display_options: True     # Enable the Settings display at top of tool
+
   ## These minimums are still checked to make sure it's worth doing vs missed potential rewards. 
   min_rewards: 1 # Minimum amount of rewards to consider claiming rewards to stake
   min_slashed: 1 # Minimum amount of slashed rewards from topoffs before considering restaking to reclaim
   
-  # Replaced with using .env file (SEE INSTRUCTIONS), but still works as an alternative:
-  # pwd_var_name: MY_WALLET_VARIABLE  # NAME OF THE ENVIRONMENT VARIABLE WITH THE PASSWORD! DO_NOT_ PUT IN YOUR DAMN PASSWORD HERE, FFS!
-  #                                    # Make sure you read the instructions on exporting the environment variable.
-  #                                    # OPTIONAL.  See instructions for .env file instead
   
-  display_options: True                # Enable the Settings display at top of tool
 
 
 WEB_DASHBOARD: # Default at http://localhost:5000
@@ -73,3 +69,8 @@ STATUSBAR: # Determines what to show in tmux statusbar
   show_peer_count: False
 
 
+# Replaced with using .env file (SEE INSTRUCTIONS), but still works as an alternative:
+  # pwd_var_name: MY_WALLET_VARIABLE  # NAME OF THE ENVIRONMENT VARIABLE WITH THE PASSWORD! DO_NOT_ PUT IN YOUR DAMN PASSWORD HERE, FFS!
+  #                                    # Make sure you read the instructions on exporting the environment variable.
+  #                                    # OPTIONAL.  See instructions for .env file instead
+  
