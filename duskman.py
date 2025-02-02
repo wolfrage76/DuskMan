@@ -5,6 +5,7 @@ import re
 import yaml
 import asyncio
 import aiohttp
+import argparse
 
 from rich.live import Live
 from rich.text import Text
@@ -60,6 +61,18 @@ include_rendered = web_dashboard.get('include_rendered', False)
 isDebug = logs_config.get('debug', False)
 display_options = config.get('display_options', True)
 monitor_wallet = notification_config.get('monitor_balance', False)
+# Initialize parser
+parser = argparse.ArgumentParser(description="Process command line arguments")
+enable_logging = logs_config.get('enable_logging', False)
+
+# Add boolean flag for `-d`
+parser.add_argument('-d', action='store_true', help="Run without GUI display, for background usage")
+
+# Parse arguments
+args = parser.parse_args() or {}
+
+# Store it as a boolean variable
+display_gui = not args.d
 
 if config.get('use_sudo', False):
     use_sudo = 'sudo'
@@ -74,7 +87,7 @@ INFO_LOG_FILE = logs_config.get("action_log","duskman_actions.log")
 ERROR_LOG_FILE =  logs_config.get("error_log","duskman_errors.log")
 DEBUG_LOG_FILE =  logs_config.get("debug_log","duskman_tmp_debug.log")
 
-if os.path.exists(DEBUG_LOG_FILE):
+if isDebug and os.path.exists(DEBUG_LOG_FILE):
     os.remove(DEBUG_LOG_FILE)
 
 END_UNDERLINE = "\033[0m"
@@ -346,6 +359,7 @@ def log_action(action="Action", details="No Details", type='info'):
     """
     Write log messages to specific files based on type.
     """
+    
     # Create a timestamp
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
     # Format the message
@@ -356,17 +370,17 @@ def log_action(action="Action", details="No Details", type='info'):
                 log_entries.pop(0)
     
     # Write to the appropriate log file
-    if type == 'debug':
+    if type == 'debug' and enable_logging:
         if isDebug:
             write_to_log(DEBUG_LOG_FILE, formatted_message)
             return
-    elif type == 'error':
+    elif type == 'error' and enable_logging:
         if isDebug:
             write_to_log(DEBUG_LOG_FILE, formatted_message)
             
         log_entries.append(formatted_message)    
         write_to_log(ERROR_LOG_FILE, formatted_message)
-    else:
+    elif enable_logging:
         write_to_log(INFO_LOG_FILE, formatted_message)
         log_entries.append(formatted_message)
         
@@ -758,12 +772,14 @@ async def stake_management_loop():
                 stake_checking = False
                 await sleep_with_feedback(60, "skipping cycle")
                 continue
-
+            
+            
             # Update in shared state
             shared_state["stake_info"]["stake_amount"] = e_stake
             shared_state["stake_info"]["reclaimable_slashed_stake"] = r_slashed
             shared_state["stake_info"]["rewards_amount"] = a_rewards
 
+            stake_checking = False
             # For logic thresholds
             last_claim_block = shared_state["last_claim_block"]
             stake_amount = e_stake or 0.0
@@ -902,9 +918,11 @@ async def stake_management_loop():
             first_run = False
             stake_checking = False
         except Exception as e:
+                stake_checking = False
                 log_action("Error in stake management loop", e, "error")
                 raise Exception("Error in stake management loop")
-            # Sleep until near the next epoch
+        # Sleep until near the next epoch
+        stake_checking = False
         await sleep_until_next_epoch(block_height, buffer_blocks=buffer_blocks)
 
 
@@ -1033,7 +1051,8 @@ async def realtime_display(tmux=False):
                 
                 
                 # Update the Live display
-                live.update(Text(realtime_content), refresh=True)
+                if display_gui:
+                    live.update(Text(realtime_content), refresh=True)
 
                 # Update TMUX status bar
 
