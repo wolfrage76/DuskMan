@@ -46,7 +46,7 @@ NOTIFICATIONS:
   webhook_url:         # https://your-webhook-url.com/endpoint # For parsing with your own server/middleware
 
 LOG_FILES:
-  
+  enable_logging: False
   action_log:           # Defaults to ./duskman_actions.log
   error_log:            # Defaults to ./duskman_errors.log
   debug_log:            # Defaults to ./duskman_tmp_debug.log  :NOTE: Debug log is deleted on each start!

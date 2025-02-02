@@ -63,6 +63,7 @@ display_options = config.get('display_options', True)
 monitor_wallet = notification_config.get('monitor_balance', False)
 # Initialize parser
 parser = argparse.ArgumentParser(description="Process command line arguments")
+enable_logging = logs_config.get('enable_logging', False)
 
 # Add boolean flag for `-d`
 parser.add_argument('-d', action='store_true', help="Run without GUI display, for background usage")
@@ -358,6 +359,7 @@ def log_action(action="Action", details="No Details", type='info'):
     """
     Write log messages to specific files based on type.
     """
+    
     # Create a timestamp
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
     # Format the message
@@ -368,17 +370,17 @@ def log_action(action="Action", details="No Details", type='info'):
                 log_entries.pop(0)
     
     # Write to the appropriate log file
-    if type == 'debug':
+    if type == 'debug' and enable_logging:
         if isDebug:
             write_to_log(DEBUG_LOG_FILE, formatted_message)
             return
-    elif type == 'error':
+    elif type == 'error' and enable_logging:
         if isDebug:
             write_to_log(DEBUG_LOG_FILE, formatted_message)
             
         log_entries.append(formatted_message)    
         write_to_log(ERROR_LOG_FILE, formatted_message)
-    else:
+    elif enable_logging:
         write_to_log(INFO_LOG_FILE, formatted_message)
         log_entries.append(formatted_message)
         
