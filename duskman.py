@@ -61,6 +61,7 @@ include_rendered = web_dashboard.get('include_rendered', False)
 isDebug = logs_config.get('debug', False)
 display_options = config.get('display_options', True)
 monitor_wallet = notification_config.get('monitor_balance', False)
+
 # Initialize parser
 parser = argparse.ArgumentParser(description="Process command line arguments")
 enable_logging = logs_config.get('enable_logging', False)
@@ -489,10 +490,17 @@ async def get_wallet_balances(password, first_run=False):
                 total_str = out.replace("Total: ", "")
                 return float(total_str)
         except Exception as e:
-            log_action(
-                f"Error in get_spendable_for_address(): {str(e).replace(password, '#####')}",
-                "error"
-            )
+            if 'Connection to Rusk Failed' in str(e):
+                log_action(
+                    f"Error in get_spendable_for_address() reaching Node", f"{str(e).replace(password, '#####')}",
+                    "error"
+                )
+            else:
+                log_action(
+                    f"Error in get_spendable_for_address()", f"{str(e).replace(password, '#####')}",
+                    "error"
+                )
+
         return 0.0
 
     tasks_public = [get_spendable_for_address(addr) for addr in addresses["public"]]
@@ -531,6 +539,7 @@ async def get_wallet_balances(password, first_run=False):
 
 def calculate_rewards_per_epoch(rewards_amount, last_claim_block, current_block):
     """Estimate how many rewards are generated per epoch (2160 blocks) since last claim."""
+    
     blocks_elapsed = current_block - last_claim_block
     epochs_elapsed = blocks_elapsed / 2160
     if epochs_elapsed > 0:
@@ -735,7 +744,7 @@ async def stake_management_loop():
     """
 
     first_run = True
-    # stake_checking = True
+
     while True:
         try:
             stake_checking = True     
@@ -803,7 +812,7 @@ async def stake_management_loop():
                     stake_checking = False
                 else:
                     # Unstake & Restake
-                    act_msg = f"Unstake/Restake @ Block #{block_height}"
+                    act_msg = f"Start Unstake/Restake @ Block #{block_height}"
                     shared_state["last_action_taken"] = act_msg
                     
                     log_action(act_msg,
@@ -857,7 +866,7 @@ async def stake_management_loop():
 
                 # 1) Withdraw
                 
-                curr_cmd =f"{use_sudo} rusk-wallet --password ####### withdraw"
+                curr_cmd = f"{use_sudo} rusk-wallet --password ####### withdraw"
                 curr2 = curr_cmd
                 cmd_success = await execute_command_async(curr_cmd.replace('#######',password))
                 if not cmd_success or 'rror' in cmd_success:
@@ -1017,8 +1026,11 @@ async def realtime_display(tmux=False):
                 
                 per_epoch = str()
                 rpe = convert_to_float(shared_state.get('rewards_per_epoch',0.0))
-                if  rpe > 0.0 and int(shared_state.get("last_claim_block", 0)) > 0: # Check if we have a ~ rewards per epoch since last claim
-                    per_epoch = f"@ Epoch/claim: {format_float(rpe)}"
+                if  rpe > 0.0: # Check if we have a ~ rewards per epoch since last claim
+                    if int(shared_state.get("last_claim_block", 0)) > 0:
+                        per_epoch = f"@ Epoch/claim: {format_float(rpe)}"
+                    # else:
+                    #     per_epoch = f"Since startup: {format_float(rpe * epoch_num)}"
                 
                 reward_percent = 0.0
                 if st_info.get('rewards_amount',0.0) > 0.0 and st_info.get('stake_amount', 0.0) > 0.0:
