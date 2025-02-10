@@ -150,7 +150,7 @@ shared_state = {
     "last_action_taken": "Starting Up",
     "completion_time": "--:--",
     "peer_count": 0,
-    "price":0.0,
+    "price": 0.0,
     "market": 0,
     "volume": 0,
     "usd_24h_change": 0,
@@ -1026,7 +1026,7 @@ async def realtime_display(tmux=False):
                 
                 per_epoch = str()
                 rpe = convert_to_float(shared_state.get('rewards_per_epoch',0.0))
-                if  rpe > 0.0: # Check if we have a ~ rewards per epoch since last claim
+                if  rpe > 0.0: # Check if we have a ~ rewards per epoch since last claim        
                     if int(shared_state.get("last_claim_block", 0)) > 0:
                         per_epoch = f"@ Epoch/claim: {format_float(rpe)}"
                     # else:
