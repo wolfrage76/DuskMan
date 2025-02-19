@@ -4,7 +4,6 @@ Improved Web Dashboard
 Auth info for web dashboard
 Add commands for manually forcing claims/stakes
 More notification systems integrated
-Marketcap and other coingecko info
 Rewards tracking
 Improve Tmux statusbar display
 Diff colors for diff things in web log display

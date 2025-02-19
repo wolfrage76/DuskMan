@@ -79,7 +79,6 @@ use_sudo = 'sudo' if config.get('use_sudo', False) else ''
 
 errored = False
 log_entries = []
-stake_checking = False
 
 INFO_LOG_FILE = logs_config.get("action_log","duskman_actions.log")
 ERROR_LOG_FILE =  logs_config.get("error_log","duskman_errors.log")
@@ -154,7 +153,7 @@ shared_state = {
     "rendered":"",
     "stake_active_blk": 0,
     "options":"",
-    "rewards_per_epoch":0.0,
+    "rewards_per_epoch": 0.0,
 }
 
 # Define log file paths
@@ -595,11 +594,11 @@ async def sleep_with_feedback(seconds_to_sleep, msg=None):
     shared_state["completion_time"] = "@ " + completion_time
     
     while shared_state["remain_time"] > 0:
-        interval = min(1, shared_state["remain_time"])
-        
-        await asyncio.sleep(interval)
-        shared_state["remain_time"] -= interval
-        
+        #log_action("Sleep Countdown", f"Remaining Time: {shared_state['remain_time']}s", "debug")
+        await asyncio.sleep(1)
+        shared_state["remain_time"] -= 1
+    log_action("Sleep Countdown", f"Sleep Finished", "debug")
+
 
 async def sleep_until_next_epoch(block_height, buffer_blocks=60, msg=None):
     """
@@ -624,8 +623,6 @@ async def sleep_until_next_epoch(block_height, buffer_blocks=60, msg=None):
 #     Return how many whole minutes remain until next epoch minus buffer_blocks.
 #     """
 #     blocks_left = 2160 - (block_height % 2160) - buffer_blocks
-#     total_seconds = max(blocks_left * 10, 0)
-#     return total_seconds // 60
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -637,6 +634,8 @@ async def frequent_update_loop():
     Update the block height and balances every 20 seconds.
     Checks if the block height changes to ensure node responsiveness.
     """
+    global stake_checking
+    stake_checking = False
 
     loopcnt = 0
     consecutive_no_change = 0  # Counter for consecutive no-change in block height
@@ -644,12 +643,14 @@ async def frequent_update_loop():
     consecutive_low_peers = 0 # Track loops of low peer counts
     
     while True:
-            
+        
+        try:
+            log_action("Frequent Update", f"Block height: {shared_state['block_height']}", "debug")
             # 1) Fetch block height
             block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height", False)
             if not block_height_str:
                 log_action("Failed to fetch block height.", ' Retrying in 10s...', "error")
-                await asyncio.sleep(10)
+                await sleep_with_feedback(10, "retry block height fetch")
                 continue
             
             current_block_height = int(block_height_str)
@@ -720,7 +721,10 @@ async def frequent_update_loop():
 
             loopcnt += 1
             await asyncio.sleep(10)  # Wait 10 seconds before the next loop
-
+        except Exception as e:
+                stake_checking = False
+                log_action("Error in Frequent Update Loop", e, "error")
+                raise Exception("Error in Frequent Update Loop")
 async def init_balance():
     """
         Init display values
@@ -853,7 +857,7 @@ async def stake_management_loop():
                         log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr2}", 'error')
                         raise Exception("CMD execution failed")
 
-                    log_action("Restake Completed", f"New Stake: {format_float(float(total_restake))}")
+                    log_action("Full Restake Completed", f"New Stake: {format_float(float(total_restake))}")
                     shared_state["last_claim_block"] = block_height
 
                     stake_checking = False
@@ -892,7 +896,9 @@ async def stake_management_loop():
                 log_action("Stake Completed", f"New Stake: {format_float(new_stake)}")
                 shared_state["last_claim_block"] = block_height
                 stake_checking = False
+                log_action("Stake Loop", "Finished staking, now sleeping.", "debug")
                 await sleep_with_feedback(2160 * 10, "1 epoch wait after claiming")
+                log_action("Stake Loop", "Woke up from sleep.", "debug")
                 continue
             else:
                 # No action
@@ -906,6 +912,7 @@ async def stake_management_loop():
                 if first_run:
                     shared_state["last_action_taken"] = f"Startup @ Block #{block_height}"
                     first_run = False
+                    stake_checking = False
                 else:
                     stake_checking = False
                     # If no action, just wait and don't log since it's no longer first run
