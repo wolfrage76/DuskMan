@@ -645,7 +645,7 @@ async def frequent_update_loop():
     while True:
         
         try:
-            log_action("Frequent Update", f"Block height: {shared_state['block_height']}", "debug")
+            
             # 1) Fetch block height
             block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height", False)
             if not block_height_str:
@@ -679,6 +679,7 @@ async def frequent_update_loop():
             
             # Perform balance and stake-info updates every X  loops (e.g., 30 is 5 minutes)
             if loopcnt >= 20 and not stake_checking:
+                log_action("Frequent Update (>=20 Loops)", f"Block height: {shared_state['block_height']}", "debug")
                 pub_bal, shld_bal = await get_wallet_balances(password)
                 shared_state["balances"]["public"] = pub_bal or 0.0
                 shared_state["balances"]["shielded"] = shld_bal or 0.0
@@ -756,7 +757,7 @@ async def stake_management_loop():
 
     while True:
         try:
-            stake_checking = True     
+                
             # For logic, we may want a fresh block height right before we do anything:
             block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height", False)
             if not block_height_str:
@@ -777,6 +778,7 @@ async def stake_management_loop():
                 continue
 
             # Fetch stake-info
+            stake_checking = True 
             stake_output = await execute_command_async(f"{use_sudo} rusk-wallet --password {password} stake-info")
             if not stake_output:
                 log_action("Error", "Failed to fetch stake-info. Retrying in 60s...", "error")
@@ -861,12 +863,16 @@ async def stake_management_loop():
                     shared_state["last_claim_block"] = block_height
 
                     stake_checking = False
+                    rewards_per_epoch = 0
+                    shared_state["rewards_per_epoch"] = rewards_per_epoch
                     # Sleep 2 epochs
                     await sleep_until_next_epoch(block_height + 2160, msg="2-epoch wait after restaking...")
                     continue
 
             elif should_claim_and_stake(rewards_amount, incremental_threshold) and not first_run:
                 # Claim & Stake
+                
+                
                 shared_state["last_action_taken"] = f"Claim/Stake @ Block {block_height}"
                 log_action(
                     shared_state["last_action_taken"],
@@ -899,6 +905,8 @@ async def stake_management_loop():
                 log_action("Stake Loop", "Finished staking, now sleeping.", "debug")
                 await sleep_with_feedback(2160 * 10, "1 epoch wait after claiming")
                 log_action("Stake Loop", "Woke up from sleep.", "debug")
+                rewards_per_epoch = 0
+                shared_state["rewards_per_epoch"] = rewards_per_epoch
                 continue
             else:
                 # No action

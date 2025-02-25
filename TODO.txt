@@ -4,8 +4,8 @@ Improved Web Dashboard
 Auth info for web dashboard
 Add commands for manually forcing claims/stakes
 More notification systems integrated
-Rewards tracking
+Rewards history tracking
 Improve Tmux statusbar display
 Diff colors for diff things in web log display
 Separate balance notification logs and action logs in web display
-Allow separate notifications config for balance change (i.e they could go to a separate discord channel)
+Allow separate notifications config for balance change (i.e they could go to a separate discord channel)2
