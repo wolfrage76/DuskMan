@@ -75,14 +75,10 @@ args = parser.parse_args() or {}
 # Store it as a boolean variable
 display_gui = not args.d
 
-if config.get('use_sudo', False):
-    use_sudo = 'sudo'
-else:
-    use_sudo = ''
+use_sudo = 'sudo' if config.get('use_sudo', False) else ''
 
 errored = False
 log_entries = []
-stake_checking = False
 
 INFO_LOG_FILE = logs_config.get("action_log","duskman_actions.log")
 ERROR_LOG_FILE =  logs_config.get("error_log","duskman_errors.log")
@@ -157,7 +153,7 @@ shared_state = {
     "rendered":"",
     "stake_active_blk": 0,
     "options":"",
-    "rewards_per_epoch":0.0,
+    "rewards_per_epoch": 0.0,
 }
 
 # Define log file paths
@@ -183,6 +179,16 @@ def get_env_variable(var_name='WALLET_PASSWORD', dotenv_key='WALLET_PASSWORD'):
     return value
 
 password = get_env_variable(config.get('pwd_var_name', 'WALLET_PASSWORD'), dotenv_key="WALLET_PASSWORD")
+
+def format_number(number: int) -> str:
+    return f"{number:,}"
+
+def convert_timestamp(timestamp: str) -> str:
+    try:
+        dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+        return dt.strftime('%m/%d/%y')
+    except ValueError as e:
+        return f"Error: Invalid timestamp format - {e}"
 
 
 def display_wallet_distribution_bar(public_amount, shielded_amount, width=30):
@@ -339,7 +345,7 @@ async def fetch_dusk_data():
 
 
 def format_float(value, places=4):
-    """Convert float to a string with max 4 (default) decimal digits."""
+    """Convert float to a string with max (4 default) decimal digits."""
     parts = str(convert_to_float(value)).split('.')
     if len(parts) == 2:
         return f"{parts[0]}.{parts[1][:places]}" if len(parts[1]) > 0 else parts[0]
@@ -361,9 +367,7 @@ def log_action(action="Action", details="No Details", type='info'):
     Write log messages to specific files based on type.
     """
     
-    # Create a timestamp
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-    # Format the message
     formatted_message = LOG_FORMAT.format(timestamp=timestamp, message=f"{action}: {details}")
     
     formatted_message = formatted_message.replace(password, '#####').replace(password, '#####')
@@ -590,11 +594,11 @@ async def sleep_with_feedback(seconds_to_sleep, msg=None):
     shared_state["completion_time"] = "@ " + completion_time
     
     while shared_state["remain_time"] > 0:
-        interval = min(1, shared_state["remain_time"])
-        
-        await asyncio.sleep(interval)
-        shared_state["remain_time"] -= interval
-        
+        #log_action("Sleep Countdown", f"Remaining Time: {shared_state['remain_time']}s", "debug")
+        await asyncio.sleep(1)
+        shared_state["remain_time"] -= 1
+    log_action("Sleep Countdown", f"Sleep Finished", "debug")
+
 
 async def sleep_until_next_epoch(block_height, buffer_blocks=60, msg=None):
     """
@@ -619,8 +623,6 @@ async def sleep_until_next_epoch(block_height, buffer_blocks=60, msg=None):
 #     Return how many whole minutes remain until next epoch minus buffer_blocks.
 #     """
 #     blocks_left = 2160 - (block_height % 2160) - buffer_blocks
-#     total_seconds = max(blocks_left * 10, 0)
-#     return total_seconds // 60
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -632,6 +634,8 @@ async def frequent_update_loop():
     Update the block height and balances every 20 seconds.
     Checks if the block height changes to ensure node responsiveness.
     """
+    global stake_checking
+    stake_checking = False
 
     loopcnt = 0
     consecutive_no_change = 0  # Counter for consecutive no-change in block height
@@ -639,12 +643,14 @@ async def frequent_update_loop():
     consecutive_low_peers = 0 # Track loops of low peer counts
     
     while True:
+        
+        try:
             
             # 1) Fetch block height
             block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height", False)
             if not block_height_str:
                 log_action("Failed to fetch block height.", ' Retrying in 10s...', "error")
-                await asyncio.sleep(10)
+                await sleep_with_feedback(10, "retry block height fetch")
                 continue
             
             current_block_height = int(block_height_str)
@@ -673,6 +679,7 @@ async def frequent_update_loop():
             
             # Perform balance and stake-info updates every X  loops (e.g., 30 is 5 minutes)
             if loopcnt >= 20 and not stake_checking:
+                log_action("Frequent Update (>=20 Loops)", f"Block height: {shared_state['block_height']}", "debug")
                 pub_bal, shld_bal = await get_wallet_balances(password)
                 shared_state["balances"]["public"] = pub_bal or 0.0
                 shared_state["balances"]["shielded"] = shld_bal or 0.0
@@ -684,7 +691,7 @@ async def frequent_update_loop():
                     shared_state["stake_info"]["reclaimable_slashed_stake"] = r_slashed or 0.0
                     shared_state["stake_info"]["rewards_amount"] = a_rewards or 0.0
                 
-                await fetch_dusk_data()  
+                await fetch_dusk_data()
                     
                 loopcnt = 0  # Reset loop count after update
             
@@ -715,7 +722,10 @@ async def frequent_update_loop():
 
             loopcnt += 1
             await asyncio.sleep(10)  # Wait 10 seconds before the next loop
-
+        except Exception as e:
+                stake_checking = False
+                log_action("Error in Frequent Update Loop", e, "error")
+                raise Exception("Error in Frequent Update Loop")
 async def init_balance():
     """
         Init display values
@@ -747,7 +757,7 @@ async def stake_management_loop():
 
     while True:
         try:
-            stake_checking = True     
+                
             # For logic, we may want a fresh block height right before we do anything:
             block_height_str = await execute_command_async(f"{use_sudo} ruskquery block-height", False)
             if not block_height_str:
@@ -768,6 +778,7 @@ async def stake_management_loop():
                 continue
 
             # Fetch stake-info
+            stake_checking = True 
             stake_output = await execute_command_async(f"{use_sudo} rusk-wallet --password {password} stake-info")
             if not stake_output:
                 log_action("Error", "Failed to fetch stake-info. Retrying in 60s...", "error")
@@ -848,16 +859,20 @@ async def stake_management_loop():
                         log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr2}", 'error')
                         raise Exception("CMD execution failed")
 
-                    log_action("Restake Completed", f"New Stake: {format_float(float(total_restake))}")
+                    log_action("Full Restake Completed", f"New Stake: {format_float(float(total_restake))}")
                     shared_state["last_claim_block"] = block_height
 
                     stake_checking = False
+                    rewards_per_epoch = 0
+                    shared_state["rewards_per_epoch"] = rewards_per_epoch
                     # Sleep 2 epochs
                     await sleep_until_next_epoch(block_height + 2160, msg="2-epoch wait after restaking...")
                     continue
 
             elif should_claim_and_stake(rewards_amount, incremental_threshold) and not first_run:
                 # Claim & Stake
+                
+                
                 shared_state["last_action_taken"] = f"Claim/Stake @ Block {block_height}"
                 log_action(
                     shared_state["last_action_taken"],
@@ -887,7 +902,11 @@ async def stake_management_loop():
                 log_action("Stake Completed", f"New Stake: {format_float(new_stake)}")
                 shared_state["last_claim_block"] = block_height
                 stake_checking = False
+                log_action("Stake Loop", "Finished staking, now sleeping.", "debug")
                 await sleep_with_feedback(2160 * 10, "1 epoch wait after claiming")
+                log_action("Stake Loop", "Woke up from sleep.", "debug")
+                rewards_per_epoch = 0
+                shared_state["rewards_per_epoch"] = rewards_per_epoch
                 continue
             else:
                 # No action
@@ -901,6 +920,7 @@ async def stake_management_loop():
                 if first_run:
                     shared_state["last_action_taken"] = f"Startup @ Block #{block_height}"
                     first_run = False
+                    stake_checking = False
                 else:
                     stake_checking = False
                     # If no action, just wait and don't log since it's no longer first run
@@ -1012,9 +1032,15 @@ async def realtime_display(tmux=False):
                 ath_change = shared_state["ath_change_percentage"]
                 ath_date = shared_state["ath_date"]
                 
+                if shared_state['market_cap_change_percentage_24h'] > 0:
+                    mcap_color = GREEN
+                else:
+                    mcap_color = RED
+                
                 atl = shared_state["atl"]
                 atl_date = shared_state["atl_date"]
-                
+                mcap = f'{LIGHT_WHITE}24hr Volume: ${format_number(volume)}  Market Cap: ${format_number(mkt_cap)} ({mcap_color}{mkt_cap_change:.2f}%{LIGHT_WHITE})\n'
+                athl = f' {LIGHT_WHITE}ATH: ${format_float(ath)} ({ath_change:.2f}%) {convert_timestamp(ath_date)} | ATL: ${format_float(atl)} {convert_timestamp(atl_date)}\n'
                 ######################
                 
                 top_bar = f" {LIGHT_WHITE}======={DEFAULT} {currenttime} Block: {LIGHT_BLUE}#{blk} {DEFAULT}(E: {LIGHT_BLUE}{epoch_num}{DEFAULT}) Peers: {peercolor}{shared_state['peer_count']}{DEFAULT} {LIGHT_WHITE}=======\n"
@@ -1054,6 +1080,9 @@ async def realtime_display(tmux=False):
                     f"    {YELLOW}Rewards{DEFAULT}       | {YELLOW}{format_float(st_info['rewards_amount'])} ({LIGHT_BLUE}{reward_percent:.4f}%{DEFAULT}) (${format_float(st_info['rewards_amount'] * price, 2)}) {LIGHT_WHITE}{per_epoch}{DEFAULT}\n"
                     f"    {LIGHT_RED}Reclaimable{DEFAULT}   | {LIGHT_RED}{format_float(st_info['reclaimable_slashed_stake'])} (${format_float(st_info['reclaimable_slashed_stake'] * price, 2)}){DEFAULT}\n"
                     f" {LIGHT_WHITE}{('=' * (len(remove_ansi(top_bar)) - 2))}{DEFAULT}\n"  
+                    f"  {mcap} {athl}\n"
+                    
+                    
                 )
                 
                 if include_rendered:
