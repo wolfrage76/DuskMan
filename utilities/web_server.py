@@ -1,12 +1,7 @@
 import asyncio
-import json
 from aiohttp import web
 import aiohttp
-from datetime import datetime
-import os
-import jinja2
-import aiohttp_jinja2
-from pathlib import Path
+
 
 # Add these imports for WebSockets
 from aiohttp import WSCloseCode
@@ -51,7 +46,7 @@ async def websocket_handler(request):
                 if msg.data == 'close':
                     await ws.close()
             elif msg.type == aiohttp.WSMsgType.ERROR:
-                print(f'WebSocket connection closed with exception {ws.exception()}')
+                print(f'Weimport jsonbSocket connection closed with exception {ws.exception()}')
     finally:
         # Remove from active connections when done
         active_ws_connections.discard(ws)
@@ -72,13 +67,6 @@ async def start_dashboard(shared_state, log_entries, host='0.0.0.0', port=8080):
     app['shared_state'] = shared_state
     app['log_entries'] = log_entries
     
-    # Set up Jinja2 templates
-    templates_path = Path(__file__).parent / 'templates'
-    aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader(str(templates_path)))
-    
-    # Routes
-    app.router.add_get('/', dashboard_handler)
-    app.router.add_get('/api/data', data_handler)
     app.router.add_get('/ws', websocket_handler)  # Add WebSocket endpoint
     
     # Start the update broadcaster
