@@ -320,19 +320,17 @@
             </div>
             
             <div class="stat-compact">
-              <div class="stat-label">Volume/Market Cap:</div>
               <div class="stat-value">
-                24h: ${formatUSD(d.volume)} | Market Cap: ${formatUSD(d.market_cap)}
+                24h Volume: ${formatUSD(d.volume)} | Market Cap: ${formatUSD(d.market_cap)}
                 <span class="${d.market_cap_change_24h >= 0 ? 'positive-change' : 'negative-change'}">(${formatPercent(d.market_cap_change_24h)})</span>
               </div>
             </div>
             
             <div class="stat-compact">
-              <div class="stat-label">ATH/ATL:</div>
               <div class="stat-value">
-                High: ${formatUSD(d.ath)} 
+                ATH: ${formatUSD(d.ath)} 
                 <span class="${d.ath_change >= 0 ? 'positive-change' : 'negative-change'}">(${formatPercent(d.ath_change)})</span> | 
-                Low: ${formatUSD(d.atl)}
+                ATL: ${formatUSD(d.atl)}
               </div>
             </div>
           </div>
@@ -361,7 +359,7 @@
 
   // Update dashboard immediately and then every 2 seconds
   updateDashboard();
-  setInterval(updateDashboard, 2000);
+  setInterval(updateDashboard, 1000);
 </script>
 
 </body>

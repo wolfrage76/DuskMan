@@ -542,22 +542,30 @@ def format_hms(seconds):
 
     
 
-async def sleep_with_feedback(seconds_to_sleep, msg=None):
+async def sleep_with_feedback(seconds, message=""):
     """
-    Asynchronous version of sleep with visual feedback.
-    Updates shared_state['remain_time'] for real-time display.
+    Sleep for the specified number of seconds, updating the shared state with remaining time.
     """
-    completion_time = (datetime.now() + timedelta(seconds=seconds_to_sleep)).strftime('%H:%M')
-
-    shared_state["remain_time"] = seconds_to_sleep
-    shared_state["completion_time"] = "@ " + completion_time
+    global shared_state
     
+    # Calculate the completion time as a timestamp
+    now = datetime.now()
+    completion_time = now + timedelta(seconds=seconds)
+    
+    # Store both the formatted time and the timestamp
+    shared_state["completion_time"] = completion_time.strftime("%H:%M:%S")
+    shared_state["completion_timestamp"] = int(completion_time.timestamp() * 1000)  # Milliseconds since epoch
+    shared_state["remain_time"] = seconds  # Initialize the countdown
+    
+    if message:
+        log_action("Sleep Countdown", f"{message} ({seconds}s)", "debug")
+    
+    # Sleep in 1-second increments, updating the remain_time each second
     while shared_state["remain_time"] > 0:
-        #log_action("Sleep Countdown", f"Remaining Time: {shared_state['remain_time']}s", "debug")
         await asyncio.sleep(1)
         shared_state["remain_time"] -= 1
-    log_action("Sleep Countdown", f"Sleep Finished", "debug")
-
+    
+    log_action("Sleep Countdown", "Sleep Finished", "debug")
 
 async def sleep_until_next_epoch(block_height, buffer_blocks=60, msg=None):
     """
