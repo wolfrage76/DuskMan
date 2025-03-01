@@ -32,6 +32,7 @@ The main entry point for the application. It initializes all the components, cre
 ### Blockchain Client (`blockchain_client.py`)
 
 Handles direct interactions with the Dusk blockchain, including:
+
 - Executing blockchain commands
 - Fetching block height and peer count
 - Getting wallet balances
@@ -41,6 +42,7 @@ Handles direct interactions with the Dusk blockchain, including:
 ### Blockchain Monitor (`blockchain_monitor.py`)
 
 Monitors the blockchain for updates and maintains the shared state:
+
 - Periodically checks block height and peer count
 - Updates wallet balances and stake information
 - Detects and reports issues (e.g., block height not changing, low peer count)
@@ -57,6 +59,7 @@ Handles loading and processing configuration from YAML files and environment var
 ### Display Manager (`display_manager.py`)
 
 Manages the real-time display of blockchain and staking information:
+
 - Updates the console display
 - Updates the TMUX status bar
 - Formats data for display
@@ -64,6 +67,7 @@ Manages the real-time display of blockchain and staking information:
 ### Logger (`logger.py`)
 
 Handles logging functionality:
+
 - Writes log messages to files
 - Maintains a log history in memory
 - Sends notifications for important events
@@ -71,12 +75,14 @@ Handles logging functionality:
 ### Market Data (`market_data.py`)
 
 Fetches and processes cryptocurrency market data:
+
 - Gets price and market data from CoinGecko
 - Updates the shared state with market information
 
 ### Notifications (`notifications.py`)
 
 Sends notifications through various services:
+
 - Discord
 - Pushbullet
 - Telegram
@@ -87,6 +93,7 @@ Sends notifications through various services:
 ### Stake Manager (`stake_manager.py`)
 
 Manages staking operations:
+
 - Monitors stake information
 - Decides when to claim rewards and stake
 - Decides when to unstake and restake

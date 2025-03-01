@@ -53,7 +53,7 @@ class StakeManager:
         """
         return (self.auto_reclaim_full_restakes and 
                 (reclaimable_slashed_stake >= self.min_slashed and 
-                 reclaimable_slashed_stake >= downtime_loss))
+                    reclaimable_slashed_stake >= downtime_loss))
 
     def should_claim_and_stake(self, rewards: float, incremental_threshold: float) -> bool:
         """
@@ -68,8 +68,8 @@ class StakeManager:
         """
         return (self.auto_stake_rewards and 
                 (rewards >= self.min_rewards and 
-                 rewards >= incremental_threshold))
-                 
+                    rewards >= incremental_threshold))
+        
     async def sleep_with_feedback(self, seconds: int, message: str = "") -> None:
         """
         Sleep for the specified number of seconds, updating the shared state with remaining time.

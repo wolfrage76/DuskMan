@@ -103,8 +103,8 @@ def get_env_variable(var_name='WALLET_PASSWORD', dotenv_key='WALLET_PASSWORD'):
         value = os.getenv(dotenv_key)
         if not value:
             log_action("Wallet Password Variable Error", 
-                      f"Neither environment variable '{var_name}' nor .env key '{dotenv_key}' found for wallet password.", 
-                      "error")
+                        f"Neither environment variable '{var_name}' nor .env key '{dotenv_key}' found for wallet password.", 
+                        "error")
             sys.exit(1)
             
     return value 
