@@ -57,6 +57,27 @@ def create_app(shared_state, log_entries):
             },
             "last_action": shared_state["last_action_taken"],
             "rendered": shared_state["rendered"],
+            
+            # Add additional market data
+            "price_change_7d": shared_state.get("price_change_percentage_7d_in_currency", 0),
+            "price_change_30d": shared_state.get("price_change_percentage_30d_in_currency", 0),
+            "price_change_1y": shared_state.get("price_change_percentage_1y_in_currency", 0),
+            "volume": shared_state.get("volume", 0),
+            "market_cap": shared_state.get("market_cap", 0),
+            "market_cap_change_24h": shared_state.get("market_cap_change_percentage_24h", 0),
+            "ath": shared_state.get("ath", 0),
+            "ath_change": shared_state.get("ath_change_percentage", 0),
+            "ath_date": shared_state.get("ath_date", ""),
+            "atl": shared_state.get("atl", 0),
+            "atl_date": shared_state.get("atl_date", ""),
+            
+            # Add reward percentage and per epoch data
+            "rewards_per_epoch": shared_state.get("rewards_per_epoch", 0),
+            "reward_percent": calculate_reward_percent(shared_state),
+            
+            # Add epoch information
+            "current_epoch": int(shared_state["block_height"] / 2160),
+            "active_block": shared_state.get("active_blk", 0),
         }
 
         # Reverse the logs so newest appear first
@@ -89,3 +110,11 @@ async def start_dashboard(shared_state, log_entries, host="0.0.0.0", port=5000):
     await asyncio.sleep(0.1)
     logging.debug("DuskMan dashboard started in background thread.")
     return flask_thread
+
+def calculate_reward_percent(shared_state):
+    """Calculate reward percentage relative to stake amount"""
+    rewards = shared_state["stake_info"]["rewards_amount"]
+    stake = shared_state["stake_info"]["stake_amount"]
+    if stake > 0:
+        return (rewards / stake) * 100
+    return 0

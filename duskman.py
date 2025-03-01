@@ -15,6 +15,8 @@ from rich import print
 from datetime import datetime, timedelta
 from utilities.notifications import NotificationService
 from rich.traceback import install
+from utilities.colors import *
+from utilities.config import initialize_config
 
 install()
 load_dotenv()
@@ -24,47 +26,43 @@ console = Console()
 # CONFIGURATION AND INITIALIZING
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Initialize configuration
+config_data = initialize_config()
 
+# Extract configuration values
+min_rewards = config_data['min_rewards']
+min_slashed = config_data['min_slashed']
+buffer_blocks = config_data['buffer_blocks']
+min_stake_amount = config_data['min_stake_amount']
+min_peers = config_data['min_peers']
+auto_stake_rewards = config_data['auto_stake_rewards']
+auto_reclaim_full_restakes = config_data['auto_reclaim_full_restakes']
+pwd_var = config_data['pwd_var']
+enable_dashboard = config_data['enable_dashboard']
+dash_port = config_data['dash_port']
+dash_ip = config_data['dash_ip']
+include_rendered = config_data['include_rendered']
+isDebug = config_data['isDebug']
+display_options = config_data['display_options']
+monitor_wallet = config_data['monitor_wallet']
+display_gui = config_data['display_gui']
+use_sudo = config_data['use_sudo']
+enable_tmux = config_data['enable_tmux']
+password = config_data['password']
+enable_logging = config_data['enable_logging']
+INFO_LOG_FILE = config_data['INFO_LOG_FILE']
+ERROR_LOG_FILE = config_data['ERROR_LOG_FILE']
+DEBUG_LOG_FILE = config_data['DEBUG_LOG_FILE']
 
-def load_config(section="GENERAL", file_path="config.yaml"):
-    """Load configuration from a YAML file."""
-    try:
-        with open(file_path, "r") as file:
-            config = yaml.safe_load(file)
-            return config.get(section, {})
-    except FileNotFoundError:
-        log_action("Config File error", f"Configuration file {file_path} not found. Exiting.", "error")
-        sys.exit(1)
-    except yaml.YAMLError as e:
-        log_action("Config File Error", f"Error parsing YAML file {file_path}: {e}", "error")
-        sys.exit(1)
+# For components that need the original config sections
+notification_config = config_data['notification_config']
+status_bar = config_data['status_bar_config']
 
-# Load configuration
-config = load_config('GENERAL')
-notification_config = load_config('NOTIFICATIONS')
-status_bar = load_config('STATUSBAR')
-web_dashboard = load_config('WEB_DASHBOARD')
-logs_config = load_config('LOG_FILES')
-
-min_rewards = config.get('min_rewards', 1)
-min_slashed = config.get('min_slashed', 1)
-buffer_blocks = config.get('buffer_blocks', 60)
-min_stake_amount = config.get('min_stake_amount', 1000)
-min_peers = config.get('min_peers', 10)
-auto_stake_rewards = config.get('auto_stake_rewards', False)
-auto_reclaim_full_restakes = config.get('auto_reclaim_full_restakes', False)
-pwd_var = config.get('pwd_var_name', 'MY_WALLET_VARIABLE')
-enable_dashboard = web_dashboard.get('enable_dashboard', True)
-dash_port = web_dashboard.get('dash_port', '5000')
-dash_ip = web_dashboard.get('dash_ip', '0.0.0.0')
-include_rendered = web_dashboard.get('include_rendered', False)
-isDebug = logs_config.get('debug', False)
-display_options = config.get('display_options', True)
-monitor_wallet = notification_config.get('monitor_balance', False)
+# Initialize the notification service with the notification config
+notifier = NotificationService(notification_config)
 
 # Initialize parser
 parser = argparse.ArgumentParser(description="Process command line arguments")
-enable_logging = logs_config.get('enable_logging', False)
 
 # Add boolean flag for `-d`
 parser.add_argument('-d', action='store_true', help="Run without GUI display, for background usage")
@@ -75,55 +73,18 @@ args = parser.parse_args() or {}
 # Store it as a boolean variable
 display_gui = not args.d
 
-use_sudo = 'sudo' if config.get('use_sudo', False) else ''
-
 errored = False
 log_entries = []
 
-INFO_LOG_FILE = logs_config.get("action_log","duskman_actions.log")
-ERROR_LOG_FILE =  logs_config.get("error_log","duskman_errors.log")
-DEBUG_LOG_FILE =  logs_config.get("debug_log","duskman_tmp_debug.log")
-
-if isDebug and os.path.exists(DEBUG_LOG_FILE):
-    os.remove(DEBUG_LOG_FILE)
-
-END_UNDERLINE = "\033[0m"
-UNDERLINE = "\033[4m"
-
 byline = f"DuskMan Stake Management System: by Wolfrage"
-if not config.get('display_options', True):
+if not config_data['display_options']:
     byline = f"{UNDERLINE}{byline}{END_UNDERLINE}\n"
     
 # If user passes "tmux" as first argument, override enable_tmux
-if config.get('enable_tmux', False) or (len(sys.argv) > 1 and sys.argv[1].lower() == 'tmux'):
+if config_data['enable_tmux'] or (len(sys.argv) > 1 and sys.argv[1].lower() == 'tmux'):
     enable_tmux = True
 else:
     enable_tmux = False
-
-# Initialize the notification service
-notifier = NotificationService(notification_config)
-
-
-BLACK = "\033[0;30m"
-RED = "\033[0;31m"
-GREEN = "\033[0;32m"
-BROWN = "\033[0;33m"
-BLUE = "\033[0;34m"
-PURPLE = "\033[0;35m"
-CYAN = "\033[0;36m"
-LIGHT_GRAY = "\033[0;37m"
-DARK_GRAY = "\033[1;30m"
-LIGHT_RED = "\033[1;31m"
-LIGHT_GREEN = "\033[1;32m"
-YELLOW = "\033[1;33m"
-LIGHT_BLUE = "\033[1;34m"
-LIGHT_PURPLE = "\033[1;35m"
-LIGHT_CYAN = "\033[1;36m"
-LIGHT_WHITE = "\033[1;37m"
-
-DEFAULT = "\033[1;39m"
-
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SHARED STATE
@@ -177,8 +138,6 @@ def get_env_variable(var_name='WALLET_PASSWORD', dotenv_key='WALLET_PASSWORD'):
             sys.exit(1)
             
     return value
-
-password = get_env_variable(config.get('pwd_var_name', 'WALLET_PASSWORD'), dotenv_key="WALLET_PASSWORD")
 
 def format_number(number: int) -> str:
     return f"{number:,}"
@@ -556,11 +515,11 @@ def calculate_downtime_loss(rewards_per_epoch, downtime_epochs=1):
 
 def should_unstake_and_restake(reclaimable_slashed_stake, downtime_loss):
     """Determine if unstaking/restaking is worthwhile."""
-    return auto_reclaim_full_restakes and (reclaimable_slashed_stake >= config.get('min_slashed',1) and reclaimable_slashed_stake >= downtime_loss)
+    return auto_reclaim_full_restakes and (reclaimable_slashed_stake >= config_data['min_slashed'] and reclaimable_slashed_stake >= downtime_loss)
 
 def should_claim_and_stake(rewards, incremental_threshold):
     """Determine if claiming and staking rewards is worthwhile."""
-    return auto_stake_rewards and (rewards >= config.get('min_rewards',1) and rewards >= incremental_threshold)
+    return auto_stake_rewards and (rewards >= config_data['min_rewards'] and rewards >= incremental_threshold)
 
 def format_hms(seconds):
     """
@@ -788,7 +747,7 @@ async def stake_management_loop():
 
             e_stake, r_slashed, a_rewards = parse_stake_info(stake_output)
             if e_stake is None or r_slashed is None or a_rewards is None:
-                log_action("Skiping Cycle","Parsing stake info failed or incomplete. Skipping cycle...", 'debug')
+                log_action("Skiping Cycle","Parsing stake info incomplete. Sleeping 60s...", 'debug')
                 stake_checking = False
                 await sleep_with_feedback(60, "skipping cycle")
                 continue
@@ -847,7 +806,7 @@ async def stake_management_loop():
                     curr2 = curr_cmd
                     cmd_success = await execute_command_async(curr_cmd.replace('#######',password))
                     if not cmd_success or 'rror' in cmd_success:
-                        log_action(f"Withdraw Failed (Block #{block_height})", f"Command: {curr2}", 'error')
+                        log_action(f"Unstake Failed (Block #{block_height})", f"Command: {curr2}", 'error')
                         raise Exception("CMD execution failed")
                     
                     # 3) Stake
@@ -1199,14 +1158,14 @@ async def main():
 
     # Update shared state with options display
     
-    if config.get('display_options', True):
+    if config_data['display_options']:
         shared_state["options"] = byline + '\n'+ separator + auto_status
     else:
         shared_state["options"] = byline 
 
     if enable_webdash:
         from utilities.web_dashboard import start_dashboard
-    await start_dashboard(shared_state, log_entries, host=dash_ip, port=dash_port) 
+        await start_dashboard(shared_state, log_entries, host=dash_ip, port=dash_port)
     
     await asyncio.gather(
         frequent_update_loop(),
