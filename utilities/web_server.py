@@ -46,7 +46,7 @@ async def websocket_handler(request):
                 if msg.data == 'close':
                     await ws.close()
             elif msg.type == aiohttp.WSMsgType.ERROR:
-                print(f'Weimport jsonbSocket connection closed with exception {ws.exception()}')
+                print(f'WebSocket connection closed with exception {ws.exception()}')
     finally:
         # Remove from active connections when done
         active_ws_connections.discard(ws)
