@@ -129,7 +129,7 @@ class DisplayManager:
                     
                     # Build the display
                     top_bar = f" {LIGHT_WHITE}======={DEFAULT} {currenttime} Block: {LIGHT_BLUE}#{blk} {DEFAULT}(E: {LIGHT_BLUE}{epoch_num}{DEFAULT}) Peers: {peercolor}{self.shared_state['peer_count']}{DEFAULT} {LIGHT_WHITE}=======\n"
-                    title_spaces = int((len(remove_ansi(top_bar)) - len(remove_ansi(self.byline))) / 2)
+                    title_spaces = int((len(remove_ansi(top_bar)) - len(remove_ansi(self.byline))) / 7) # Quick fix meh
 
                     opts = '\n' + (' ' * title_spaces) + BLUE + self.shared_state["options"]
                     
