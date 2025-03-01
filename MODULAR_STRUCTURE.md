@@ -96,6 +96,7 @@ Manages staking operations:
 ### Utils (`utils.py`)
 
 Provides utility functions used across the application:
+
 - Formatting functions
 - Environment variable handling
 - Wallet distribution visualization
@@ -106,12 +107,14 @@ Provides utility functions used across the application:
 ### Web Dashboard (`web_dashboard.py`)
 
 Provides a web-based dashboard using Flask:
+
 - Displays real-time blockchain and staking information
 - Provides an API for accessing data
 
 ### Web Server (`web_server.py`)
 
 Provides a web server using aiohttp:
+
 - Serves the dashboard
 - Handles WebSocket connections for real-time updates
 
