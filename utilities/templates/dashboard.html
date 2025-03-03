@@ -357,9 +357,194 @@
     }
   }
 
-  // Update dashboard immediately and then every 2 seconds
+  // Client-side timer variables
+  let remainingTime = 0;
+  let completionTime = "--:--";
+  let timerInterval = null;
+  let timerElement = null;
+  
+  // Function to update the timer display
+  function updateTimerDisplay() {
+    if (remainingTime > 0) {
+      remainingTime -= 1;
+      const timeString = formatHMS(remainingTime);
+      
+      // Find and update the timer element if we haven't stored it yet
+      if (!timerElement) {
+        // Find the timer element by looking for the "Next Check:" label
+        const labels = document.querySelectorAll('.stat-label');
+        for (let i = 0; i < labels.length; i++) {
+          if (labels[i].textContent === 'Next Check:') {
+            // The next sibling should be the value element
+            timerElement = labels[i].nextElementSibling;
+            break;
+          }
+        }
+      }
+      
+      // Update the timer if we found the element
+      if (timerElement) {
+        timerElement.innerHTML = `${timeString} <span style="opacity:0.7">(${completionTime})</span>`;
+      }
+    }
+  }
+  
+  // Modified updateDashboard to handle timer
+  async function updateDashboard() {
+    try {
+      const response = await fetch('/api/data');
+      if (!response.ok) {
+        console.error("Error fetching data:", response.statusText);
+        return;
+      }
+      const jsonData = await response.json();
+      const d = jsonData.data;
+      const logs = jsonData.log_entries;
+      
+      // Update timer variables from server data
+      remainingTime = d.remain_time;
+      completionTime = d.completion_time;
+      
+      // Clear existing timer interval if it exists
+      if (timerInterval) {
+        clearInterval(timerInterval);
+      }
+      
+      // Start a new timer interval
+      timerInterval = setInterval(updateTimerDisplay, 1000);
+
+      // Update stats card
+      const statsCard = document.getElementById('stats-card');
+      
+      // Calculate time remaining
+      const timeString = formatHMS(remainingTime);
+      
+      // Create stats HTML
+      statsCard.innerHTML = `
+        <div class="card-section">
+          <h4>Node Status</h4>
+          <div class="stat-grid">
+            <div class="stat-label">Block Height:</div>
+            <div class="stat-value highlight-value">#${d.block_height} <span style="opacity:0.7">(Epoch: ${d.current_epoch})</span></div>
+            <div class="stat-label">Peer Count:</div>
+            <div class="stat-value">${d.peer_count}</div>
+            <div class="stat-label">Last Action:</div>
+            <div class="stat-value">${d.last_action}</div>
+            <div class="stat-label">Next Check:</div>
+            <div class="stat-value">${timeString} <span style="opacity:0.7">(${d.completion_time})</span></div>
+          </div>
+        </div>
+        
+        <div class="card-section">
+          <h4>Wallet Status</h4>
+          <div class="section-content">
+            <div class="stat-row tree-parent">
+              <div class="stat-label">Balance:</div>
+              <div class="stat-value highlight-value">${formatNumber(d.balances_total)} DUSK <span style="opacity:0.7">(${formatUSD(d.balances_total * d.price)})</span></div>
+            </div>
+            <div class="stat-row tree-item">
+              <div class="stat-label">Public:</div>
+              <div class="stat-value">${formatNumber(d.balances_public)} DUSK <span style="opacity:0.7">(${formatUSD(d.balances_public * d.price)})</span></div>
+            </div>
+            <div class="stat-row tree-item">
+              <div class="stat-label">Shielded:</div>
+              <div class="stat-value">${formatNumber(d.balances_shielded)} DUSK <span style="opacity:0.7">(${formatUSD(d.balances_shielded * d.price)})</span></div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="card-section">
+          <h4>Staking Status</h4>
+          <div class="section-content">
+            <div class="stat-row">
+              <div class="stat-label">Staked Amount:</div>
+              <div class="stat-value highlight-value">${formatNumber(d.stake_info.stake_amount)} <span class="usd-value">(${formatUSD(d.stake_info.stake_amount * d.price)})</span></div>
+            </div>
+            ${d.active_block > d.block_height ? `
+            <div class="stat-row">
+              <div class="stat-label">Active From:</div>
+              <div class="stat-value">Block #${d.active_block} <span class="usd-value">(Epoch: ${Math.floor(d.active_block/2160)})</span></div>
+            </div>` : ''}
+            <div class="stat-row tree-parent">
+              <div class="stat-label">Rewards:</div>
+              <div class="stat-value highlight-value">${formatNumber(d.stake_info.rewards_amount)} <span class="usd-value">(${formatPercent(d.reward_percent)})</span></div>
+            </div>
+            ${d.rewards_per_epoch > 0 ? `
+            <div class="stat-row tree-item last-tree-item">
+              <div class="stat-label">Per Epoch:</div>
+              <div class="stat-value">${formatNumber(d.rewards_per_epoch)}</div>
+            </div>` : ''}
+            <div class="stat-row">
+              <div class="stat-label">Reclaimable:</div>
+              <div class="stat-value">${formatNumber(d.stake_info.reclaimable_slashed_stake)} <span class="usd-value">(${formatUSD(d.stake_info.reclaimable_slashed_stake * d.price)})</span></div>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      // Update market data card
+      const marketCard = document.getElementById('market-data');
+      marketCard.innerHTML = `
+        <div class="card-section">
+          <div class="section-content">
+            <div class="stat-row">
+              <div class="stat-label">Price:</div>
+              <div class="stat-value highlight-value">${formatUSD(d.price)} 
+                <span class="${d.usd_24h_change >= 0 ? 'positive-change' : 'negative-change'}">(${formatPercent(d.usd_24h_change)} 24h)</span>
+              </div>
+            </div>
+            
+            <div class="stat-compact">
+              <div class="stat-label">Price Change:</div>
+              <div class="stat-value">
+                <span class="${d.price_change_7d >= 0 ? 'positive-change' : 'negative-change'}">7d: ${formatPercent(d.price_change_7d)}</span> | 
+                <span class="${d.price_change_30d >= 0 ? 'positive-change' : 'negative-change'}">30d: ${formatPercent(d.price_change_30d)}</span> | 
+                <span class="${d.price_change_1y >= 0 ? 'positive-change' : 'negative-change'}">1y: ${formatPercent(d.price_change_1y)}</span>
+              </div>
+            </div>
+            
+            <div class="stat-compact">
+              <div class="stat-value">
+                24h Volume: ${formatUSD(d.volume)} | Market Cap: ${formatUSD(d.market_cap)}
+                <span class="${d.market_cap_change_24h >= 0 ? 'positive-change' : 'negative-change'}">(${formatPercent(d.market_cap_change_24h)})</span>
+              </div>
+            </div>
+            
+            <div class="stat-compact">
+              <div class="stat-value">
+                ATH: ${formatUSD(d.ath)} 
+                <span class="${d.ath_change >= 0 ? 'positive-change' : 'negative-change'}">(${formatPercent(d.ath_change)})</span> | 
+                ATL: ${formatUSD(d.atl)}
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // Build logs
+      let logsHtml = `<h4>Recent Logs</h4>`;
+      if (logs.length === 0) {
+        logsHtml += `
+          <div class="log-entry-card">
+            <h5>No log entries yet</h5>
+          </div>
+        `;
+      } else {
+        logs.forEach(rawLog => {
+          logsHtml += parseLogEntry(rawLog);
+        });
+      }
+      document.getElementById('logs-card').innerHTML = logsHtml;
+
+    } catch (e) {
+      console.error("Fetch error:", e);
+    }
+  }
+
+  // Update dashboard immediately and then every 5 seconds
+  // The timer will update every second independently
   updateDashboard();
-  setInterval(updateDashboard, 1000);
+  setInterval(updateDashboard, 5000);
 </script>
 
 </body>
