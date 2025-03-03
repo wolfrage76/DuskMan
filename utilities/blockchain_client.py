@@ -4,6 +4,16 @@ from typing import Optional, Tuple, Dict, Any, List, Union
 
 from utilities.utils import convert_to_float, format_float
 
+# Command Constants
+CMD_BLOCK_HEIGHT = "ruskquery block-height"
+CMD_PEERS = "ruskquery peers"
+CMD_WALLET_PROFILES = "rusk-wallet --password {password} profiles"
+CMD_WALLET_BALANCE = "rusk-wallet --password {password} balance --spendable --address {address}"
+CMD_STAKE_INFO = "rusk-wallet --password {password} stake-info"
+CMD_WITHDRAW = "rusk-wallet --password {password} withdraw"
+CMD_UNSTAKE = "rusk-wallet --password {password} unstake"
+CMD_STAKE = "rusk-wallet --password {password} stake --amt {amount}"
+
 class BlockchainClient:
     """
     Client for interacting with the Dusk blockchain.
@@ -78,7 +88,7 @@ class BlockchainClient:
         Returns:
             Current block height as integer, or None if the command failed
         """
-        block_height_str = await self.execute_command(f"{self.use_sudo} ruskquery block-height", False)
+        block_height_str = await self.execute_command(f"{self.use_sudo} {CMD_BLOCK_HEIGHT}", False)
         if not block_height_str:
             self.log_action("Failed to fetch block height", "Could not retrieve block height", "error")
             return None
@@ -96,7 +106,7 @@ class BlockchainClient:
         Returns:
             Current peer count as integer, or None if the command failed
         """
-        peer_count_str = await self.execute_command(f"{self.use_sudo} ruskquery peers", False)
+        peer_count_str = await self.execute_command(f"{self.use_sudo} {CMD_PEERS}", False)
         if not peer_count_str:
             self.log_action("Failed to fetch peers", "Could not retrieve peer count", "error")
             return None
@@ -126,7 +136,7 @@ class BlockchainClient:
                 "shielded": []
             }
 
-            cmd_profiles = f"{self.use_sudo} rusk-wallet --password {self.password} profiles"
+            cmd_profiles = f"{self.use_sudo} {CMD_WALLET_PROFILES.format(password=self.password)}"
             output_profiles = await self.execute_command(cmd_profiles)
             if not output_profiles:
                 return 0.0, 0.0
@@ -151,30 +161,87 @@ class BlockchainClient:
             await asyncio.sleep(5)
             return 0.0, 0.0
 
+        # Track if we've encountered the specific error before
+        error_logged = False
+        error_fixed = False
+        
         async def get_spendable_for_address(addr):
             """
             Fetches the spendable balance for the given address
             """
-            cmd_balance = f"{self.use_sudo} rusk-wallet --password {self.password} balance --spendable --address {addr}"
-            try:
-                out = await self.execute_command(cmd_balance)
-                if out:
-                    total_str = out.replace("Total: ", "")
-                    return float(total_str)
-            except Exception as e:
-                if 'Connection to Rusk Failed' in str(e):
-                    self.log_action(
-                        f"Error in get_spendable_for_address() reaching Node",
-                        f"{str(e).replace(self.password, '#####')}",
-                        "error"
-                    )
-                else:
-                    self.log_action(
-                        f"Error in get_spendable_for_address()",
-                        f"{str(e).replace(self.password, '#####')}",
-                        "error"
-                    )
-
+            nonlocal error_logged, error_fixed
+            
+            cmd_balance = f"{self.use_sudo} {CMD_WALLET_BALANCE.format(password=self.password, address=addr)}"
+            max_retries = 5  # Maximum number of retries
+            retry_count = 0
+            encountered_error = False
+            
+            while retry_count < max_retries:
+                try:
+                    out = await self.execute_command(cmd_balance)
+                    if out:
+                        total_str = out.replace("Total: ", "")
+                        result = float(total_str)
+                        
+                        # If we previously encountered the error and now it's fixed, log it
+                        if encountered_error and not error_fixed:
+                            self.log_action(
+                                "Balance parsing fixed",
+                                f"Successfully parsed balance after previous failures",
+                                "info"
+                            )
+                            error_fixed = True
+                            
+                        return result
+                        
+                except Exception as e:
+                    # Only log connection errors immediately
+                    if 'Connection to Rusk Failed' in str(e):
+                        self.log_action(
+                            f"Error in get_spendable_for_address() reaching Node",
+                            f"{str(e).replace(self.password, '#####')}",
+                            "error"
+                        )
+                    # For parsing errors (like '\x1b[?25h'), log once and retry
+                    elif '\x1b[?25h' in str(e):
+                        encountered_error = True
+                        # Only log the error once per session until fixed
+                        if not error_logged:
+                            self.log_action(
+                                f"Error in get_spendable_for_address()",
+                                f"Could not convert string to float: '\\x1b[?25h' - will retry after 15 seconds",
+                                "error"
+                            )
+                            error_logged = True
+                            error_fixed = False
+                            
+                        # Wait 15 seconds before retrying
+                        await asyncio.sleep(15)
+                        retry_count += 1
+                        continue
+                    else:
+                        # For other errors, log and retry
+                        self.log_action(
+                            f"Error in get_spendable_for_address()",
+                            f"{str(e).replace(self.password, '#####')}",
+                            "error"
+                        )
+                
+                # If we reach here, either there was no output or an error that's not the specific '\x1b[?25h' error
+                # Wait 5 seconds before retrying
+                await asyncio.sleep(5)
+                retry_count += 1
+            
+            # If we've exhausted all retries and encountered the specific error
+            if encountered_error and not error_logged:
+                self.log_action(
+                    f"Error in get_spendable_for_address() after {max_retries} retries",
+                    f"Could not convert string to float: '\\x1b[?25h'",
+                    "error"
+                )
+                error_logged = True
+                error_fixed = False
+                
             return 0.0
 
         tasks_public = [get_spendable_for_address(addr) for addr in addresses["public"]]
@@ -275,7 +342,7 @@ class BlockchainClient:
         Returns:
             Tuple of (eligible_stake, reclaimable_slashed_stake, accumulated_rewards)
         """
-        stake_output = await self.execute_command(f"{self.use_sudo} rusk-wallet --password {self.password} stake-info")
+        stake_output = await self.execute_command(f"{self.use_sudo} {CMD_STAKE_INFO.format(password=self.password)}")
         if not stake_output:
             self.log_action("Error", "Failed to fetch stake-info.", "error")
             return None, None, 0.0
@@ -289,7 +356,7 @@ class BlockchainClient:
         Returns:
             True if successful, False otherwise
         """
-        cmd = f"{self.use_sudo} rusk-wallet --password {self.password} withdraw"
+        cmd = f"{self.use_sudo} {CMD_WITHDRAW.format(password=self.password)}"
         cmd_success = await self.execute_command(cmd)
         if not cmd_success:
             self.log_action("Withdraw Failed", "Command execution failed", 'error')
@@ -306,7 +373,7 @@ class BlockchainClient:
         Returns:
             True if successful, False otherwise
         """
-        cmd = f"{self.use_sudo} rusk-wallet --password {self.password} unstake"
+        cmd = f"{self.use_sudo} {CMD_UNSTAKE.format(password=self.password)}"
         cmd_success = await self.execute_command(cmd)
         if not cmd_success or 'rror' in cmd_success:
             self.log_action("Unstake Failed", "Command execution failed", 'error')
@@ -323,7 +390,7 @@ class BlockchainClient:
         Returns:
             True if successful, False otherwise
         """
-        cmd = f"{self.use_sudo} rusk-wallet --password {self.password} stake --amt {amount}"
+        cmd = f"{self.use_sudo} {CMD_STAKE.format(password=self.password, amount=amount)}"
         cmd_success = await self.execute_command(cmd)
         if not cmd_success or 'rror' in cmd_success:
             self.log_action("Stake Failed", f"Command execution failed", 'error')

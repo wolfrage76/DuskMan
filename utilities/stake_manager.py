@@ -78,6 +78,11 @@ class StakeManager:
             seconds: Number of seconds to sleep
             message: Message to log
         """
+        # Validate the input seconds
+        if seconds <= 0:
+            self.log_action("Sleep Countdown", "Invalid sleep duration provided. Must be greater than 0.", "error")
+            return  # Exit the function early
+
         # Calculate the completion time as a timestamp
         from datetime import datetime, timedelta
         now = datetime.now()
@@ -91,12 +96,15 @@ class StakeManager:
         if message:
             self.log_action("Sleep Countdown", f"{message} ({seconds}s)", "debug")
         
-        # Sleep in 1-second increments, updating the remain_time each second
-        while self.shared_state["remain_time"] > 0:
-            await asyncio.sleep(1)
-            self.shared_state["remain_time"] -= 1
-        
-        self.log_action("Sleep Countdown", "Sleep Finished", "debug")
+        try:
+            # Sleep in 1-second increments, updating the remain_time each second
+            while self.shared_state["remain_time"] > 0:
+                await asyncio.sleep(1)
+                self.shared_state["remain_time"] -= 1
+        except Exception as e:
+            self.log_action("Sleep Countdown", f"Error during sleep: {str(e)}", "error")
+        finally:
+            self.log_action("Sleep Countdown", "Sleep Finished", "debug")
 
     async def sleep_until_next_epoch(self, block_height: int, buffer_blocks: int = 60, msg: Optional[str] = None) -> None:
         """
@@ -119,7 +127,15 @@ class StakeManager:
             sleep_time = buffer_blocks * 11
             msg = "Epoch boundary reached; forcing minimal sleep."
 
-        await self.sleep_with_feedback(sleep_time, msg)
+        # Validate the sleep time
+        if sleep_time <= 0:
+            self.log_action("Sleep Countdown", "Invalid sleep duration calculated. Must be greater than 0.", "error")
+            return  # Exit the function early
+
+        try:
+            await self.sleep_with_feedback(sleep_time, msg)
+        except Exception as e:
+            self.log_action("Sleep Countdown", f"Error during sleep until next epoch: {str(e)}", "error")
         
     async def perform_unstake_restake(self, block_height: int, stake_amount: float, rewards_amount: float, reclaimable_slashed_stake: float, downtime_loss: float) -> bool:
         """
