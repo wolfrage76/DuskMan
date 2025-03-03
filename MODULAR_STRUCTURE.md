@@ -143,11 +143,3 @@ The application uses a shared state dictionary to maintain the current state of 
 3. The stake manager uses the shared state to make staking decisions and perform operations.
 4. The display manager uses the shared state to update the console and TMUX displays.
 5. The web dashboard and web server provide access to the shared state through a web interface.
-
-## Benefits of Modular Structure
-
-- **Improved Maintainability**: Each module has a clear responsibility, making it easier to understand and maintain.
-- **Better Testability**: Modules can be tested independently.
-- **Enhanced Extensibility**: New features can be added by creating new modules or extending existing ones.
-- **Clearer Code Organization**: The codebase is organized logically, making it easier to navigate.
-- **Reduced Complexity**: Each module is smaller and more focused, reducing complexity.

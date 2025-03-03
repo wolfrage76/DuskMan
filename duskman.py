@@ -156,7 +156,7 @@ async def main():
     # Build the status messages
     notification_status = f'Enabled Notifications:{YELLOW}   {services}\n'
     
-    auto_status = (
+    options_status = (
         f'\n\t{LIGHT_WHITE}Enable Web Dashboard:{DEFAULT}    {colorize_bool(enable_webdash)}'
         f'\n\t{LIGHT_WHITE}Enable tmux Support:{DEFAULT}     {colorize_bool(config_data["enable_tmux"])}'
         f'\n\t{LIGHT_WHITE}Auto Staking Rewards:{DEFAULT}    {colorize_bool(config_data["auto_stake_rewards"])}'
@@ -172,7 +172,7 @@ async def main():
 
     # Update shared state with options display
     if config_data['display_options']:
-        shared_state["options"] = byline + '\n' + separator + auto_status
+        shared_state["options"] = byline + '\n' + separator + options_status
     else:
         shared_state["options"] = byline 
 

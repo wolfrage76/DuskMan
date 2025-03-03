@@ -359,9 +359,6 @@
 
       // Update stats card
       const statsCard = document.getElementById('stats-card');
-      
-      // We don't need to get the timer string here anymore - it's handled by the Web Worker
-      // Just use a placeholder that will be updated by the worker
       const timeString = formatHMS(0);
       
       // Create stats HTML
@@ -488,7 +485,7 @@
 
   // Update dashboard immediately and then every 5 seconds
   updateDashboard();
-  setInterval(updateDashboard, 5000);
+  setInterval(updateDashboard, 10000);
 </script>
 
 </body>
