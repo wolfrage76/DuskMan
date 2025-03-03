@@ -243,7 +243,8 @@ class BlockchainClient:
                 error_fixed = False
                 
             return 0.0
-
+        error_logged = False
+        error_fixed = True
         tasks_public = [get_spendable_for_address(addr) for addr in addresses["public"]]
         tasks_shielded = [get_spendable_for_address(addr) for addr in addresses["shielded"]]
 
