@@ -72,7 +72,8 @@ def create_app(shared_state, log_entries):
             "atl_date": shared_state.get("atl_date", ""),
             
             # Add reward percentage and per epoch data
-            "rewards_per_epoch": shared_state.get("rewards_per_epoch", 0),
+            # Only include rewards_per_epoch if there has been at least one claim
+            "rewards_per_epoch": shared_state.get("rewards_per_epoch", 0) if shared_state.get("last_claim_block", 0) > 0 else 0,
             "reward_percent": calculate_reward_percent(shared_state),
             
             # Add epoch information
