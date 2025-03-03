@@ -1,4 +1,4 @@
-/* ================= Desktop pinned layout ============== */
+/*==================DESKTOP PINNED LAYOUT==================*/
 html,
 body {
     margin: 0;
@@ -55,7 +55,7 @@ body {
 }
 
 .sidebar-right {
-    flex: 0 0 5%;
+    flex: 0 0 auto;
     background-color: #f7f7f7;
 }
 
@@ -69,7 +69,7 @@ body {
 
 /* about=20%, left=35%, right=45% pinned on desktop */
 .about-panel {
-    flex: 0 0 auto;
+    flex: 0 0 20%;
     min-width: 25%;
     max-width: 35%;
     padding: 1em;
@@ -83,9 +83,11 @@ body {
     padding: 1em;
     border-left: 1px solid #ccc;
     border-right: 1px solid #ccc;
-    overflow-y: auto;
-    background: #fafafa;
     height: 100%;
+    overflow-y: auto;
+
+    background: #fafafa;
+
 }
 
 .right-panel {
@@ -132,7 +134,7 @@ body {
 .card {
     background: #fff;
     border-radius: 8px;
-    box-shadow: 0 0 6px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     margin-bottom: 1.2em;
     padding: 1em;
 }
@@ -195,7 +197,7 @@ strong {
 .about-card {
     background: #fefefe;
     border-radius: 8px;
-    box-shadow: 0 0 6px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     padding: 1em;
     margin-bottom: 1.2em;
     font-size: 0.95rem;
@@ -418,7 +420,7 @@ strong {
 
 .tree-parent {
   font-weight: bold;
-  margin-bottom: 0;
+  margin-bottom: 0;/* Remove the margin to eliminate gaps */
   border-bottom: none !important;
 }
 
@@ -527,8 +529,8 @@ strong {
 /* Prevent wrapping in the stat-grid labels */
 .stat-grid .stat-label {
   white-space: nowrap;
-  overflow: visible; /* Allow overflow to be visible */
-  text-overflow: clip;
+  overflow: hidden; /* Match dark theme behavior */
+  text-overflow: ellipsis; /* Match dark theme behavior */
 }
 
 /* Ensure the tree items are properly positioned on mobile */

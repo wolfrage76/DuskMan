@@ -411,7 +411,7 @@ strong {
 
 .tree-parent {
   font-weight: bold;
-  margin-bottom: 0; /* Remove the margin to eliminate gaps */
+  margin-bottom: 0;/* Remove the margin to eliminate gaps */
   border-bottom: none !important;
 }
 
