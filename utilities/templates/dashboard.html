@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>DuskMan: The Dusk Network Stake Manager</title>
   <!-- We'll inject the theme CSS dynamically via JS below -->
   <style id="theme-style"></style>
@@ -63,6 +63,12 @@
       <div class="card" id="stats-card">
         <h4>Loading real-time data...</h4>
       </div>
+      
+      <!-- New Market Data Card -->
+      <div class="card" id="market-card">
+        <h4>Market Data</h4>
+        <div id="market-data">Loading market data...</div>
+      </div>
     </div>
 
     <!-- Logs (45%) -->
@@ -78,7 +84,7 @@
 
 <!-- FOOTER -->
 <div class="footer">
-  <p>© {{ year }} Wolfrage’s Dusk Dashboard. All rights reserved.
+  <p>© {{ year }} Wolfrage's Dusk Dashboard. All rights reserved.
     <a href="https://github.com/wolfrage76" target="_blank" style="margin-left:8px;">
       <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" 
           alt="GitHub" 
@@ -107,6 +113,24 @@
   function toggleTheme() {
     const current = localStorage.getItem('duskmanIsDark') === 'true';
     applyTheme(!current);
+    
+    // Update timer color when theme changes
+    const timerElements = document.querySelectorAll('.stat-label');
+    for (let i = 0; i < timerElements.length; i++) {
+      if (timerElements[i].textContent === 'Next Check:') {
+        const timerValueElement = timerElements[i].nextElementSibling;
+        if (timerValueElement) {
+          const timerSpan = timerValueElement.querySelector('span');
+          if (timerSpan) {
+            // Get the current timer text and update its color
+            const timeString = timerSpan.textContent;
+            const timerColor = getTimerColor(lastKnownRemainingSeconds);
+            timerSpan.style.color = timerColor;
+          }
+        }
+        break;
+      }
+    }
   }
 
   // On load, check stored preference or default to dark
@@ -121,184 +145,327 @@
   document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
 
   // Utility functions
-  function truncateNumber(num, decimals){
+  function formatNumber(num, decimals = 4) {
     if (!num || isNaN(num)) return num;
-    let str = String(num);
-    const [integer, fraction = ''] = str.split('.');
-    if (fraction.length > decimals) {
-      return integer + '.' + fraction.substring(0, decimals);
+    return new Intl.NumberFormat().format(parseFloat(num).toFixed(decimals));
+  }
+
+  function formatUSD(num) {
+    if (num >= 1000000) {
+      return new Intl.NumberFormat('en-US', { 
+        style: 'currency', 
+        currency: 'USD',
+        maximumFractionDigits: 2,
+        minimumFractionDigits: 2
+      }).format(num / 1000000) + 'M';
     }
-    return str;
+    return new Intl.NumberFormat('en-US', { 
+      style: 'currency', 
+      currency: 'USD' 
+    }).format(num);
   }
 
-  function roundTo(num, decimals){
-    if(!num || isNaN(num)) return num;
-    const factor = Math.pow(10, decimals);
-    return Math.round(num * factor) / factor;
+  function formatPercent(num) {
+    return parseFloat(num).toFixed(2) + '%';
   }
 
-  function formatHMS(seconds){
-    if(!seconds || isNaN(seconds)) return seconds;
+  function formatHMS(seconds) {
+    if (!seconds || isNaN(seconds)) return seconds;
     const h = Math.floor(seconds / 3600);
     const r = seconds % 3600;
     const m = Math.floor(r / 60);
     const s = r % 60;
     const parts = [];
-    if(h > 0) parts.push(h + "h");
-    if(m > 0) parts.push(m + "m");
+    if (h > 0) parts.push(h + "h");
+    if (m > 0) parts.push(m + "m");
     parts.push(s + "s");
     return parts.join(" ");
   }
 
-function parseLogEntry(rawText){
-  // Convert multiple blank lines into a single blank line:
-  rawText = rawText.replace(/\n\s*\n+/g, '\n\n').trim();
+  function parseLogEntry(rawText) {
+    // Convert multiple blank lines into a single blank line:
+    rawText = rawText.replace(/\n\s*\n+/g, '\n\n').trim();
 
-  let lines = rawText.split(/\r?\n/).map(l => l.trim());
+    let lines = rawText.split(/\r?\n/).map(l => l.trim());
 
-  // Filter out lines that are entirely '====' or empty
-  lines = lines.filter(l => l && !/^=+$/.test(l));
-  if(!lines.length){
-    return '<div class="log-entry-card"><h5>Empty Log</h5></div>';
-  }
+    // Filter out lines that are entirely '====' or empty
+    lines = lines.filter(l => l && !/^=+$/.test(l));
+    if (!lines.length) {
+      return '<div class="log-entry-card"><h5>Empty Log</h5></div>';
+    }
 
-  let activityLine = lines.shift();
-  let activityTitle = activityLine
-    .replace(/^====\s*Activity\s*@/i, "")
-    .replace(/====$/, "")
-    .trim()
-    .replace(/^\d{4}-/, "");  // remove leading year
+    let activityLine = lines.shift();
+    let activityTitle = activityLine
+      .replace(/^====\s*Activity\s*@/i, "")
+      .replace(/====$/, "")
+      .trim()
+      .replace(/^\d{4}-/, "");  // remove leading year
 
-  let blockNumber = null;
-  const filtered = [];
-  lines.forEach(l => {
-    if(l.toLowerCase().startsWith("current block")){
-      const parts = l.split(":", 2);
-      if(parts.length === 2){
-        blockNumber = parts[1].trim();
+    let blockNumber = null;
+    const filtered = [];
+    lines.forEach(l => {
+      if (l.toLowerCase().startsWith("current block")) {
+        const parts = l.split(":", 2);
+        if (parts.length === 2) {
+          blockNumber = parts[1].trim();
+        }
+      } else {
+        filtered.push(l);
       }
-    } else {
-      filtered.push(l);
-    }
-  });
+    });
 
-  const itemLines = filtered.filter(l => l.includes(":"));
+    const itemLines = filtered.filter(l => l.includes(":"));
 
-  let itemsHtml = "";
-  itemLines.forEach(line => {
-    const [label, val] = line.split(":", 2);
-    if(val !== undefined){
-      itemsHtml += `<li><span class="label-col">${label.trim()}:</span><span class="value-col">${val.trim()}</span></li>`;
+    let itemsHtml = "";
+    itemLines.forEach(line => {
+      const [label, val] = line.split(":", 2);
+      if (val !== undefined) {
+        itemsHtml += `<li><span class="label-col">${label.trim()}:</span><span class="value-col">${val.trim()}</span></li>`;
+      }
+    });
+    if (!itemsHtml) {
+      itemsHtml = "<li> </li>"; // itemsHtml = "<li>[No valid lines in this entry]</li>";
     }
-  });
-  if(!itemsHtml){
-    itemsHtml = "<li> </li>"; // itemsHtml = "<li>[No valid lines in this entry]</li>";
+
+    const heading = blockNumber
+      ? `Activity @ Block ${blockNumber} - ${activityTitle}`
+      : `Activity @ ${activityTitle}`;
+
+    // Single-line return to avoid accidental extra whitespace:
+    return `<div class="log-entry-card"><h5>${heading}</h5><ul>${itemsHtml}</ul></div>`;
   }
 
-  const heading = blockNumber
-    ? `Activity @ Block ${blockNumber} - ${activityTitle}`
-    : `Activity @ ${activityTitle}`;
-
-  // Single-line return to avoid accidental extra whitespace:
-  return `<div class="log-entry-card"><h5>${heading}</h5><ul>${itemsHtml}</ul></div>`;
-}
 
 
-  async function fetchDataAndUpdate(){
-    try{
+  // This runs in a separate thread and won't be affected by UI events
+  const timerWorkerCode = `
+    let timerEndTime = Date.now();
+    let timerCompletionTime = "--:--";
+    
+    // Function to update the timer
+    function updateTimer() {
+      const now = Date.now();
+      const remainingMs = Math.max(0, timerEndTime - now);
+      const remainingSeconds = Math.ceil(remainingMs / 1000);
+      
+      // Send the updated timer value to the main thread
+      self.postMessage({
+        type: 'timerUpdate',
+        remainingSeconds: remainingSeconds,
+        completionTime: timerCompletionTime
+      });
+      
+      // Schedule the next update in 1 second
+      setTimeout(updateTimer, 1000);
+    }
+    
+    // Listen for messages from the main thread
+    self.onmessage = function(e) {
+      if (e.data.type === 'updateTimerValues') {
+        timerCompletionTime = e.data.completionTime;
+        timerEndTime = Date.now() + (e.data.remainTime * 1000);
+        
+        // Force an immediate update
+        updateTimer();
+      }
+    };
+    
+    // Start the timer
+    updateTimer();
+  `;
+  
+  // Create a Blob containing the worker code
+  const timerWorkerBlob = new Blob([timerWorkerCode], { type: 'application/javascript' });
+  const timerWorkerUrl = URL.createObjectURL(timerWorkerBlob);
+  
+  // Create the worker
+  const timerWorker = new Worker(timerWorkerUrl);
+  
+  // Store the last known remaining seconds
+  let lastKnownRemainingSeconds = 0;
+  
+  // Listen for messages from the worker
+  timerWorker.onmessage = function(e) {
+    if (e.data.type === 'timerUpdate') {
+      // Store the last known remaining seconds
+      lastKnownRemainingSeconds = e.data.remainingSeconds;
+      
+      // Update the timer display in the DOM
+      updateTimerDisplay(e.data.remainingSeconds, e.data.completionTime);
+    }
+  };
+  
+  // Function to update timer values from server data
+  function updateTimerValues(remainTime, completionTime) {
+    console.log("Updating timer values with new data at " + new Date().toISOString());
+    
+    // Send the updated values to the worker
+    timerWorker.postMessage({
+      type: 'updateTimerValues',
+      remainTime: remainTime,
+      completionTime: completionTime
+    });
+  }
+  
+  // Function to determine timer color based on remaining time
+  function getTimerColor(remainingSeconds) {
+    // Check if we're in dark mode
+    const isDarkMode = localStorage.getItem('duskmanIsDark') === 'true';
+    
+    if (remainingSeconds <= 3600) {
+      return '#f87171'; // RED - less than or equal to 1 hour
+    } else if (remainingSeconds <= 7200) {
+      return '#fbbf24'; // YELLOW - between 1-2 hours
+    } else if (remainingSeconds <= 10800) {
+      return '#34d399'; // GREEN - between 2-3 hours
+    } else {
+      // Different default color based on theme
+      return isDarkMode ? '#e0e0e0' : '#333333'; // LIGHT_WHITE or DARK_GRAY
+    }
+  }
+  
+  // Function to update the timer display in the DOM
+  function updateTimerDisplay(remainingSeconds, completionTime) {
+    const timeString = formatHMS(remainingSeconds);
+    const timerColor = getTimerColor(remainingSeconds);
+    
+    // Find the timer element
+    const timerElements = document.querySelectorAll('.stat-label');
+    for (let i = 0; i < timerElements.length; i++) {
+      if (timerElements[i].textContent === 'Next Check:') {
+        const timerValueElement = timerElements[i].nextElementSibling;
+        if (timerValueElement) {
+          timerValueElement.innerHTML = `<span style="color:${timerColor}">${timeString}</span> <span style="opacity:0.7">(${completionTime})</span>`;
+        }
+        break;
+      }
+    }
+  }
+  
+  // Modified updateDashboard to handle timer display directly
+  async function updateDashboard() {
+    try {
       const response = await fetch('/api/data');
-      if(!response.ok){
+      if (!response.ok) {
         console.error("Error fetching data:", response.statusText);
         return;
       }
       const jsonData = await response.json();
-      const data = jsonData.data;
+      const d = jsonData.data;
       const logs = jsonData.log_entries;
+      
+      // Update timer values
+      updateTimerValues(d.remain_time, d.completion_time);
 
-      // Build stats HTML
-      let statsHtml = `<h4>Real-Time Stats</h4>`;
-
-      // Basic stats
-      const blockHeight = '#' + data.block_height;
-      const peerCount = data.peer_count;
-      const remainTime = formatHMS(data.remain_time);
-      const completionTime = data.completion_time;
-
-      statsHtml += `
-        <p>
-          <span class="label-col" style="width:auto;">Block:</span> ${blockHeight}
-          &nbsp; &nbsp;
-          <span class="label-col" style="width:auto;">Peers:</span> ${peerCount}
-        </p>
-        <p>
-          <span class="label-col" style="width:auto;">Next Check:</span>
-          ${remainTime} (${completionTime})
-        </p>
+      // Update stats card
+      const statsCard = document.getElementById('stats-card');
+      const timeString = formatHMS(0);
+      
+      // Create stats HTML
+      statsCard.innerHTML = `
+        <div class="card-section">
+          <h4>Node Status</h4>
+          <div class="stat-grid">
+            <div class="stat-label">Block Height:</div>
+            <div class="stat-value highlight-value">#${d.block_height} <span style="opacity:0.7">(Epoch: ${d.current_epoch})</span></div>
+            <div class="stat-label">Peer Count:</div>
+            <div class="stat-value">${d.peer_count}</div>
+            <div class="stat-label">Last Action:</div>
+            <div class="stat-value">${d.last_action}</div>
+            <div class="stat-label">Next Check:</div>
+            <div class="stat-value">${timeString} <span style="opacity:0.7">(${d.completion_time})</span></div>
+          </div>
+        </div>
+        
+        <div class="card-section">
+          <h4>Wallet Status</h4>
+          <div class="section-content">
+            <div class="stat-row tree-parent">
+              <div class="stat-label">Balance:</div>
+              <div class="stat-value highlight-value">${formatNumber(d.balances_total)} DUSK <span style="opacity:0.7">(${formatUSD(d.balances_total * d.price)})</span></div>
+            </div>
+            <div class="stat-row tree-item">
+              <div class="stat-label">Public:</div>
+              <div class="stat-value">${formatNumber(d.balances_public)} DUSK <span style="opacity:0.7">(${formatUSD(d.balances_public * d.price)})</span></div>
+            </div>
+            <div class="stat-row tree-item">
+              <div class="stat-label">Shielded:</div>
+              <div class="stat-value">${formatNumber(d.balances_shielded)} DUSK <span style="opacity:0.7">(${formatUSD(d.balances_shielded * d.price)})</span></div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="card-section">
+          <h4>Staking Status</h4>
+          <div class="section-content">
+            <div class="stat-row">
+              <div class="stat-label">Staked Amount:</div>
+              <div class="stat-value highlight-value">${formatNumber(d.stake_info.stake_amount)} <span class="usd-value">(${formatUSD(d.stake_info.stake_amount * d.price)})</span></div>
+            </div>
+            ${d.active_block > d.block_height ? `
+            <div class="stat-row">
+              <div class="stat-label">Active From:</div>
+              <div class="stat-value">Block #${d.active_block} <span class="usd-value">(Epoch: ${Math.floor(d.active_block/2160)})</span></div>
+            </div>` : ''}
+            <div class="stat-row tree-parent">
+              <div class="stat-label">Rewards:</div>
+              <div class="stat-value highlight-value">${formatNumber(d.stake_info.rewards_amount)} <span class="usd-value">(${formatPercent(d.reward_percent)})</span></div>
+            </div>
+            ${d.rewards_per_epoch > 0 ? `
+            <div class="stat-row tree-item last-tree-item">
+              <div class="stat-label">Per Epoch:</div>
+              <div class="stat-value">${formatNumber(d.rewards_per_epoch)}</div>
+            </div>` : ''}
+            <div class="stat-row">
+              <div class="stat-label">Reclaimable:</div>
+              <div class="stat-value">${formatNumber(d.stake_info.reclaimable_slashed_stake)} <span class="usd-value">(${formatUSD(d.stake_info.reclaimable_slashed_stake * d.price)})</span></div>
+            </div>
+          </div>
+        </div>
       `;
-
-      // Balances
-      const balPublic = truncateNumber(data.balances_public, 4);
-      const balShielded = truncateNumber(data.balances_shielded, 4);
-      const balTotal = truncateNumber(data.balances_total, 4);
-
-      // Price and 24h change
-      const price = truncateNumber(data.price, 3); // 3 decimals, no rounding
-      const change24h = roundTo(data.usd_24h_change, 2); // 2 decimals, rounding
-      let changeColor = "white";
-      if(change24h > 0) changeColor = "green";
-      else if(change24h < 0) changeColor = "red";
-
-      statsHtml += `<hr><h5>Balances</h5>`;
-      let balanceList = `
-        <li>
-          <span class="label-col">Public:</span>
-          <span class="value-col">${balPublic} DUSK ($${(balPublic * price).toFixed(2)})</span>
-        </li>
-        <li>
-          <span class="label-col">Shielded:</span>
-          <span class="value-col">${balShielded} DUSK ($${(balShielded * price).toFixed(2)})</span>
-        </li>
-        <li class="total-balance">
-          <span class="label-col">Total:</span>
-          <span class="value-col">${balTotal} DUSK ($${(balTotal * price).toFixed(2)})</span>
-        </li>
+      
+      // Update market data card
+      const marketCard = document.getElementById('market-data');
+      marketCard.innerHTML = `
+        <div class="card-section">
+          <div class="section-content">
+            <div class="stat-row">
+              <div class="stat-label">Price:</div>
+              <div class="stat-value highlight-value">${formatUSD(d.price)} 
+                <span class="${d.usd_24h_change >= 0 ? 'positive-change' : 'negative-change'}">(${formatPercent(d.usd_24h_change)} 24h)</span>
+              </div>
+            </div>
+            
+            <div class="stat-compact">
+              <div class="stat-label">Price Change:</div>
+              <div class="stat-value">
+                <span class="${d.price_change_7d >= 0 ? 'positive-change' : 'negative-change'}">7d: ${formatPercent(d.price_change_7d)}</span> | 
+                <span class="${d.price_change_30d >= 0 ? 'positive-change' : 'negative-change'}">30d: ${formatPercent(d.price_change_30d)}</span> | 
+                <span class="${d.price_change_1y >= 0 ? 'positive-change' : 'negative-change'}">1y: ${formatPercent(d.price_change_1y)}</span>
+              </div>
+            </div>
+            
+            <div class="stat-compact">
+              <div class="stat-value">
+                24h Volume: ${formatUSD(d.volume)} | Market Cap: ${formatUSD(d.market_cap)}
+                <span class="${d.market_cap_change_24h >= 0 ? 'positive-change' : 'negative-change'}">(${formatPercent(d.market_cap_change_24h)})</span>
+              </div>
+            </div>
+            
+            <div class="stat-compact">
+              <div class="stat-value">
+                ATH: ${formatUSD(d.ath)} 
+                <span class="${d.ath_change >= 0 ? 'positive-change' : 'negative-change'}">(${formatPercent(d.ath_change)})</span> | 
+                ATL: ${formatUSD(d.atl)}
+              </div>
+            </div>
+          </div>
+        </div>
       `;
-      let priceLine = `
-        <p style="text-align:center;">
-          Price: $${price} USD
-          (<span style="color:${changeColor};">${change24h}%</span> 24h)
-        </p>
-      `;
-      statsHtml += `<ul>${balanceList}</ul>${priceLine}`;
-
-      // Staking
-      statsHtml += `<hr><h5>Staking Info</h5>`;
-      const s = data.stake_info || {};
-      const stake = truncateNumber(s.stake_amount || 0, 4);
-      const rewards = truncateNumber(s.rewards_amount || 0, 4);
-      const reclaimable = truncateNumber(s.reclaimable_slashed_stake || 0, 4);
-
-      let stakeList = `
-        <li>
-          <span class="label-col">Stake Amount:</span>
-          <span class="value-col">${stake} DUSK</span>
-        </li>
-        <li>
-          <span class="label-col">Rewards:</span>
-          <span class="value-col">${rewards} DUSK</span>
-        </li>
-        <li>
-          <span class="label-col">Reclaimable:</span>
-          <span class="value-col">${reclaimable} DUSK</span>
-        </li>
-      `;
-      statsHtml += `<ul>${stakeList}</ul>`;
-
-      document.getElementById('stats-card').innerHTML = statsHtml;
 
       // Build logs
       let logsHtml = `<h4>Recent Logs</h4>`;
-      if(logs.length === 0){
+      if (logs.length === 0) {
         logsHtml += `
           <div class="log-entry-card">
             <h5>No log entries yet</h5>
@@ -311,15 +478,14 @@ function parseLogEntry(rawText){
       }
       document.getElementById('logs-card').innerHTML = logsHtml;
 
-    } catch(e){
+    } catch (e) {
       console.error("Fetch error:", e);
     }
   }
 
-  // Fetch data every second
-  setInterval(fetchDataAndUpdate, 1000);
-  // Initial load
-  fetchDataAndUpdate();
+  // Update dashboard immediately and then every 5 seconds
+  updateDashboard();
+  setInterval(updateDashboard, 10000);
 </script>
 
 </body>

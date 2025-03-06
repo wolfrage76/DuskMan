@@ -1,4 +1,4 @@
-/* ================= Desktop pinned layout ============== */
+/*==================DESKTOP PINNED LAYOUT==================*/
 html,
 body {
     margin: 0;
@@ -55,7 +55,7 @@ body {
 }
 
 .sidebar-right {
-    flex: 0 0 5%;
+    flex: 0 0 auto;
     background-color: #f7f7f7;
 }
 
@@ -69,7 +69,7 @@ body {
 
 /* about=20%, left=35%, right=45% pinned on desktop */
 .about-panel {
-    flex: 0 0 auto;
+    flex: 0 0 20%;
     min-width: 25%;
     max-width: 35%;
     padding: 1em;
@@ -83,9 +83,11 @@ body {
     padding: 1em;
     border-left: 1px solid #ccc;
     border-right: 1px solid #ccc;
-    overflow-y: auto;
-    background: #fafafa;
     height: 100%;
+    overflow-y: auto;
+
+    background: #fafafa;
+
 }
 
 .right-panel {
@@ -132,7 +134,7 @@ body {
 .card {
     background: #fff;
     border-radius: 8px;
-    box-shadow: 0 0 6px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     margin-bottom: 1.2em;
     padding: 1em;
 }
@@ -195,7 +197,7 @@ strong {
 .about-card {
     background: #fefefe;
     border-radius: 8px;
-    box-shadow: 0 0 6px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     padding: 1em;
     margin-bottom: 1.2em;
     font-size: 0.95rem;
@@ -263,29 +265,289 @@ strong {
 
 /* ===================== MOBILE: let entire page scroll, hide about ============= */
 @media (max-width:768px) {
-
-    html,
-    body {
+    html, body {
         overflow: auto;
         height: auto;
+        font-size: 14px; /* Slightly smaller base font size for mobile */
+    }
+
+    .container-wrapper {
+        padding: 0;
     }
 
     .main-container {
         flex-direction: column;
         height: auto;
+        width: 100%;
+        padding: 0;
     }
 
     .about-panel {
-        display: none;
-        /* hide on mobile */
+        display: none; /* hide on mobile */
     }
 
-    .left-panel,
-    .right-panel {
+    .left-panel, .right-panel {
         width: 100%;
+        max-width: 100%;
         border: none;
         height: auto;
         overflow: visible;
         margin-bottom: 1em;
+        padding: 0.5em;
+        box-sizing: border-box;
     }
+
+    .card {
+        width: 100%;
+        box-sizing: border-box;
+        margin: 0 0 1em 0;
+        padding: 0.6em;
+        border-radius: 6px;
+    }
+
+    #market-card {
+        width: 100%;
+        box-sizing: border-box;
+        margin: 0.5em 0;
+    }
+
+    .stat-grid {
+        display: grid;
+        grid-template-columns: 1fr; /* Stack in one column on mobile */
+        grid-gap: 0.3em;
+    }
+
+    .stat-grid .stat-label {
+        font-size: 0.9em;
+        margin-bottom: 0.1em;
+    }
+
+    .stat-grid .stat-value {
+        font-size: 0.9em;
+        text-align: left;
+        padding-left: 1em;
+        margin-bottom: 0.5em;
+    }
+
+    .tree-item {
+        padding-left: 1em;
+    }
+
+    .tree-item::before {
+        left: 0;
+    }
+
+    .header h1 {
+        font-size: 1.2rem;
+        padding: 0 1em;
+    }
+
+    #theme-toggle {
+        top: 5px;
+        right: 5px;
+        padding: 0.3em 0.6em;
+    }
+
+    .section-content {
+        padding-left: 0.8em;
+    }
+
+    /* Make USD values even smaller on mobile */
+    .usd-value {
+        font-size: 0.75em;
+    }
+}
+
+/* Add styles for extra small screens */
+@media (max-width: 480px) {
+    html, body {
+        font-size: 13px;
+    }
+
+    .stat-compact .stat-value {
+        /* Handle long values better on very small screens */
+        word-break: break-word;
+    }
+}
+
+/* Add these styles for the dashboard */
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.5em;
+  padding-bottom: 0.5em;
+  border-bottom: 1px dotted #ddd;
+  gap: 0.5em;
+}
+
+.stat-label {
+  font-weight: bold;
+  color: #444;
+  display: flex;
+  align-items: center;
+  flex: 0 0 40%; /* Make label take only 40% of the width */
+  max-width: 40%; /* Ensure it doesn't grow beyond this */
+}
+
+.stat-value {
+  text-align: right;
+  font-family: "Fira Code", monospace;
+  flex: 0 0 60%; /* Make value take 60% of the width */
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.95em;
+}
+
+.tree-item {
+  padding-left: 1.5em;
+  position: relative;
+  margin-bottom: 0;
+  border-bottom: none !important;
+}
+
+.tree-item::before {
+  content: "├─";
+  position: absolute;
+  left: 0;
+  color: #888;
+}
+
+.tree-item:last-child::before {
+  content: "└─";
+}
+
+.tree-parent {
+  font-weight: bold;
+  margin-bottom: 0;/* Remove the margin to eliminate gaps */
+  border-bottom: none !important;
+}
+
+.highlight-value {
+  font-weight: bold;
+  color: #2c7be5;
+}
+
+.positive-change {
+  color: #10b981;
+}
+
+.negative-change {
+  color: #ef4444;
+}
+
+#market-card {
+  margin-top: 1.5em;
+  background: #f0f0f0;
+  border-radius: 5px;
+  padding: 1em;
+}
+
+.log-entry {
+  padding: 0.5em;
+  border-bottom: 1px solid #eee;
+  font-family: monospace;
+  white-space: pre-wrap;
+  font-size: 0.9em;
+}
+
+.card-section {
+  margin-bottom: 1.2em;
+}
+
+.card-section h4 {
+  margin-top: 0.8em;
+  margin-bottom: 0.8em;
+  padding-bottom: 0.3em;
+  border-bottom: 2px solid #e0e0e0;
+  color: #3077c9;
+}
+
+/* Add these styles for the more compact layout */
+.stat-grid {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) 1fr; /* First column min 120px, equal sharing */
+  grid-gap: 0.5em 1em;
+  margin-bottom: 0.5em;
+}
+
+.section-content {
+  padding-left: 1.2em;
+  margin-top: 0.8em;
+}
+
+.stat-compact {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0.8em;
+  padding-bottom: 0.5em;
+  border-bottom: 1px dotted #ddd;
+}
+
+.stat-compact .stat-label {
+  font-weight: bold;
+  color: #444;
+  margin-bottom: 0.2em;
+}
+
+.stat-compact .stat-value {
+  text-align: left;
+  padding-left: 1em;
+  font-family: "Fira Code", monospace;
+}
+
+.card-section h4 {
+  margin-top: 0.8em;
+  margin-bottom: 0.8em;
+  padding-bottom: 0.3em;
+  border-bottom: 2px solid #e0e0e0;
+  color: #3077c9;
+  font-size: 1.1em;
+}
+
+/* Mobile adjustments */
+@media (max-width:768px) {
+  .section-content {
+    padding-left: 0.8em;
+  }
+  .stat-value {
+    white-space: normal; /* Allow wrapping on mobile */
+    overflow: visible;
+    text-overflow: clip;
+  }
+}
+
+/* Add this style to make USD values more compact */
+.usd-value {
+  opacity: 0.7;
+  font-size: 0.8em;
+  white-space: nowrap;
+  margin-left: 0.2em;
+}
+
+/* Prevent wrapping in the stat-grid labels */
+.stat-grid .stat-label {
+  white-space: nowrap;
+  overflow: hidden; /* Match dark theme behavior */
+  text-overflow: ellipsis; /* Match dark theme behavior */
+}
+
+/* Ensure the tree items are properly positioned on mobile */
+@media (max-width:768px) {
+  .tree-item {
+    padding-left: 1em;
+  }
+  
+  .tree-item::before {
+    left: 0;
+  }
+}
+
+/* Add a specific class for the last tree item to ensure it shows the correct symbol */
+.last-tree-item::before {
+  content: "└─" !important;
+  position: absolute;
+  left: 0;
+  color: #888;
 }
