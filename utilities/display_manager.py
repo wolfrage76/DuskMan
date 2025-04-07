@@ -93,6 +93,26 @@ class DisplayManager:
 
                     currenttime = datetime.now().strftime('%H:%M:%S')
                     epoch_num = int(blk / 2160)
+                    # Remove trailing newline from top_bar definition
+                    top_bar = f" {LIGHT_WHITE}======={DEFAULT} {currenttime} Block: {LIGHT_BLUE}#{blk} {DEFAULT}(E: {LIGHT_BLUE}{epoch_num}{DEFAULT}) Peers: {peercolor}{self.shared_state['peer_count']}{DEFAULT} {LIGHT_WHITE}======={DEFAULT}"
+
+                    title_spaces = int((len(remove_ansi(top_bar)) - len(remove_ansi(self.byline))) / 7) # Quick fix meh
+                    # Remove leading newline from opts definition
+                    opts = (' ' * title_spaces) + BLUE + self.shared_state["options"]
+                    
+                    allocation_bar = display_wallet_distribution_bar(b['public'], b['shielded'], 8)
+                    
+                    # Calculate rewards per epoch
+                    per_epoch = str()
+                    rpe = self.shared_state.get('rewards_per_epoch', 0.0)
+                    if rpe > 0.0:
+                        if int(self.shared_state.get("last_claim_block", 0)) > 0:
+                            per_epoch = f"@ Epoch/claim: {format_float(rpe)}"
+                    
+                    # Calculate reward percentage
+                    reward_percent = 0.0
+                    if st_info.get('rewards_amount', 0.0) > 0.0 and st_info.get('stake_amount', 0.0) > 0.0:
+                        reward_percent = (st_info.get('rewards_amount', 0.0) / st_info.get('stake_amount', 0.0)) * 100
                     
                     # Check if stake is active
                     active_block = self.shared_state.get("active_blk", 2160)
@@ -127,30 +147,11 @@ class DisplayManager:
                     mcap = f'{LIGHT_WHITE}24hr Volume: ${format_number(volume)}  Market Cap: ${format_number(mkt_cap)} ({mcap_color}{mkt_cap_change:.2f}%{LIGHT_WHITE})\n'
                     athl = f' {LIGHT_WHITE}ATH: ${format_float(ath)} ({ath_change:.2f}%) {convert_timestamp(ath_date)} | ATL: ${format_float(atl)} {convert_timestamp(atl_date)}\n'
                     
-                    # Build the display
-                    top_bar = f" {LIGHT_WHITE}======={DEFAULT} {currenttime} Block: {LIGHT_BLUE}#{blk} {DEFAULT}(E: {LIGHT_BLUE}{epoch_num}{DEFAULT}) Peers: {peercolor}{self.shared_state['peer_count']}{DEFAULT} {LIGHT_WHITE}=======\n"
-                    title_spaces = int((len(remove_ansi(top_bar)) - len(remove_ansi(self.byline))) / 7) # Quick fix meh
-
-                    opts = '\n' + (' ' * title_spaces) + BLUE + self.shared_state["options"]
-                    
-                    allocation_bar = display_wallet_distribution_bar(b['public'], b['shielded'], 8)
-                    
-                    # Calculate rewards per epoch
-                    per_epoch = str()
-                    rpe = self.shared_state.get('rewards_per_epoch', 0.0)
-                    if rpe > 0.0:
-                        if int(self.shared_state.get("last_claim_block", 0)) > 0:
-                            per_epoch = f"@ Epoch/claim: {format_float(rpe)}"
-                    
-                    # Calculate reward percentage
-                    reward_percent = 0.0
-                    if st_info.get('rewards_amount', 0.0) > 0.0 and st_info.get('stake_amount', 0.0) > 0.0:
-                        reward_percent = (st_info.get('rewards_amount', 0.0) / st_info.get('stake_amount', 0.0)) * 100
-                    
-                    # Build the complete display content
+                    # Build the complete content string with correct newline placement
                     realtime_content = (
-                        f"{opts}\n"
-                        f"{top_bar}"
+                        f"{opts}{DEFAULT}\n"  # Line 1: Options, add newline after
+                        f"{top_bar}\n"       # Line 2: Top bar, add newline after
+                        f"{self.byline}\n"    # Line 3: Byline, add newline after
                         f"    {CYAN}Last Action{DEFAULT}   | {CYAN}{last_act}{DEFAULT}\n"
                         f"    {LIGHT_GREEN}Next Check    {DEFAULT}| {charclr}{disp_time}{DEFAULT} ({donetime}){DEFAULT}\n"
                         f"                  |\n"
@@ -165,9 +166,28 @@ class DisplayManager:
                         f"    {LIGHT_WHITE}Staked{DEFAULT}        | {LIGHT_WHITE}{format_float(st_info['stake_amount'])} (${format_float(st_info['stake_amount'] * price, 2)}){DEFAULT}{is_active}\n"
                         f"    {YELLOW}Rewards{DEFAULT}       | {YELLOW}{format_float(st_info['rewards_amount'])} ({LIGHT_BLUE}{reward_percent:.4f}%{DEFAULT}) (${format_float(st_info['rewards_amount'] * price, 2)}) {LIGHT_WHITE}{per_epoch}{DEFAULT}\n"
                         f"    {LIGHT_RED}Reclaimable{DEFAULT}   | {LIGHT_RED}{format_float(st_info['reclaimable_slashed_stake'])} (${format_float(st_info['reclaimable_slashed_stake'] * price, 2)}){DEFAULT}\n"
-                        f" {LIGHT_WHITE}{('=' * (len(remove_ansi(top_bar)) - 2))}{DEFAULT}\n"  
+                        f" {LIGHT_WHITE}{('=' * (len(remove_ansi(top_bar)) - 2))}{DEFAULT}\n"
                         f"  {mcap} {athl}\n"
                     )
+
+                    # Convert the ANSI string to a Rich Text object
+                    text_content = Text.from_ansi(realtime_content)
+
+                    # Find the index of the character *after* the second newline to apply no_wrap
+                    plain_text = text_content.plain
+                    first_newline = plain_text.find('\n')
+                    second_newline_end_index = -1
+                    if first_newline != -1:
+                        # Find the start of the second newline
+                        second_newline_start = plain_text.find('\n', first_newline + 1)
+                        if second_newline_start != -1:
+                             # The end index for stylize is exclusive, so add 1 to include the newline itself
+                            second_newline_end_index = second_newline_start + 1
+
+                    # Apply no_wrap=True to the first two lines using stylize
+                    if second_newline_end_index != -1:
+                         # Apply the style from the beginning up to the character AFTER the second newline
+                        text_content.stylize("no_wrap", 0, second_newline_end_index)
                     
                     # Update rendered content in shared state if needed
                     include_rendered = self.shared_state.get("include_rendered", False)
@@ -178,7 +198,7 @@ class DisplayManager:
                     
                     # Update the Live display
                     if self.display_gui:
-                        live.update(Text(realtime_content), refresh=True)
+                        live.update(text_content, refresh=True)
 
                     # Update TMUX status bar
                     if self.enable_tmux:
