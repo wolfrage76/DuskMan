@@ -53,34 +53,29 @@ class Logger:
         # Mask password
         formatted_message = formatted_message.replace(self.password, '#####')
         
-        # Manage log entries in shared state - deque handles maxlen automatically
-        # log_entries = self.shared_state.get("log_entries", [])
-        # if len(log_entries) > self.config.get('max_log_entries', 15): # Check against config value
-        #     log_entries.pop(0) # This check is redundant with deque
+        # Manage log entries in shared state
+        log_entries = self.shared_state.get("log_entries", [])
+        if len(log_entries) > 15:  # TODO: Make configurable
+            log_entries.pop(0)
         
-        # Get the deque
-        log_entries = self.shared_state.get("log_entries")
-
         # Write to the appropriate log file
         if type == 'debug' and self.enable_logging:
             if self.is_debug:
                 write_to_log(self.debug_log_file, formatted_message)
-                # Optionally add debug messages to deque if needed
-                # if log_entries is not None: 
-                #     log_entries.append(f"[DEBUG] {formatted_message}")
-                return # Usually don't return debug messages elsewhere
+                return
         elif type == 'error' and self.enable_logging:
             if self.is_debug:
                 write_to_log(self.debug_log_file, formatted_message)
-            if log_entries is not None: log_entries.append(formatted_message)    
+                
+            log_entries.append(formatted_message)    
             write_to_log(self.error_log_file, formatted_message)
-            # Send notification only for errors
-            if self.notifier:
-                self.notifier.notify(formatted_message, self.shared_state)
-        elif self.enable_logging: # Handle 'info' and other types
+        elif self.enable_logging:
             write_to_log(self.info_log_file, formatted_message)
-            if log_entries is not None: log_entries.append(formatted_message)
+            log_entries.append(formatted_message)
             
-        # No need to update shared state here as deque is modified directly
-        # Update shared state (log_entries updated within type blocks now)
-        # self.shared_state["log_entries"] = log_entries # No longer needed here
+        # Update shared state
+        self.shared_state["log_entries"] = log_entries
+        
+        # Send notification if notifier is available
+        if self.notifier:
+            self.notifier.notify(formatted_message, self.shared_state)
