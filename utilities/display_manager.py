@@ -8,6 +8,7 @@ from typing import Dict, Any, Optional, List, Callable
 from rich.live import Live
 from rich.text import Text
 from rich.console import Console
+from rich.style import Style
 
 from utilities.utils import format_float, format_hms, remove_ansi, convert_timestamp, display_wallet_distribution_bar, format_number
 from utilities.colors import *
@@ -128,7 +129,12 @@ class DisplayManager:
                     athl = f' {LIGHT_WHITE}ATH: ${format_float(ath)} ({ath_change:.2f}%) {convert_timestamp(ath_date)} | ATL: ${format_float(atl)} {convert_timestamp(atl_date)}\n'
                     
                     # Build the display
-                    top_bar = f" {LIGHT_WHITE}======={DEFAULT} {currenttime} Block: {LIGHT_BLUE}#{blk} {DEFAULT}(E: {LIGHT_BLUE}{epoch_num}{DEFAULT}) Peers: {peercolor}{self.shared_state['peer_count']}{DEFAULT} {LIGHT_WHITE}=======\n"
+                    currenttime = datetime.now().strftime('%H:%M:%S')
+                    epoch_num = int(blk / 2160)
+                    
+                    # Create top bar with normal spacing - wrapping will be prevented in the Rich Text object
+                    top_bar = f" {LIGHT_WHITE}======={DEFAULT} {currenttime} Block: {LIGHT_BLUE}#{blk} {DEFAULT}(E: {LIGHT_BLUE}{epoch_num}{DEFAULT}) Peers: {peercolor}{self.shared_state['peer_count']}{DEFAULT} {LIGHT_WHITE}======={DEFAULT}\n"
+
                     title_spaces = int((len(remove_ansi(top_bar)) - len(remove_ansi(self.byline))) / 7) # Quick fix meh
 
                     opts = '\n' + (' ' * title_spaces) + BLUE + self.shared_state["options"]
@@ -169,6 +175,21 @@ class DisplayManager:
                         f"  {mcap} {athl}\n"
                     )
                     
+                    # Convert ANSI colored strings to Rich Text objects for proper rendering and wrapping control
+                    text_content = Text.from_ansi(realtime_content)
+                    
+                    # Set no_wrap on the top line only
+                    # Find the end of the first line (after byline and top_bar)
+                    line_count = 0
+                    for i, char in enumerate(text_content.plain):
+                        if char == '\n':
+                            line_count += 1
+                            if line_count == 2:  # After the top_bar line
+                                # Set no_wrap for the first two lines (options and top_bar)
+                                for j in range(i):
+                                    text_content.no_wrap = True
+                                break
+                    
                     # Update rendered content in shared state if needed
                     include_rendered = self.shared_state.get("include_rendered", False)
                     if include_rendered:
@@ -176,9 +197,9 @@ class DisplayManager:
                     else:
                         self.shared_state["rendered"] = None
                     
-                    # Update the Live display
+                    # Update the Live display with the Rich Text object with wrapping control
                     if self.display_gui:
-                        live.update(Text(realtime_content), refresh=True)
+                        live.update(text_content, refresh=True)
 
                     # Update TMUX status bar
                     if self.enable_tmux:

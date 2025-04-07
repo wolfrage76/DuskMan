@@ -41,30 +41,30 @@ console = Console()
 def create_shared_state():
     """Create and initialize the shared state dictionary."""
     return {
-        "block_height": 0,
-        "remain_time": 0,                 # seconds left in the current sleep
-        "last_no_action_block": None,     # track 'No Action' blocks
-        "last_claim_block": 0,
-        "stake_info": {
-            "stake_amount": 0.0,
-            "reclaimable_slashed_stake": 0.0,
-            "rewards_amount": 0.0,
-        },
-        "balances": {
-            "public": 0.0,
-            "shielded": 0.0
-        },
-        "last_action_taken": "Starting Up",
-        "completion_time": "--:--",
-        "peer_count": 0,
-        "price": 0.0,
-        "market": 0,
-        "volume": 0,
-        "usd_24h_change": 0,
+    "block_height": 0,
+    "remain_time": 0,                 # seconds left in the current sleep
+    "last_no_action_block": None,     # track 'No Action' blocks
+    "last_claim_block": 0,
+    "stake_info": {
+        "stake_amount": 0.0,
+        "reclaimable_slashed_stake": 0.0,
+        "rewards_amount": 0.0,
+    },
+    "balances": {
+        "public": 0.0,
+        "shielded": 0.0
+    },
+    "last_action_taken": "Starting Up",
+    "completion_time": "--:--",
+    "peer_count": 0,
+    "price": 0.0,
+    "market": 0,
+    "volume": 0,
+    "usd_24h_change": 0,
         "rendered": "",
-        "stake_active_blk": 0,
+    "stake_active_blk": 0,
         "options": "",
-        "rewards_per_epoch": 0.0,
+    "rewards_per_epoch": 0.0,
         "log_entries": [],
     }
 
@@ -124,7 +124,7 @@ async def main():
         config_data['enable_tmux'],
         log_action
     )
-    
+
     # Helper function to colorize boolean values
     def colorize_bool(value):
         return f"{GREEN}True{DEFAULT}" if value else f"{RED}False{DEFAULT}"
@@ -186,7 +186,7 @@ async def main():
         blockchain_monitor.frequent_update_loop(),
         display_manager.realtime_display_loop(),
         stake_manager.stake_management_loop(),
-    )
+        )
 
 if __name__ == "__main__":
     try:
