@@ -147,12 +147,18 @@ class DisplayManager:
                     mcap = f'{LIGHT_WHITE}24hr Volume: ${format_number(volume)}  Market Cap: ${format_number(mkt_cap)} ({mcap_color}{mkt_cap_change:.2f}%{LIGHT_WHITE})\n'
                     athl = f' {LIGHT_WHITE}ATH: ${format_float(ath)} ({ath_change:.2f}%) {convert_timestamp(ath_date)} | ATL: ${format_float(atl)} {convert_timestamp(atl_date)}\n'
                     
+                    # Determine color for last action text
+                    if "Insufficient balance" in last_act or "Operation skipped" in last_act:
+                        last_act_color = LIGHT_RED
+                    else:
+                        last_act_color = CYAN
+                    
                     # Build the complete content string with correct newline placement
                     realtime_content = (
                         f"{opts}{DEFAULT}\n"  # Line 1: Options, add newline after
                         f"{top_bar}\n"       # Line 2: Top bar, add newline after
                         f"{self.byline}\n"    # Line 3: Byline, add newline after
-                        f"    {CYAN}Last Action{DEFAULT}   | {CYAN}{last_act}{DEFAULT}\n"
+                        f"    {CYAN}Last Action{DEFAULT}   | {last_act_color}{last_act}{DEFAULT}\n"
                         f"    {LIGHT_GREEN}Next Check    {DEFAULT}| {charclr}{disp_time}{DEFAULT} ({donetime}){DEFAULT}\n"
                         f"                  |\n"
                         f"    {LIGHT_WHITE}Price USD{DEFAULT}     | {LIGHT_WHITE}${format_float(price,3)}{DEFAULT} {chg24}\n"
