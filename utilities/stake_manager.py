@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, Tuple, Callable
 
 from utilities.utils import format_float, calculate_rewards_per_epoch, calculate_downtime_loss
@@ -31,6 +31,7 @@ class StakeManager:
         self.shared_state = shared_state
         self.config = config
         self.log_action = log_action_func or (lambda *args, **kwargs: None)
+        self.state_lock = asyncio.Lock()
         
         # Extract configuration values
         self.min_rewards = config.get('min_rewards', 1)
@@ -73,38 +74,62 @@ class StakeManager:
     async def sleep_with_feedback(self, seconds: int, message: str = "") -> None:
         """
         Sleep for the specified number of seconds, updating the shared state with remaining time.
+        Handles interruption via shared_state['interrupt_sleep'].
         
         Args:
             seconds: Number of seconds to sleep
             message: Message to log
         """
-        # Validate the input seconds
         if seconds <= 0:
             self.log_action("Sleep Countdown", "Invalid sleep duration provided. Must be greater than 0.", "error")
-            return  # Exit the function early
+            return
 
-        # Calculate the completion time as a timestamp
-        from datetime import datetime, timedelta
-        now = datetime.now()
-        completion_time = now + timedelta(seconds=seconds)
+        start_time = datetime.now()
+        completion_time = start_time + timedelta(seconds=seconds)
         
-        # Store both the formatted time and the timestamp
-        self.shared_state["completion_time"] = completion_time.strftime("%H:%M:%S")
-        self.shared_state["completion_timestamp"] = int(completion_time.timestamp() * 1000)  # Milliseconds since epoch
-        self.shared_state["remain_time"] = seconds  # Initialize the countdown
-        
+        async with self.state_lock:
+            self.shared_state["completion_time"] = completion_time.strftime("%H:%M:%S")
+            self.shared_state["completion_timestamp"] = int(completion_time.timestamp() * 1000)
+            self.shared_state["remain_time"] = seconds
+            self.shared_state["interrupt_sleep"] = False
+
         if message:
             self.log_action("Sleep Countdown", f"{message} ({seconds}s)", "debug")
         
         try:
-            # Sleep in 1-second increments, updating the remain_time each second
-            while self.shared_state["remain_time"] > 0:
+            while True:
+                async with self.state_lock:
+                    remaining = self.shared_state["remain_time"]
+                    interrupted = self.shared_state.get("interrupt_sleep", False)
+
+                if interrupted:
+                    self.log_action("Sleep Countdown", "Sleep interrupted by request.", "info")
+                    break
+                
+                if remaining <= 0:
+                    break
+                
                 await asyncio.sleep(1)
-                self.shared_state["remain_time"] -= 1
+                
+                async with self.state_lock:
+                    if self.shared_state.get("interrupt_sleep", False):
+                        self.log_action("Sleep Countdown", "Sleep interrupted during wait.", "info")
+                        break
+                    if self.shared_state["remain_time"] > 0:
+                         self.shared_state["remain_time"] -= 1
+                    
+        except asyncio.CancelledError:
+            self.log_action("Sleep Countdown", "Sleep cancelled externally.", "info")
+            async with self.state_lock:
+                self.shared_state["interrupt_sleep"] = True
         except Exception as e:
             self.log_action("Sleep Countdown", f"Error during sleep: {str(e)}", "error")
         finally:
-            self.log_action("Sleep Countdown", "Sleep Finished", "debug")
+            async with self.state_lock:
+                self.shared_state["completion_time"] = "--:--"
+                self.shared_state["completion_timestamp"] = 0
+                self.shared_state["remain_time"] = 0
+            self.log_action("Sleep Countdown", "Sleep Finished or Interrupted", "debug")
 
     async def sleep_until_next_epoch(self, block_height: int, buffer_blocks: int = 60, msg: Optional[str] = None) -> None:
         """
@@ -277,52 +302,68 @@ class StakeManager:
 
         while True:
             try:
-                # For logic, we may want a fresh block height right before we do anything:
+                # Get current block height safely under lock if writing
+                # Reading block_height is likely safe if only monitor updates it
                 block_height = await self.blockchain.get_block_height()
                 if block_height is None:
-                    self.log_action("Failed to fetch block height", "Retrying in 30s...", "error")
-                    stake_checking = False
+                    self.log_action("Stake Manager", "Failed to fetch block height, retrying in 30s...", "error")
+                    async with self.state_lock: self.shared_state["stake_checking"] = False
                     await self.sleep_with_feedback(30, "retry block height fetch")
                     continue
-
-                self.shared_state["block_height"] = block_height
+                
+                # Update shared state block height under lock
+                async with self.state_lock:
+                    self.shared_state["block_height"] = block_height
+                    last_no_action = self.shared_state.get("last_no_action_block")
 
                 # If we already saw 'No Action' for this block, wait a bit
-                if self.shared_state["last_no_action_block"] == block_height:
+                if last_no_action == block_height:
                     msg = f"Already did 'No Action' at block {block_height}; sleeping 30s."
-                    stake_checking = False
+                    async with self.state_lock: self.shared_state["stake_checking"] = False
                     await self.sleep_with_feedback(30, msg)
                     continue
 
+                # Set stake checking flag under lock
+                async with self.state_lock: 
+                    self.shared_state["stake_checking"] = True 
+                
                 # Fetch stake-info
-                stake_checking = True 
                 e_stake, r_slashed, a_rewards = await self.blockchain.get_stake_info(self.shared_state)
                 if e_stake is None or r_slashed is None or a_rewards is None:
                     self.log_action("Skipping Cycle", "Parsing stake info incomplete. Sleeping 60s...", 'debug')
-                    stake_checking = False
+                    async with self.state_lock: self.shared_state["stake_checking"] = False
                     await self.sleep_with_feedback(60, "skipping cycle")
                     continue
                 
-                # Update in shared state
-                self.shared_state["stake_info"]["stake_amount"] = e_stake
-                self.shared_state["stake_info"]["reclaimable_slashed_stake"] = r_slashed
-                self.shared_state["stake_info"]["rewards_amount"] = a_rewards
+                # Update stake info in shared state explicitly under lock
+                async with self.state_lock: 
+                    self.shared_state["stake_info"]["stake_amount"] = e_stake
+                    self.shared_state["stake_info"]["reclaimable_slashed_stake"] = r_slashed
+                    self.shared_state["stake_info"]["rewards_amount"] = a_rewards
+                    self.shared_state["stake_checking"] = False # Reset stake checking flag here
+                
+                # Reset stake checking flag under lock after successful fetch and state update
+                # async with self.state_lock: 
+                #     self.shared_state["stake_checking"] = False # Moved up
+                
+                # Read necessary values from state (already fetched and stored)
+                async with self.state_lock:
+                    last_claim_block = self.shared_state.get("last_claim_block", 0)
+                    # Use the just fetched values directly, avoids potential state inconsistency
+                    stake_amount = e_stake
+                    reclaimable_slashed_stake = r_slashed
+                    rewards_amount = a_rewards
 
-                stake_checking = False
-                # For logic thresholds
-                last_claim_block = self.shared_state["last_claim_block"]
-                stake_amount = e_stake or 0.0
-                reclaimable_slashed_stake = r_slashed or 0.0
-                rewards_amount = a_rewards or 0.0
-
+                # Calculations based on fetched data
                 rewards_per_epoch = calculate_rewards_per_epoch(rewards_amount, last_claim_block, block_height)
-                self.shared_state["rewards_per_epoch"] = rewards_per_epoch
+                async with self.state_lock: # Write calculated value
+                     self.shared_state["rewards_per_epoch"] = rewards_per_epoch
                 downtime_loss = calculate_downtime_loss(rewards_per_epoch, downtime_epochs=2)
                 incremental_threshold = rewards_per_epoch
                 
-                # Should this check first run and wait till first epoch? need to test
+                # Decision logic
                 if (self.should_unstake_and_restake(reclaimable_slashed_stake, downtime_loss) and 
-                    not first_run and reclaimable_slashed_stake and e_stake > 0):
+                    not first_run and reclaimable_slashed_stake and stake_amount > 0):
                     
                     success = await self.perform_unstake_restake(
                         block_height, stake_amount, rewards_amount, 
@@ -330,58 +371,67 @@ class StakeManager:
                     )
                     
                     if success:
-                        stake_checking = False
-                        rewards_per_epoch = 0
-                        self.shared_state["rewards_per_epoch"] = rewards_per_epoch
-                        # Sleep 2 epochs
+                        async with self.state_lock: self.shared_state["rewards_per_epoch"] = 0 # Reset under lock
                         await self.sleep_until_next_epoch(block_height + 2160, msg="2-epoch wait after restaking...")
                         continue
                     else:
-                        stake_checking = False
-                        # If failed, wait a bit and try again
+                        # Failure already logged in perform_unstake_restake
                         await self.sleep_with_feedback(300, "waiting after failed unstake/restake")
                         continue
 
                 elif self.should_claim_and_stake(rewards_amount, incremental_threshold) and not first_run:
-                    # Claim & Stake
                     success = await self.perform_claim_stake(
                         block_height, stake_amount, rewards_amount, reclaimable_slashed_stake
                     )
                     
                     if success:
-                        stake_checking = False
-                        self.log_action("Stake Loop", "Finished staking, now sleeping.", "debug")
+                        async with self.state_lock: self.shared_state["rewards_per_epoch"] = 0 # Reset under lock
                         await self.sleep_with_feedback(2160 * 10, "1 epoch wait after claiming")
-                        self.log_action("Stake Loop", "Woke up from sleep.", "debug")
-                        rewards_per_epoch = 0
-                        self.shared_state["rewards_per_epoch"] = rewards_per_epoch
                         continue
                     else:
-                        stake_checking = False
-                        # If failed, wait a bit and try again
+                         # Failure already logged in perform_claim_stake
                         await self.sleep_with_feedback(300, "waiting after failed claim/stake")
                         continue
                 else:
-                    # No action
-                    self.shared_state["last_no_action_block"] = block_height
-                    self.shared_state["last_action_taken"] = f"No Action @ Block {block_height}"
+                    # No action path
+                    action_msg = f"No Action @ Block {block_height}"
                     
                     if first_run:
-                        self.shared_state["last_action_taken"] = f"Startup @ Block #{block_height}"
-                        await self.log_status(block_height, self.shared_state["last_action_taken"])
+                        # Log startup status but don't set last_no_action_block yet
+                        action_msg = f"Startup / No Action @ Block #{block_height}"
+                        async with self.state_lock:
+                             self.shared_state["last_action_taken"] = action_msg
+                        await self.log_status(block_height, action_msg)
                         first_run = False
-                        stake_checking = False
+                        # After first run, immediately proceed to wait for the next epoch
+                        # Don't set last_no_action_block here to avoid the 30s delay
+                        await self.sleep_until_next_epoch(block_height, buffer_blocks=self.buffer_blocks, msg="Waiting until next epoch after startup...")
+                        continue 
                     else:
-                        stake_checking = False
-                        # If no action, just wait and don't log since it's no longer first run
+                        # This is a subsequent No Action decision
+                        async with self.state_lock:
+                            # Now it's safe to set last_no_action_block
+                            self.shared_state["last_no_action_block"] = block_height 
+                            self.shared_state["last_action_taken"] = action_msg
+                            
+                        # Log status for subsequent No Action if needed (optional)
+                        # await self.log_status(block_height, action_msg) 
+                        
+                        # Wait until next epoch
                         await self.sleep_until_next_epoch(block_height, buffer_blocks=self.buffer_blocks)
                         continue
                 
+            except asyncio.CancelledError:
+                self.log_action("Stake Manager Loop", "Cancellation requested.", "info")
+                break # Exit loop cleanly on cancellation
             except Exception as e:
-                stake_checking = False
+                # Log error and reset stake checking flag under lock
+                async with self.state_lock: 
+                    self.shared_state["stake_checking"] = False
                 self.log_action("Error in stake management loop", str(e), "error")
+                import traceback
+                self.log_action("Stake Manager Traceback", traceback.format_exc(), "error") # Log traceback
                 await self.sleep_with_feedback(60, "error recovery")
-                
-            # Sleep until near the next epoch
-            stake_checking = False
-            await self.sleep_until_next_epoch(block_height, buffer_blocks=self.buffer_blocks)
+                continue # Continue loop after error recovery sleep
+
+        self.log_action("Stake Manager Loop", "Exited.", "info") # Log loop exit

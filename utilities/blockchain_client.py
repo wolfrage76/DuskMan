@@ -1,8 +1,9 @@
 import asyncio
 import re
+import traceback
 from typing import Optional, Tuple, Dict, Any, List, Union
 
-from utilities.utils import convert_to_float, format_float
+from utilities.utils import convert_to_float, format_float, remove_ansi
 
 # Command Constants
 CMD_BLOCK_HEIGHT = "ruskquery block-height"
@@ -60,7 +61,7 @@ class BlockchainClient:
 
             if process.returncode != 0:
                 self.log_action(
-                    f"Command failed with return code {process.returncode}:\n {command.replace(self.password, '#####')}",
+                    f"Command failed with return code {process.returncode}:\\n {command.replace(self.password, '#####')}",
                     stderr_str.replace(self.password, '#####'),
                     "error"
                 )
@@ -72,11 +73,17 @@ class BlockchainClient:
                         stdout_str.replace(self.password, '#####'),
                         'debug'
                     )
-                return stdout_str.replace(self.password, '#####')
-        except Exception as e:
+                # Return raw stdout for parsing later, don't remove password here
+                return stdout.decode().strip()
+        except asyncio.CancelledError: # Explicitly handle cancellation first
+            raise # Re-raise cancellation to allow proper shutdown
+        except Exception as e: # Catch other exceptions, including potential subprocess errors
+            # Check if it looks like a subprocess error based on context/type if possible,
+            # otherwise log as a general error during command execution.
+            error_type = type(e).__name__ # Get the specific exception type name
             self.log_action(
                 f"Error executing command: {command.replace(self.password, '#####')}",
-                str(e),
+                f"Type: {error_type}, Error: {str(e)}\\n{traceback.format_exc()}", # Include type and traceback
                 "error"
             )
             return None
@@ -178,73 +185,94 @@ class BlockchainClient:
             
             while retry_count < max_retries:
                 try:
-                    out = await self.execute_command(cmd_balance)
+                    out = await self.execute_command(cmd_balance, log_output=False)
                     if out:
-                        total_str = out.replace("Total: ", "")
-                        result = float(total_str)
+                        # Clean the output first
+                        cleaned_output = remove_ansi(out)
                         
-                        # If we previously encountered the error and now it's fixed, log it
-                        if encountered_error and not error_fixed:
-                            self.log_action(
-                                "Balance parsing fixed",
-                                f"Successfully parsed balance after previous failures",
-                                "info"
-                            )
-                            error_fixed = True
+                        # Log the cleaned output if needed for debugging
+                        # self.log_action("Cleaned Balance Output", cleaned_output.replace(self.password, '#####'), "debug")
+
+                        total_str = cleaned_output.replace("Total: ", "").strip()
+                        
+                        # Check if the cleaned string is a valid float representation
+                        if re.match(r'^-?\d+(\.\d+)?$', total_str):
+                            result = float(total_str)
                             
-                        return result
-                        
-                except Exception as e:
-                    # Only log connection errors immediately
-                    if 'Connection to Rusk Failed' in str(e):
+                            # If we previously encountered the error and now it's fixed, log it
+                            if encountered_error and not error_fixed:
+                                self.log_action(
+                                    "Balance parsing fixed",
+                                    f"Successfully parsed balance for address {addr} after previous failures",
+                                    "info"
+                                )
+                                error_fixed = True
+                                
+                            return result
+                        else:
+                            # If cleaning didn't result in a valid number, treat as parsing error
+                            raise ValueError(f"Cleaned output '{total_str}' is not a valid float")
+
+                except ValueError as e:
+                    encountered_error = True
+                    # Only log the specific parsing error once per cycle until fixed
+                    if not error_logged:
                         self.log_action(
-                            f"Error in get_spendable_for_address() reaching Node",
-                            f"{str(e).replace(self.password, '#####')}",
+                            f"Error parsing balance for address {addr}",
+                            f"Could not convert string to float: {e}. Output: '{out[:100]}...' - Retrying...",
                             "error"
                         )
-                    # For parsing errors (like '\x1b[?25h'), log once and retry
-                    elif '\x1b[?25h' in str(e):
-                        encountered_error = True
-                        # Only log the error once per session until fixed
+                        error_logged = True
+                        error_fixed = False
+
+                    # Wait with exponential backoff
+                    backoff_time = 15 * (2 ** retry_count)
+                    self.log_action("Retrying balance fetch", f"Waiting {backoff_time}s before retry {retry_count + 1}/{max_retries} for address {addr}", "debug")
+                    await asyncio.sleep(backoff_time)
+                    retry_count += 1
+                    continue
+
+                except Exception as e:
+                    # Handle connection errors or other unexpected issues
+                    encountered_error = True
+                    log_msg = str(e).replace(self.password, '#####')
+                    
+                    if 'Connection to Rusk Failed' in log_msg:
                         if not error_logged:
-                            self.log_action(
-                                f"Error in get_spendable_for_address()",
-                                f"Could not convert string to float: '\\x1b[?25h' - will retry after 15 seconds",
-                                "error"
-                            )
+                            self.log_action(f"Connection Error getting balance for {addr}", log_msg, "error")
                             error_logged = True
                             error_fixed = False
-                            
-                        # Wait 15 seconds before retrying
-                        await asyncio.sleep(15)
-                        retry_count += 1
-                        continue
+                        # Use a shorter, fixed retry delay for connection issues
+                        await asyncio.sleep(10)
                     else:
-                        # For other errors, log and retry
-                        self.log_action(
-                            f"Error in get_spendable_for_address()",
-                            f"{str(e).replace(self.password, '#####')}",
-                            "error"
-                        )
+                        if not error_logged:
+                            self.log_action(f"Unexpected Error getting balance for {addr}", log_msg, "error")
+                            error_logged = True
+                            error_fixed = False
+                        # Use standard backoff for other errors
+                        backoff_time = 5 * (2 ** retry_count)
+                        await asyncio.sleep(backoff_time)
+
+                    retry_count += 1
+                    continue
                 
-                # If we reach here, either there was no output or an error that's not the specific '\x1b[?25h' error
-                # Wait 5 seconds before retrying
-                await asyncio.sleep(5)
+                # If execute_command returned None or empty string without throwing an error
+                self.log_action(f"Empty response getting balance for {addr}", "Retrying...", "debug")
+                await asyncio.sleep(5 * (2 ** retry_count))
                 retry_count += 1
-            
-            # If we've exhausted all retries and encountered the specific error
-            if encountered_error and not error_logged:
+
+            # If we've exhausted all retries
+            if encountered_error and not error_fixed:
                 self.log_action(
-                    f"Error in get_spendable_for_address() after {max_retries} retries",
-                    f"Could not convert string to float: '\\x1b[?25h'",
+                    f"Failed to get balance for address {addr} after {max_retries} retries.",
+                    "Will try again in the next cycle.",
                     "error"
                 )
-                error_logged = True
-                error_fixed = False
+                # error_logged state persists until the next successful parse in this cycle
                 
             return 0.0
         error_logged = False
-        error_fixed = True
+        error_fixed = False
         tasks_public = [get_spendable_for_address(addr) for addr in addresses["public"]]
         tasks_shielded = [get_spendable_for_address(addr) for addr in addresses["shielded"]]
 
