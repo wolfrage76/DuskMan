@@ -95,8 +95,8 @@ class BlockchainClient:
         
         try:
             return int(block_height_str)
-        except ValueError:
-            self.log_action("Invalid block height", f"Could not parse block height: {block_height_str}", "error")
+        except ValueError as e:
+            self.log_action("Invalid block height", f"Could not parse block height: {block_height_str}\n {e}", "error")
             return None
             
     async def get_peer_count(self) -> Optional[int]:
@@ -154,8 +154,7 @@ class BlockchainClient:
                         addresses["public"].append(match.group(1))
         except Exception as e:
             self.log_action(
-                f"Error in get_wallet_balances(): ",
-                str(e).replace(self.password, '#####'),
+                f"Error in get_wallet_balances(): {cmd_profiles.replace(self.password, '#####')}", str(e).replace(self.password, '#####'),
                 "error"
             )
             await asyncio.sleep(5)
@@ -199,7 +198,7 @@ class BlockchainClient:
                     if 'Connection to Rusk Failed' in str(e):
                         self.log_action(
                             f"Error in get_spendable_for_address() reaching Node",
-                            f"{str(e).replace(self.password, '#####')}",
+                            f"{cmd_balance.replace(self.password, '#####')}\n {str(e).replace(self.password, '#####')}",
                             "error"
                         )
                     # For parsing errors (like '\x1b[?25h'), log once and retry
@@ -209,7 +208,7 @@ class BlockchainClient:
                         if not error_logged:
                             self.log_action(
                                 f"Error in get_spendable_for_address()",
-                                f"Could not convert string to float: {str(e).replace(self.password, '#####')} - will retry after 15 seconds",
+                                f"Could not convert string to float: {cmd_balance.replace(self.password, '#####')}\n {str(e).replace(self.password, '#####')} - will retry after 15 seconds",
                                 "error"
                             )
                             error_logged = True
@@ -223,7 +222,7 @@ class BlockchainClient:
                         # For other errors, log and retry
                         self.log_action(
                             f"Error in get_spendable_for_address()",
-                            f"{str(e).replace(self.password, '#####')}",
+                            f"{cmd_balance.replace(self.password, '#####')}\n {str(e).replace(self.password, '#####')}",
                             "error"
                         )
                 

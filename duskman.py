@@ -74,9 +74,15 @@ def create_shared_state():
 
 async def main():
     """Main entry point for the application."""
-    # Clear the screen on startup
     
-    console.clear()
+    # Clear the screen on startup
+    # The combined sequence to clear screen, scrollback, and move cursor to top-left
+    clear_sequence = "\033[H\033[2J\033[3J"
+
+    # Print the sequence to standard output
+    # Use sys.stdout.write and flush for better control than print() in some terminals
+    sys.stdout.write(clear_sequence)
+    sys.stdout.flush()
     console.print("Starting up... Initiating Super Saiyan transformation...")
     
 

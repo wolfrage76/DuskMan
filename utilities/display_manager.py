@@ -1,5 +1,6 @@
 import asyncio
 import subprocess
+from rich.console import Console
 
 
 from datetime import datetime, timedelta
@@ -11,6 +12,7 @@ from rich.console import Console
 
 from utilities.utils import format_float, format_hms, remove_ansi, convert_timestamp, display_wallet_distribution_bar, format_number
 from utilities.colors import *
+
 
 class DisplayManager:
     """
@@ -51,7 +53,7 @@ class DisplayManager:
         """
         first_run = True
 
-        with Live(console=self.console, refresh_per_second=4, auto_refresh=False) as live:
+        with Live(console=self.console, refresh_per_second=10, auto_refresh=False) as live:
             while True:
                 try:
                     # Get current state
@@ -60,8 +62,8 @@ class DisplayManager:
                     b = self.shared_state["balances"]
                     last_act = self.shared_state["last_action_taken"]
                     remain_seconds = self.shared_state["remain_time"]
-                    disp_time = format_hms(remain_seconds) if remain_seconds > 0 else "0s"
-                    donetime = self.shared_state["completion_time"]
+                    disp_time = format_hms(remain_seconds) if remain_seconds > 0 else "Processing..."
+                    donetime = self.shared_state["completion_time"] if remain_seconds > 0 else " "
                     
                     if donetime == '--:--':
                         await asyncio.sleep(2)
@@ -187,12 +189,12 @@ class DisplayManager:
                         # Find the start of the second newline
                         second_newline_start = plain_text.find('\n', first_newline + 1)
                         if second_newline_start != -1:
-                             # The end index for stylize is exclusive, so add 1 to include the newline itself
+                            # The end index for stylize is exclusive, so add 1 to include the newline itself
                             second_newline_end_index = second_newline_start + 1
 
                     # Apply no_wrap=True to the first two lines using stylize
                     if second_newline_end_index != -1:
-                         # Apply the style from the beginning up to the character AFTER the second newline
+                        # Apply the style from the beginning up to the character AFTER the second newline
                         text_content.stylize("no_wrap", 0, second_newline_end_index)
                     
                     # Update rendered content in shared state if needed
@@ -204,6 +206,7 @@ class DisplayManager:
                     
                     # Update the Live display
                     if self.display_gui:
+                        #self.console.clear()
                         live.update(text_content, refresh=True)
 
                     # Update TMUX status bar
