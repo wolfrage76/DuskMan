@@ -77,6 +77,17 @@ async def main():
     # Initialize configuration
     config_data = initialize_config()
     
+    # Delete debug log file if it exists
+    debug_log_path = config_data.get('debug_log_file')
+    if debug_log_path and os.path.exists(debug_log_path):
+        try:
+            os.remove(debug_log_path)
+            # Optionally log this action if logger is available or print
+            # print(f"Removed existing debug log file: {debug_log_path}")
+        except OSError as e:
+            # Handle potential errors like permission issues
+            print(f"Error removing debug log file {debug_log_path}: {e}")
+
     # Create shared state
     shared_state = create_shared_state()
     

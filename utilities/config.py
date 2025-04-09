@@ -65,9 +65,9 @@ def initialize_config():
         # Logs settings
         'isDebug': logs_config.get('debug', False),
         'enable_logging': logs_config.get('enable_logging', False),
-        'INFO_LOG_FILE': logs_config.get("action_log", "duskman_actions.log"),
-        'ERROR_LOG_FILE': logs_config.get("error_log", "duskman_errors.log"),
-        'DEBUG_LOG_FILE': logs_config.get("debug_log", "duskman_tmp_debug.log"),
+        'info_log_file': logs_config.get("action_log", "duskman_actions.log"),
+        'error_log_file': logs_config.get("error_log", "duskman_errors.log"),
+        'debug_log_file': logs_config.get("debug_log", "duskman_tmp_debug.log"),
         
         # Notification settings
         'monitor_wallet': notification_config.get('monitor_balance', False),

@@ -45,9 +45,9 @@ class BlockchainClient:
             Command output as string, or None if the command failed
         """
         try:
-            if log_output:
-                cmd2 = command
-                self.log_action("Executing Command", cmd2.replace(self.password, '#####'), "debug")
+            #if log_output: # ToDo: Add config to enable/disable showing actual command, not just result
+            #    cmd2 = command
+            #    self.log_action("Executing Command", cmd2.replace(self.password, '#####'), "debug")
                 
             process = await asyncio.create_subprocess_shell(
                 command,
@@ -209,7 +209,7 @@ class BlockchainClient:
                         if not error_logged:
                             self.log_action(
                                 f"Error in get_spendable_for_address()",
-                                f"Could not convert string to float: '\\x1b[?25h' - will retry after 15 seconds",
+                                f"Could not convert string to float: {str(e).replace(self.password, '#####')} - will retry after 15 seconds",
                                 "error"
                             )
                             error_logged = True
