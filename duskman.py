@@ -74,6 +74,12 @@ def create_shared_state():
 
 async def main():
     """Main entry point for the application."""
+    # Clear the screen on startup
+    
+    console.clear()
+    console.print("Starting up... Initiating Super Saiyan transformation...")
+    
+
     # Initialize configuration
     config_data = initialize_config()
     
@@ -192,6 +198,7 @@ async def main():
         from utilities.web_dashboard import start_dashboard
         await start_dashboard(shared_state, shared_state["log_entries"], host=config_data['dash_ip'], port=config_data['dash_port'])
     
+    console.clear()
     # Start all the main loops
     await asyncio.gather(
         blockchain_monitor.frequent_update_loop(),
