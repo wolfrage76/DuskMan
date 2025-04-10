@@ -126,17 +126,17 @@ class DisplayManager:
                         is_active = f"{LIGHT_RED}\n\tActive @ {when_active} - #{active_block} (E: {int(active_block/2160)}){DEFAULT}\n"               
                     
                     # Get price change percentages
-                    chg7d = self.shared_state["price_change_percentage_7d_in_currency"]
-                    chg30d = self.shared_state["price_change_percentage_30d_in_currency"]
-                    chg1y = self.shared_state["price_change_percentage_1y_in_currency"]
+                    chg7d = self.shared_state["price_change_percentage_7d_in_currency"] or 0.0
+                    chg30d = self.shared_state["price_change_percentage_30d_in_currency"] or 0.0
+                    chg1y = self.shared_state["price_change_percentage_1y_in_currency"] or 0.0
                     
                     # Market data
-                    volume = self.shared_state["volume"]
-                    mkt_cap = self.shared_state["market_cap"]
-                    mkt_cap_change = self.shared_state["market_cap_change_percentage_24h"]
+                    volume = self.shared_state["volume"] or 0.0
+                    mkt_cap = self.shared_state["market_cap"] or 0.0
+                    mkt_cap_change = self.shared_state["market_cap_change_percentage_24h"] or 0.0
                     
-                    ath = self.shared_state["ath"]
-                    ath_change = self.shared_state["ath_change_percentage"]
+                    ath = self.shared_state["ath"] or 0.0
+                    ath_change = self.shared_state["ath_change_percentage"] or 0.0
                     ath_date = self.shared_state["ath_date"]
                     
                     if self.shared_state['market_cap_change_percentage_24h'] > 0:
@@ -144,7 +144,7 @@ class DisplayManager:
                     else:
                         mcap_color = RED
                     
-                    atl = self.shared_state["atl"]
+                    atl = self.shared_state["atl"] or 0.0
                     atl_date = self.shared_state["atl_date"]
                     mcap = f'{LIGHT_WHITE}24hr Volume: ${format_number(volume)}  Market Cap: ${format_number(mkt_cap)} ({mcap_color}{mkt_cap_change:.2f}%{LIGHT_WHITE})\n'
                     athl = f' {LIGHT_WHITE}ATH: ${format_float(ath)} ({ath_change:.2f}%) {convert_timestamp(ath_date)} | ATL: ${format_float(atl)} {convert_timestamp(atl_date)}\n'

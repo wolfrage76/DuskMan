@@ -48,7 +48,7 @@ class Logger:
             type: Type of log message (info, error, debug)
         """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-        formatted_message = self.log_format.format(timestamp=timestamp, message=f"{action}: {details}")
+        formatted_message = self.log_format.format(timestamp=timestamp, message=f"{action}: {details}\n")
         
         # Mask password
         formatted_message = formatted_message.replace(self.password, '#####')
