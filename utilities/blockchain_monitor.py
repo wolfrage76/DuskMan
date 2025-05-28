@@ -3,6 +3,7 @@ from typing import Dict, Any, Optional, Callable
 
 from utilities.blockchain_client import BlockchainClient
 from utilities.market_data import MarketDataClient
+from utilities.banner import BannerManager
 
 class BlockchainMonitor:
     """
@@ -14,6 +15,7 @@ class BlockchainMonitor:
         self, 
         blockchain_client: BlockchainClient,
         market_data_client: MarketDataClient,
+        banner_manager: BannerManager,
         shared_state: Dict[str, Any],
         config: Dict[str, Any],
         log_action_func: Callable = None
@@ -24,12 +26,14 @@ class BlockchainMonitor:
         Args:
             blockchain_client: Client for blockchain interactions
             market_data_client: Client for market data
+            banner_manager: Manager for banner information
             shared_state: Shared state dictionary
             config: Configuration dictionary
             log_action_func: Function to call for logging
         """
         self.blockchain = blockchain_client
         self.market_data = market_data_client
+        self.banner_manager = banner_manager
         self.shared_state = shared_state
         self.config = config
         self.log_action = log_action_func or (lambda *args, **kwargs: None)
@@ -46,13 +50,22 @@ class BlockchainMonitor:
         """
         stake_checking = False
         loopcnt = 0
+        banner_fetch_count = 0  # Counter for banner fetching (every 15 minutes)
         consecutive_no_change = 0  # Counter for consecutive no-change in block height
         last_known_block_height = None  # Track the last block height
         consecutive_low_peers = 0  # Track loops of low peer counts
+        first_run = True  # Flag for first run to fetch banner immediately
         
         while True:
             try:
                 self.log_action("Frequent Update Loop", "Loop iteration started.", "debug")
+
+                # Fetch banner info immediately on first run, then every 15 minutes
+                if first_run or banner_fetch_count >= 90:
+                    self.log_action("Frequent Update Loop", "Attempting to fetch banner info.", "debug")
+                    await self.banner_manager.fetch_banner_info(self.shared_state)
+                    banner_fetch_count = 0  # Reset banner fetch counter
+                    first_run = False  # Clear first run flag
 
                 # 1) Fetch block height
                 self.log_action("Frequent Update Loop", "Attempting to get block height.", "debug")
@@ -86,6 +99,7 @@ class BlockchainMonitor:
                 self.shared_state["block_height"] = block_height
                 
                 self.log_action("Frequent Update Loop", f"Loop count: {loopcnt}. Stake checking (local): {stake_checking}", "debug")
+                
                 # Perform balance and stake-info updates every X loops (e.g., 30 is 5 minutes)
                 if loopcnt >= 20 and not stake_checking:
                     self.log_action("Frequent Update (>=20 Loops)", f"Block height: {self.shared_state['block_height']}", "debug")
@@ -139,6 +153,7 @@ class BlockchainMonitor:
                     continue
 
                 loopcnt += 1
+                banner_fetch_count += 1
                 await asyncio.sleep(10)  # Wait 10 seconds before the next loop
                 
             except Exception as e:

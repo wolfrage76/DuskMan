@@ -1,7 +1,7 @@
 import asyncio
 import subprocess
+import textwrap
 from rich.console import Console
-
 
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List, Callable
@@ -149,6 +149,44 @@ class DisplayManager:
                     mcap = f'{LIGHT_WHITE}24hr Volume: ${format_number(volume)}  Market Cap: ${format_number(mkt_cap)} ({mcap_color}{mkt_cap_change:.2f}%{LIGHT_WHITE})\n'
                     athl = f' {LIGHT_WHITE}ATH: ${format_float(ath)} ({ath_change:.2f}%) {convert_timestamp(ath_date)} | ATL: ${format_float(atl)} {convert_timestamp(atl_date)}\n'
                     
+                    # Banner processing
+                    banner_message_raw = self.shared_state.get("banner_message", "")
+                    final_banner_string = "" # This will hold the fully formatted multi-line banner
+
+                    if banner_message_raw:
+                        top_bar_plain_width = len(remove_ansi(top_bar))
+                        wrap_width = max(1, top_bar_plain_width - 4)
+                        raw_lines = banner_message_raw.split('\n')
+                        all_processed_segments = []
+
+                        for raw_line in raw_lines:
+                            wrapped_segments = textwrap.wrap(
+                                raw_line,
+                                width=wrap_width,
+                                break_long_words=True,
+                                replace_whitespace=False, # Do not replace existing whitespace in raw_line more than necessary
+                                expand_tabs=False
+                            )
+                            if wrapped_segments:  # Only add non-empty segments
+                                all_processed_segments.extend(wrapped_segments)
+                            else:
+                                # If textwrap.wrap returns empty (e.g., for empty lines), preserve the empty line
+                                all_processed_segments.append("")
+
+                        # Now center each segment and build the final banner string
+                        for segment in all_processed_segments:
+                            segment_plain_width = len(remove_ansi(segment))
+                            if top_bar_plain_width > segment_plain_width:
+                                padding_width = (top_bar_plain_width - segment_plain_width) // 2
+                                padding = ' ' * padding_width
+                            else:
+                                padding = ""
+                            final_banner_string += f" {LIGHT_CYAN}{padding}{segment}{DEFAULT}\n"
+
+                        # Add separator line
+                        separator_line = f" {LIGHT_WHITE}{'-' * (top_bar_plain_width - 2)}{DEFAULT}\n"
+                        final_banner_string = separator_line + final_banner_string
+
                     # Determine color for last action text
                     if "Insufficient balance" in last_act or "Operation skipped" in last_act:
                         last_act_color = LIGHT_RED
@@ -175,7 +213,8 @@ class DisplayManager:
                         f"    {YELLOW}Rewards{DEFAULT}       | {YELLOW}{format_float(st_info['rewards_amount'])} ({LIGHT_BLUE}{reward_percent:.4f}%{DEFAULT}) (${format_float(st_info['rewards_amount'] * price, 2)}) {LIGHT_WHITE}{per_epoch}{DEFAULT}\n"
                         f"    {LIGHT_RED}Reclaimable{DEFAULT}   | {LIGHT_RED}{format_float(st_info['reclaimable_slashed_stake'])} (${format_float(st_info['reclaimable_slashed_stake'] * price, 2)}){DEFAULT}\n"
                         f" {LIGHT_WHITE}{('=' * (len(remove_ansi(top_bar)) - 2))}{DEFAULT}\n"
-                        f"  {mcap} {athl}\n"
+                        f"  {mcap} {athl}"
+                        f"\n{final_banner_string}"
                     )
 
                     # Convert the ANSI string to a Rich Text object

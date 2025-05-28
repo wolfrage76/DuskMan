@@ -23,6 +23,7 @@ from utilities.blockchain_monitor import BlockchainMonitor
 from utilities.market_data import MarketDataClient
 from utilities.stake_manager import StakeManager
 from utilities.display_manager import DisplayManager
+from utilities.banner import BannerManager
 from utilities.colors import *
 
 # Initialize rich traceback handler
@@ -66,6 +67,7 @@ def create_shared_state():
         "options": "",
     "rewards_per_epoch": 0.0,
         "log_entries": [],
+    "banner_message": "",  # Add banner message to shared state
     }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -122,10 +124,14 @@ async def main():
     # Initialize market data client
     market_data_client = MarketDataClient(log_action)
     
+    # Initialize banner manager
+    banner_manager = BannerManager(log_action)
+    
     # Initialize blockchain monitor
     blockchain_monitor = BlockchainMonitor(
         blockchain_client,
         market_data_client,
+        banner_manager,
         shared_state,
         config_data,
         log_action
