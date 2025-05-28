@@ -52,12 +52,16 @@ class BlockchainMonitor:
         
         while True:
             try:
+                self.log_action("Frequent Update Loop", "Loop iteration started.", "debug")
+
                 # 1) Fetch block height
+                self.log_action("Frequent Update Loop", "Attempting to get block height.", "debug")
                 block_height = await self.blockchain.get_block_height()
                 if block_height is None:
                     self.log_action("Failed to fetch block height.", ' Retrying in 10s...', "error")
                     await asyncio.sleep(10)
                     continue
+                self.log_action("Frequent Update Loop", f"Block height fetched: {block_height}. Last known: {last_known_block_height}", "debug")
                 
                 # Compare with last known block height
                 if last_known_block_height is not None:
@@ -81,27 +85,39 @@ class BlockchainMonitor:
                 last_known_block_height = block_height
                 self.shared_state["block_height"] = block_height
                 
+                self.log_action("Frequent Update Loop", f"Loop count: {loopcnt}. Stake checking (local): {stake_checking}", "debug")
                 # Perform balance and stake-info updates every X loops (e.g., 30 is 5 minutes)
                 if loopcnt >= 20 and not stake_checking:
                     self.log_action("Frequent Update (>=20 Loops)", f"Block height: {self.shared_state['block_height']}", "debug")
                     
                     # Update wallet balances
+                    self.log_action("Frequent Update Loop", "Attempting to get wallet balances.", "debug")
                     await self.blockchain.get_wallet_balances(self.shared_state, self.monitor_wallet)
+                    self.log_action("Frequent Update Loop", f"Wallet balances updated. Public: {self.shared_state['balances']['public']}, Shielded: {self.shared_state['balances']['shielded']}", "debug")
                     
                     # Update stake info
+                    self.log_action("Frequent Update Loop", "Attempting to get stake info.", "debug")
                     e_stake, r_slashed, a_rewards = await self.blockchain.get_stake_info(self.shared_state)
+                    self.log_action("Frequent Update Loop", f"Stake info fetched: e_stake={e_stake}, r_slashed={r_slashed}, a_rewards={a_rewards}", "debug")
                     if e_stake is not None and r_slashed is not None:
                         self.shared_state["stake_info"]["stake_amount"] = e_stake
                         self.shared_state["stake_info"]["reclaimable_slashed_stake"] = r_slashed
                         self.shared_state["stake_info"]["rewards_amount"] = a_rewards or 0.0
+                        self.log_action("Frequent Update Loop", "Shared state updated with new stake info.", "debug")
+                    else:
+                        self.log_action("Frequent Update Loop", "Failed to get complete stake info for shared state update.", "debug")
                     
                     # Update market data
+                    self.log_action("Frequent Update Loop", "Attempting to fetch market data.", "debug")
                     await self.market_data.fetch_dusk_data(self.shared_state)
+                    self.log_action("Frequent Update Loop", f"Market data updated. Price: {self.shared_state['price']}", "debug")
                         
                     loopcnt = 0  # Reset loop count after update
                 
                 # Update peer count
+                self.log_action("Frequent Update Loop", "Attempting to get peer count.", "debug")
                 peer_count = await self.blockchain.get_peer_count()
+                self.log_action("Frequent Update Loop", f"Peer count fetched: {peer_count}", "debug")
                 if peer_count is not None:
                     self.shared_state["peer_count"] = peer_count
                     
@@ -128,6 +144,7 @@ class BlockchainMonitor:
             except Exception as e:
                 stake_checking = False
                 self.log_action("Error in Frequent Update Loop", str(e), "error")
+                self.log_action("Frequent Update Loop", "Error caught. Sleeping for 30s before retry.", "debug")
                 await asyncio.sleep(30)  # Wait longer after an error
                 
     async def init_balance(self) -> None:

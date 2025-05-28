@@ -317,31 +317,38 @@ class StakeManager:
 
         while True:
             try:
+                self.log_action("Stake Loop", "Loop iteration started.", "debug")
+
                 # For logic, we may want a fresh block height right before we do anything:
+                self.log_action("Stake Loop", "Attempting to get block height.", "debug")
                 block_height = await self.blockchain.get_block_height()
                 if block_height is None:
                     self.log_action("Failed to fetch block height", "Retrying in 30s...", "error")
                     stake_checking = False
                     await self.sleep_with_feedback(30, "retry block height fetch")
                     continue
-
+                self.log_action("Stake Loop", f"Block height fetched: {block_height}", "debug")
                 self.shared_state["block_height"] = block_height
 
                 # If we already saw 'No Action' for this block, wait a bit
                 if self.shared_state["last_no_action_block"] == block_height:
                     msg = f"Already did 'No Action' at block {block_height}; sleeping 30s."
+                    self.log_action("Stake Loop", msg, "debug")
                     stake_checking = False
                     await self.sleep_with_feedback(30, msg)
                     continue
 
                 # Fetch stake-info
                 stake_checking = True 
+                self.log_action("Stake Loop", "Attempting to get stake info.", "debug")
                 e_stake, r_slashed, a_rewards = await self.blockchain.get_stake_info(self.shared_state)
+                self.log_action("Stake Loop", f"Stake info result: e_stake={e_stake}, r_slashed={r_slashed}, a_rewards={a_rewards}", "debug")
                 if e_stake is None or r_slashed is None or a_rewards is None:
                     self.log_action("Skipping Cycle", "Parsing stake info incomplete. Sleeping 60s...", 'debug')
                     stake_checking = False
                     await self.sleep_with_feedback(60, "skipping cycle")
                     continue
+                self.log_action("Stake Loop", "Stake info fetched and parsed successfully.", "debug")
                 
                 # Update in shared state
                 self.shared_state["stake_info"]["stake_amount"] = e_stake
@@ -360,9 +367,12 @@ class StakeManager:
                 downtime_loss = calculate_downtime_loss(rewards_per_epoch, downtime_epochs=2)
                 incremental_threshold = rewards_per_epoch
                 
+                self.log_action("Stake Loop", f"Decision params: first_run={first_run}, e_stake={e_stake}, r_slashed={reclaimable_slashed_stake}, rewards={rewards_amount}, downtime_loss={downtime_loss}, inc_thresh={incremental_threshold}", "debug")
+
                 # Should this check first run and wait till first epoch? need to test
                 if (self.should_unstake_and_restake(reclaimable_slashed_stake, downtime_loss) and 
                     not first_run and reclaimable_slashed_stake and e_stake > 0):
+                    self.log_action("Stake Loop", "Condition for unstake/restake met.", "debug")
                     
                     success = await self.perform_unstake_restake(
                         block_height, stake_amount, rewards_amount, 
@@ -373,16 +383,19 @@ class StakeManager:
                         stake_checking = False
                         rewards_per_epoch = 0
                         self.shared_state["rewards_per_epoch"] = rewards_per_epoch
+                        self.log_action("Stake Loop", "Unstake/Restake successful. Sleeping for 2 epochs.", "debug")
                         # Sleep 2 epochs
                         await self.sleep_until_next_epoch(block_height + 2160, msg="2-epoch wait after restaking...")
                         continue
                     else:
                         stake_checking = False
+                        self.log_action("Stake Loop", "Unstake/Restake failed. Waiting before retry.", "debug")
                         # If failed, wait a bit and try again
                         await self.sleep_with_feedback(300, "waiting after failed unstake/restake")
                         continue
 
                 elif self.should_claim_and_stake(rewards_amount, incremental_threshold) and not first_run:
+                    self.log_action("Stake Loop", "Condition for claim/stake met.", "debug")
                     # Claim & Stake
                     success = await self.perform_claim_stake(
                         block_height, stake_amount, rewards_amount, reclaimable_slashed_stake
@@ -390,29 +403,37 @@ class StakeManager:
                     
                     if success:
                         stake_checking = False
-                        self.log_action("Stake Loop", "Finished staking, now sleeping.", "debug")
-                        await self.sleep_with_feedback(2160 * 10, "1 epoch wait after claiming")
-                        self.log_action("Stake Loop", "Woke up from sleep.", "debug")
+                        self.log_action("Stake Loop", "Finished staking, now sleeping.", "debug") # Existing log
+                        await self.sleep_with_feedback(2160 * 10, "1 epoch wait after claiming") # This logs "Sleep Countdown" and "Sleep Finished"
+                        self.log_action("Stake Loop", "Woke up from sleep (after claim/stake).", "debug") # Modified existing log for clarity
                         rewards_per_epoch = 0
                         self.shared_state["rewards_per_epoch"] = rewards_per_epoch
                         continue
                     else:
                         stake_checking = False
+                        self.log_action("Stake Loop", "Claim/Stake failed. Waiting before retry.", "debug")
                         # If failed, wait a bit and try again
                         await self.sleep_with_feedback(300, "waiting after failed claim/stake")
                         continue
                 else:
                     # No action
+                    self.log_action("Stake Loop", "No specific staking action met conditions.", "debug")
                     self.shared_state["last_no_action_block"] = block_height
                     self.shared_state["last_action_taken"] = f"No Action @ Block {block_height}"
-                    stake_checking = False
+                    
                     if first_run:
+                        self.log_action("Stake Loop", "First run, logging status and setting first_run to False.", "debug")
                         self.shared_state["last_action_taken"] = f"Startup @ Block #{block_height}"
                         await self.log_status(block_height, self.shared_state["last_action_taken"])
                         first_run = False
-                        
+                        stake_checking = False
+                        # For the first run, we don't necessarily sleep until next epoch immediately,
+                        # let the loop continue to potentially make an action if conditions are met without first_run block.
+                        # However, standard behavior is to sleep, so let's ensure it does.
+                        # Fall through to the main sleep_until_next_epoch at the end of the try block.
                     else:
-                        
+                        stake_checking = False
+                        self.log_action("Stake Loop", "No action taken. Sleeping until next epoch.", "debug")
                         # If no action, just wait and don't log since it's no longer first run
                         await self.sleep_until_next_epoch(block_height, buffer_blocks=self.buffer_blocks)
                         continue
@@ -420,8 +441,11 @@ class StakeManager:
             except Exception as e:
                 stake_checking = False
                 self.log_action("Error in stake management loop", str(e), "error")
+                self.log_action("Stake Loop", "Error caught in main try block. Sleeping for 60s before retry.", "debug")
                 await self.sleep_with_feedback(60, "error recovery")
+                continue # Ensure we always continue to restart the loop cleanly
                 
-            # Sleep until near the next epoch
+            # Sleep until near the next epoch (this part is reached if no 'continue' was hit earlier in 'else: No action' for first_run)
             stake_checking = False
+            self.log_action("Stake Loop", "End of try block reached. Sleeping until next epoch.", "debug")
             await self.sleep_until_next_epoch(block_height, buffer_blocks=self.buffer_blocks)

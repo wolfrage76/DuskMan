@@ -45,16 +45,29 @@ class BlockchainClient:
             Command output as string, or None if the command failed
         """
         try:
-            #if log_output: # ToDo: Add config to enable/disable showing actual command, not just result
-            #    cmd2 = command
-            #    self.log_action("Executing Command", cmd2.replace(self.password, '#####'), "debug")
+            if log_output:
+                cmd2 = command
+                self.log_action("Executing Command", cmd2.replace(self.password, '#####'), "debug")
                 
             process = await asyncio.create_subprocess_shell(
                 command,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
-            stdout, stderr = await process.communicate()
+            
+            try:
+                # Add a timeout to the communicate() call
+                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=60.0)
+            except asyncio.TimeoutError:
+                self.log_action(
+                    f"Command timed out after 60s: {command.replace(self.password, '#####')}",
+                    "Killing process.",
+                    "error"
+                )
+                process.kill()
+                await process.wait()  # Ensure the process is cleaned up
+                return None
+
             stdout_str = stdout.decode().strip()
             stderr_str = stderr.decode().strip()
 
