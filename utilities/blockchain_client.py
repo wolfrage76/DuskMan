@@ -54,7 +54,20 @@ class BlockchainClient:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
-            stdout, stderr = await process.communicate()
+            
+            try:
+                # Add a timeout to the communicate() call
+                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=60.0)
+            except asyncio.TimeoutError:
+                self.log_action(
+                    f"Command timed out after 60s: {command.replace(self.password, '#####')}",
+                    "Killing process.",
+                    "error"
+                )
+                process.kill()
+                await process.wait()  # Ensure the process is cleaned up
+                return None
+
             stdout_str = stdout.decode().strip()
             stderr_str = stderr.decode().strip()
 
