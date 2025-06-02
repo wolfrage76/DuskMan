@@ -43,6 +43,13 @@ class BlockchainMonitor:
         self.monitor_wallet = config.get('monitor_wallet', False)
         self.password = config.get('password', '')
         
+        self._shutdown_event = asyncio.Event()
+        
+    async def shutdown(self):
+        """Gracefully shutdown the monitor."""
+        self.log_action("Blockchain Monitor", "Shutdown requested!", "info")
+        self._shutdown_event.set()
+        
     async def frequent_update_loop(self) -> None:
         """
         Update the block height and balances every 20 seconds.
@@ -63,7 +70,7 @@ class BlockchainMonitor:
         last_successful_update = None  # Track when we last successfully completed an update
         operation_timeout = 30.0  # Timeout for individual operations
         
-        while True:
+        while not self._shutdown_event.is_set():
             loop_start_time = asyncio.get_event_loop().time()
             
             try:
@@ -267,6 +274,10 @@ class BlockchainMonitor:
                     self.log_action("CRITICAL: Frequent Update Loop", 
                                   f"No successful updates for {int(current_time - last_successful_update)} seconds. "
                                   f"Consecutive failures: {consecutive_failures}", "error")
+                
+                # Check for shutdown between operations
+                if self._shutdown_event.is_set():
+                    break
                 
     async def init_balance(self) -> None:
         """

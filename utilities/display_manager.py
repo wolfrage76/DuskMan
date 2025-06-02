@@ -326,3 +326,12 @@ class DisplayManager:
         except Exception as e:
             self.log_action("tmux Error", f"Error updating tmux status bar: {str(e)}", "debug")
             self.enable_tmux = False
+
+    async def _cleanup_old_state(self):
+        """Periodically clean up old state to prevent memory leaks."""
+        # Clean up old log entries if they exceed limits
+        log_entries = self.shared_state.get("log_entries", [])
+        max_entries = self.config.get('max_log_entries', 50)
+        
+        if len(log_entries) > max_entries:
+            self.shared_state["log_entries"] = log_entries[-max_entries:]
