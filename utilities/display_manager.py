@@ -214,7 +214,7 @@ class DisplayManager:
                         f"    {LIGHT_RED}Reclaimable{DEFAULT}   | {LIGHT_RED}{format_float(st_info['reclaimable_slashed_stake'])} (${format_float(st_info['reclaimable_slashed_stake'] * price, 2)}){DEFAULT}\n"
                         f" {LIGHT_WHITE}{('=' * (len(remove_ansi(top_bar)) - 2))}{DEFAULT}\n"
                         f"  {mcap} {athl}"
-                        f"\n{final_banner_string}"
+                        f"{final_banner_string}"
                     )
 
                     # Convert the ANSI string to a Rich Text object
