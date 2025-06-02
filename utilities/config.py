@@ -22,6 +22,21 @@ def load_config(section="GENERAL", file_path="config.yaml"):
         log_action("Config File Error", f"Error parsing YAML file {file_path}: {e}", "error")
         sys.exit(1)
 
+def get_log_file_path(config_value, default_path):
+    """
+    Get log file path, defaulting to specified path if config value is None, 'none', or empty.
+    
+    Args:
+        config_value: Value from config file
+        default_path: Default file path to use
+        
+    Returns:
+        Resolved file path
+    """
+    if config_value is None or (isinstance(config_value, str) and config_value.lower() in ['none', 'null', '']):
+        return default_path
+    return config_value
+
 def initialize_config():
     """Initialize and return all configuration settings"""
     load_dotenv()
@@ -65,9 +80,9 @@ def initialize_config():
         # Logs settings
         'isDebug': logs_config.get('debug', False),
         'enable_logging': logs_config.get('enable_logging', False),
-        'info_log_file': logs_config.get("action_log", "duskman_actions.log"),
-        'error_log_file': logs_config.get("error_log", "duskman_errors.log"),
-        'debug_log_file': logs_config.get("debug_log", "duskman_tmp_debug.log"),
+        'info_log_file': get_log_file_path(logs_config.get("action_log"), "duskman_actions.log"),
+        'error_log_file': get_log_file_path(logs_config.get("error_log"), "duskman_errors.log"),
+        'debug_log_file': get_log_file_path(logs_config.get("debug_log"), "duskman_tmp_debug.log"),
         
         # Notification settings
         'monitor_wallet': notification_config.get('monitor_balance', False),

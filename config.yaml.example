@@ -47,9 +47,9 @@ NOTIFICATIONS:
 
 LOG_FILES:
   enable_logging: False
-  action_log:           # Defaults to ./duskman_actions.log
-  error_log:            # Defaults to ./duskman_errors.log
-  debug_log:            # Defaults to ./duskman_tmp_debug.log  :NOTE: Debug log is deleted on each start!
+  action_log:           # Defaults to ./duskman_actions.log (set to 'none' to use default)
+  error_log:            # Defaults to ./duskman_errors.log (set to 'none' to use default)
+  debug_log:            # Defaults to ./duskman_tmp_debug.log (set to 'none' to use default) :NOTE: Debug log is deleted on each start!
   
   debug: False          # Enable the debugging log. Debug log is deleted on each start!
 
