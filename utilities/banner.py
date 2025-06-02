@@ -55,11 +55,11 @@ class BannerManager:
                 else:
                     self.log_action("BannerManager", f"Failed to fetch banner info. HTTP Status: {response.status}", "warning")
         except aiohttp.ClientConnectorError as e:
-            self.log_action("BannerManager", f"Connection error fetching banner: {str(e)}", "error")
+            self.log_action("BannerManager", f"Connection error fetching banner: {str(e)}", "debug")
         except asyncio.TimeoutError:
-            self.log_action("BannerManager", f"Timeout fetching banner from {self.banner_url}", "error")
+            self.log_action("BannerManager", f"Timeout fetching banner from {self.banner_url}", "debug")
         except Exception as e:
-            self.log_action("BannerManager", f"Unexpected error fetching banner: {str(e)}", "error")
+            self.log_action("BannerManager", f"Unexpected error fetching banner: {str(e)}", "debug")
         finally:
             shared_state[self.shared_info_key] = banner_text
             if not self._session and 'session' in locals() and not session.closed: # if session was created locally

@@ -305,9 +305,17 @@ class BlockchainClient:
         """
         try:
             lines = output.splitlines()
-            eligible_stake = None  # Eligible stake for staking
-            reclaimable_slashed_stake = None  # Reclaimable slashed stake (from penalties)
+            eligible_stake = None  # Changed to None to detect if we found any stake info
+            reclaimable_slashed_stake = None  # Changed to None to detect if we found any stake info
             accumulated_rewards = 0.0  # Accumulated rewards from staking
+            found_stake_data = False  # Track if we found any actual stake data
+
+            # Check if there's no stake first
+            for line in lines:
+                line = line.strip()
+                if "A stake does not exist for this key" in line:
+                    # This is a normal condition, not an error
+                    return 0.0, 0.0, 0.0
 
             for line in lines:
                 line = line.strip()
@@ -316,31 +324,43 @@ class BlockchainClient:
                     match = re.search(r"Eligible stake:\s*([\d]+(?:\.\d+)?)\s*DUSK", line)
                     if match:
                         eligible_stake = convert_to_float(match.group(1))
+                        found_stake_data = True
                 elif "Reclaimable slashed stake:" in line:
                     # Example: "Reclaimable slashed stake: 50.0 DUSK"
                     match = re.search(r"Reclaimable slashed stake:\s*([\d]+(?:\.\d+)?)\s*DUSK", line)
                     if match:
                         reclaimable_slashed_stake = convert_to_float(match.group(1))
+                        found_stake_data = True
                 elif "Accumulated rewards is:" in line:
                     # Example: "Accumulated rewards is: 10.0 DUSK"
                     match = re.search(r"Accumulated rewards is:\s*([\d]+(?:\.\d+)?)\s*DUSK", line)
                     if match:
                         accumulated_rewards = convert_to_float(match.group(1))
+                        found_stake_data = True
                 elif "Stake active from block #" in line:
                     # Example: "Stake active from block #123456"
                     match = re.search(r"#(\d+)", line)
                     if match:
                         stake_active_blk = int(match.group(1))
                         shared_state["active_blk"] = stake_active_blk
+                        found_stake_data = True
 
-            if (eligible_stake is None or
-                reclaimable_slashed_stake is None):
-                # If we couldn't parse the stake-info output fully, log an error
-                self.log_action("Incomplete stake-info values.", f"Could not parse fully.\n{lines}", "error")
-                return None, None, 0.0
+            # If we found some stake data but couldn't parse all expected values
+            if found_stake_data and (eligible_stake is None or reclaimable_slashed_stake is None):
+                # Format the lines properly for logging
+                full_output = "\n".join(lines)
+                self.log_action("Incomplete stake-info values.", f"Could not parse fully.\n{full_output}", "error")
+                return 0.0, 0.0, 0.0
 
-            # Return the parsed values
-            return eligible_stake, reclaimable_slashed_stake, accumulated_rewards
+            # If no stake data was found at all, this might be unexpected
+            if not found_stake_data:
+                # Format the lines properly for logging
+                full_output = "\n".join(lines)
+                self.log_action("No stake data found", f"Unexpected stake-info output:\n{full_output}", "warning")
+                return 0.0, 0.0, 0.0
+
+            # Return the parsed values (convert None to 0.0 for safety)
+            return (eligible_stake or 0.0), (reclaimable_slashed_stake or 0.0), accumulated_rewards
         except Exception as e:
             self.log_action(f"Error parsing stake-info output: ", str(e), "error")
             return None, None, 0.0
