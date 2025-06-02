@@ -56,24 +56,65 @@ class BlockchainMonitor:
         consecutive_low_peers = 0  # Track loops of low peer counts
         first_run = True  # Flag for first run to fetch banner immediately
         
+        # Soft-lock prevention variables
+        consecutive_failures = 0  # Track consecutive failures for circuit breaker
+        max_consecutive_failures = 5  # Maximum failures before entering recovery mode
+        recovery_mode = False  # Flag to indicate we're in recovery mode
+        last_successful_update = None  # Track when we last successfully completed an update
+        operation_timeout = 30.0  # Timeout for individual operations
+        
         while True:
+            loop_start_time = asyncio.get_event_loop().time()
+            
             try:
-                self.log_action("Frequent Update Loop", "Loop iteration started.", "debug")
+                self.log_action("Frequent Update Loop", f"Loop iteration started. Recovery mode: {recovery_mode}, Consecutive failures: {consecutive_failures}", "debug")
+
+                # Circuit breaker: If we have too many consecutive failures, enter recovery mode
+                if consecutive_failures >= max_consecutive_failures and not recovery_mode:
+                    recovery_mode = True
+                    self.log_action("Frequent Update Loop", f"Entering recovery mode after {consecutive_failures} consecutive failures", "warning")
+                
+                # In recovery mode, use longer timeouts and simpler operations
+                current_timeout = operation_timeout * 2 if recovery_mode else operation_timeout
 
                 # Fetch banner info immediately on first run, then every 15 minutes
                 if first_run or banner_fetch_count >= 90:
                     self.log_action("Frequent Update Loop", "Attempting to fetch banner info.", "debug")
-                    await self.banner_manager.fetch_banner_info(self.shared_state)
-                    banner_fetch_count = 0  # Reset banner fetch counter
-                    first_run = False  # Clear first run flag
+                    try:
+                        await asyncio.wait_for(
+                            self.banner_manager.fetch_banner_info(self.shared_state),
+                            timeout=current_timeout
+                        )
+                        banner_fetch_count = 0  # Reset banner fetch counter
+                        first_run = False  # Clear first run flag
+                    except asyncio.TimeoutError:
+                        self.log_action("Frequent Update Loop", f"Banner fetch timed out after {current_timeout}s", "warning")
+                        banner_fetch_count = 0  # Reset to avoid getting stuck
+                        first_run = False
+                    except Exception as e:
+                        self.log_action("Frequent Update Loop", f"Banner fetch failed: {str(e)}", "warning")
+                        banner_fetch_count = 0  # Reset to avoid getting stuck
+                        first_run = False
 
-                # 1) Fetch block height
+                # 1) Fetch block height with timeout
                 self.log_action("Frequent Update Loop", "Attempting to get block height.", "debug")
-                block_height = await self.blockchain.get_block_height()
+                block_height = None
+                try:
+                    block_height = await asyncio.wait_for(
+                        self.blockchain.get_block_height(),
+                        timeout=current_timeout
+                    )
+                except asyncio.TimeoutError:
+                    self.log_action("Frequent Update Loop", f"Block height fetch timed out after {current_timeout}s", "warning")
+                except Exception as e:
+                    self.log_action("Frequent Update Loop", f"Block height fetch failed: {str(e)}", "warning")
+                
                 if block_height is None:
-                    self.log_action("Failed to fetch block height.", ' Retrying in 10s...', "error")
+                    consecutive_failures += 1
+                    self.log_action("Failed to fetch block height.", f'Retrying in 10s... (failure #{consecutive_failures})', "error")
                     await asyncio.sleep(10)
                     continue
+                    
                 self.log_action("Frequent Update Loop", f"Block height fetched: {block_height}. Last known: {last_known_block_height}", "debug")
                 
                 # Compare with last known block height
@@ -86,13 +127,10 @@ class BlockchainMonitor:
                     consecutive_no_change = 0  # Reset counter on first valid block height
                 
                 # Log and notify if block height hasn't changed for 10 loops (100 seconds)
-                if consecutive_no_change >= 10:
+                # But don't get stuck in a continue loop - limit the warning frequency
+                if consecutive_no_change >= 10 and consecutive_no_change % 10 == 0:  # Log every 10 loops after the first warning
                     message = f"WARNING! Block height has not changed for {consecutive_no_change * 10} seconds.\nLast height: {last_known_block_height}"
                     self.log_action("Block Height Error!", message, "error")
-                    
-                    consecutive_no_change = 0  # Reset after notifying to avoid spamming
-                    await asyncio.sleep(1)
-                    continue
 
                 # Update last known block height and shared state
                 last_known_block_height = block_height
@@ -100,37 +138,76 @@ class BlockchainMonitor:
                 
                 self.log_action("Frequent Update Loop", f"Loop count: {loopcnt}. Stake checking (local): {stake_checking}", "debug")
                 
-                # Perform balance and stake-info updates every X loops (e.g., 30 is 5 minutes)
+                # Perform balance and stake-info updates every X loops (e.g., 20 is ~3.3 minutes)
                 if loopcnt >= 20 and not stake_checking:
                     self.log_action("Frequent Update (>=20 Loops)", f"Block height: {self.shared_state['block_height']}", "debug")
                     
-                    # Update wallet balances
-                    self.log_action("Frequent Update Loop", "Attempting to get wallet balances.", "debug")
-                    await self.blockchain.get_wallet_balances(self.shared_state, self.monitor_wallet)
-                    self.log_action("Frequent Update Loop", f"Wallet balances updated. Public: {self.shared_state['balances']['public']}, Shielded: {self.shared_state['balances']['shielded']}", "debug")
+                    # Set stake_checking flag to prevent overlapping operations
+                    stake_checking = True
                     
-                    # Update stake info
-                    self.log_action("Frequent Update Loop", "Attempting to get stake info.", "debug")
-                    e_stake, r_slashed, a_rewards = await self.blockchain.get_stake_info(self.shared_state)
-                    self.log_action("Frequent Update Loop", f"Stake info fetched: e_stake={e_stake}, r_slashed={r_slashed}, a_rewards={a_rewards}", "debug")
-                    if e_stake is not None and r_slashed is not None:
-                        self.shared_state["stake_info"]["stake_amount"] = e_stake
-                        self.shared_state["stake_info"]["reclaimable_slashed_stake"] = r_slashed
-                        self.shared_state["stake_info"]["rewards_amount"] = a_rewards or 0.0
-                        self.log_action("Frequent Update Loop", "Shared state updated with new stake info.", "debug")
-                    else:
-                        self.log_action("Frequent Update Loop", "Failed to get complete stake info for shared state update.", "debug")
+                    try:
+                        # Update wallet balances with timeout
+                        self.log_action("Frequent Update Loop", "Attempting to get wallet balances.", "debug")
+                        await asyncio.wait_for(
+                            self.blockchain.get_wallet_balances(self.shared_state, self.monitor_wallet),
+                            timeout=current_timeout
+                        )
+                        self.log_action("Frequent Update Loop", f"Wallet balances updated. Public: {self.shared_state['balances']['public']}, Shielded: {self.shared_state['balances']['shielded']}", "debug")
+                    except asyncio.TimeoutError:
+                        self.log_action("Frequent Update Loop", f"Wallet balance fetch timed out after {current_timeout}s", "warning")
+                    except Exception as e:
+                        self.log_action("Frequent Update Loop", f"Wallet balance fetch failed: {str(e)}", "warning")
                     
-                    # Update market data
-                    self.log_action("Frequent Update Loop", "Attempting to fetch market data.", "debug")
-                    await self.market_data.fetch_dusk_data(self.shared_state)
-                    self.log_action("Frequent Update Loop", f"Market data updated. Price: {self.shared_state['price']}", "debug")
-                        
+                    try:
+                        # Update stake info with timeout
+                        self.log_action("Frequent Update Loop", "Attempting to get stake info.", "debug")
+                        e_stake, r_slashed, a_rewards = await asyncio.wait_for(
+                            self.blockchain.get_stake_info(self.shared_state),
+                            timeout=current_timeout
+                        )
+                        self.log_action("Frequent Update Loop", f"Stake info fetched: e_stake={e_stake}, r_slashed={r_slashed}, a_rewards={a_rewards}", "debug")
+                        if e_stake is not None and r_slashed is not None:
+                            self.shared_state["stake_info"]["stake_amount"] = e_stake
+                            self.shared_state["stake_info"]["reclaimable_slashed_stake"] = r_slashed
+                            self.shared_state["stake_info"]["rewards_amount"] = a_rewards or 0.0
+                            self.log_action("Frequent Update Loop", "Shared state updated with new stake info.", "debug")
+                        else:
+                            self.log_action("Frequent Update Loop", "Failed to get complete stake info for shared state update.", "debug")
+                    except asyncio.TimeoutError:
+                        self.log_action("Frequent Update Loop", f"Stake info fetch timed out after {current_timeout}s", "warning")
+                    except Exception as e:
+                        self.log_action("Frequent Update Loop", f"Stake info fetch failed: {str(e)}", "warning")
+                    
+                    try:
+                        # Update market data with timeout
+                        self.log_action("Frequent Update Loop", "Attempting to fetch market data.", "debug")
+                        await asyncio.wait_for(
+                            self.market_data.fetch_dusk_data(self.shared_state),
+                            timeout=current_timeout
+                        )
+                        self.log_action("Frequent Update Loop", f"Market data updated. Price: {self.shared_state['price']}", "debug")
+                    except asyncio.TimeoutError:
+                        self.log_action("Frequent Update Loop", f"Market data fetch timed out after {current_timeout}s", "warning")
+                    except Exception as e:
+                        self.log_action("Frequent Update Loop", f"Market data fetch failed: {str(e)}", "warning")
+                    
+                    # Clear stake_checking flag and reset loop count
+                    stake_checking = False
                     loopcnt = 0  # Reset loop count after update
                 
-                # Update peer count
+                # Update peer count with timeout
                 self.log_action("Frequent Update Loop", "Attempting to get peer count.", "debug")
-                peer_count = await self.blockchain.get_peer_count()
+                peer_count = None
+                try:
+                    peer_count = await asyncio.wait_for(
+                        self.blockchain.get_peer_count(),
+                        timeout=current_timeout
+                    )
+                except asyncio.TimeoutError:
+                    self.log_action("Frequent Update Loop", f"Peer count fetch timed out after {current_timeout}s", "warning")
+                except Exception as e:
+                    self.log_action("Frequent Update Loop", f"Peer count fetch failed: {str(e)}", "warning")
+                
                 self.log_action("Frequent Update Loop", f"Peer count fetched: {peer_count}", "debug")
                 if peer_count is not None:
                     self.shared_state["peer_count"] = peer_count
@@ -141,26 +218,55 @@ class BlockchainMonitor:
                     else:
                         consecutive_low_peers = 0  # Reset counter if peer count is good
                 
-                    # Log and notify if low count for too long
-                    if consecutive_low_peers >= 240:  # 240 loops * 10 seconds = 40 minutes
+                    # Log and notify if low count for too long (but limit frequency)
+                    if consecutive_low_peers >= 240 and consecutive_low_peers % 60 == 0:  # Log every 60 loops after first warning
                         message = f"WARNING! Low peer count for {consecutive_low_peers * 10} seconds.\nCurrent Count: {peer_count}"
                         self.log_action("Low peer count!", message, "error")
-                        
-                        consecutive_low_peers = 0  # Reset after notifying to avoid spamming
                 else:
-                    self.log_action("Failed to fetch peers.", "Retrying in 10s...", "error")
+                    consecutive_failures += 1
+                    self.log_action("Failed to fetch peers.", f"Retrying in 10s... (failure #{consecutive_failures})", "error")
                     await asyncio.sleep(10)
                     continue
 
+                # If we reach here, the loop iteration was mostly successful
+                consecutive_failures = 0  # Reset failure counter
+                last_successful_update = asyncio.get_event_loop().time()
+                
+                # Exit recovery mode if we've had a successful update
+                if recovery_mode:
+                    recovery_mode = False
+                    self.log_action("Frequent Update Loop", "Exiting recovery mode after successful update", "info")
+
                 loopcnt += 1
                 banner_fetch_count += 1
-                await asyncio.sleep(10)  # Wait 10 seconds before the next loop
+                
+                # Calculate how long this loop took and adjust sleep accordingly
+                loop_duration = asyncio.get_event_loop().time() - loop_start_time
+                sleep_time = max(1, 10 - loop_duration)  # Ensure at least 1 second sleep, adjust for loop duration
+                await asyncio.sleep(sleep_time)
                 
             except Exception as e:
-                stake_checking = False
-                self.log_action("Error in Frequent Update Loop", str(e), "error")
-                self.log_action("Frequent Update Loop", "Error caught. Sleeping for 30s before retry.", "debug")
-                await asyncio.sleep(30)  # Wait longer after an error
+                consecutive_failures += 1
+                stake_checking = False  # Clear flag on any exception
+                self.log_action("Error in Frequent Update Loop", f"Failure #{consecutive_failures}: {str(e)}", "error")
+                
+                # Use exponential backoff in recovery mode, but cap at 60 seconds
+                if recovery_mode:
+                    sleep_time = min(60, 30 * (2 ** min(consecutive_failures, 3)))
+                    self.log_action("Frequent Update Loop", f"Recovery mode: sleeping for {sleep_time}s before retry.", "debug")
+                else:
+                    sleep_time = 30
+                    self.log_action("Frequent Update Loop", f"Error caught. Sleeping for {sleep_time}s before retry.", "debug")
+                
+                await asyncio.sleep(sleep_time)
+                
+                # Emergency circuit breaker: If we've been failing for too long, log critical error
+                current_time = asyncio.get_event_loop().time()
+                if (last_successful_update is not None and 
+                    current_time - last_successful_update > 600):  # 10 minutes without success
+                    self.log_action("CRITICAL: Frequent Update Loop", 
+                                  f"No successful updates for {int(current_time - last_successful_update)} seconds. "
+                                  f"Consecutive failures: {consecutive_failures}", "error")
                 
     async def init_balance(self) -> None:
         """
