@@ -118,8 +118,13 @@ async def main():
     blockchain_client = BlockchainClient(
         config_data['use_sudo'],
         config_data['password'],
-        log_action
+        log_action,
+        config_data.get('watchdog_config', {}),
+        config_data.get('sudo_config', {})
     )
+    
+    # Start the process watchdog
+    await blockchain_client.start_watchdog()
     
     # Initialize market data client
     market_data_client = MarketDataClient(log_action)
@@ -212,11 +217,27 @@ async def main():
     
     console.clear()
     # Start all the main loops
-    await asyncio.gather(
-        blockchain_monitor.frequent_update_loop(),
-        display_manager.realtime_display_loop(),
-        stake_manager.stake_management_loop(),
+    try:
+        await asyncio.gather(
+            blockchain_monitor.frequent_update_loop(),
+            display_manager.realtime_display_loop(),
+            stake_manager.stake_management_loop(),
         )
+    except KeyboardInterrupt:
+        console.print("\n\nCTRL-C detected. Shutting down gracefully...")
+        # Stop the watchdog
+        await blockchain_client.stop_watchdog()
+        # Stop the blockchain monitor
+        await blockchain_monitor.shutdown()
+        console.print("Shutdown complete.")
+    except Exception as e:
+        console.print(f"\n\nUnexpected error: {e}")
+        # Stop the watchdog
+        await blockchain_client.stop_watchdog()
+        # Stop the blockchain monitor
+        await blockchain_monitor.shutdown()
+        console.print("Emergency shutdown complete.")
+        raise
 
 if __name__ == "__main__":
     try:

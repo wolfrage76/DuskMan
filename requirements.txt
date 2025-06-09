@@ -6,3 +6,4 @@ aiohttp
 python-dotenv
 flask
 waitress
+psutil

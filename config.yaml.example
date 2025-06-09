@@ -15,14 +15,17 @@ GENERAL:
 
   min_peers: 8              # Minimum number of peers to be considered healthy
   use_sudo: True            # ONLY needs to be set True if you NEED to use sudo to run your ruskquery and rusk-wallet commands.
-  display_options: True     # Enable the Settings display at top of tool
+  display_options: False     # Enable the Settings display at top of tool
 
   ## These minimums are still checked to make sure it's worth doing vs missed potential rewards. 
   min_rewards: 1 # Minimum amount of rewards to consider claiming rewards to stake
   min_slashed: 1 # Minimum amount of slashed rewards from topoffs before considering restaking to reclaim
-  
-  
 
+PROCESS_WATCHDOG: # Settings for monitoring and killing stuck processes
+  wallet_command_timeout: 120    # Timeout in seconds for wallet commands (stake-info, balance, etc.)
+  general_command_timeout: 300   # Timeout in seconds for general commands
+  max_retries: 3                 # Maximum number of retries for failed commands
+  retry_delay: 5                 # Base delay in seconds between retries (uses exponential backoff)
 
 WEB_DASHBOARD: # Default at http://localhost:5000
   enable_dashboard: True
@@ -68,6 +71,17 @@ STATUSBAR: # Determines what to show in tmux statusbar
   show_trigger_time: True
   show_peer_count: False
 
+SUDO_CONFIG: # Configuration for sudo handling
+  # Option 1: Use passwordless sudo (recommended)
+  # Configure with: sudo visudo
+  # Add line: username ALL=(ALL) NOPASSWD: /path/to/ruskquery, /path/to/rusk-wallet
+  passwordless_sudo: False
+  
+  # Option 2: Provide sudo password (less secure)
+  # sudo_password: ""  # Leave empty to disable, or set via environment variable SUDO_PASSWORD
+  
+  # Option 3: Use sudo with -S flag to read password from stdin
+  use_stdin_password: True
 
 # Replaced with using .env file (SEE INSTRUCTIONS), but still works as an alternative:
   # pwd_var_name: MY_WALLET_VARIABLE  # NAME OF THE ENVIRONMENT VARIABLE WITH THE PASSWORD! DO_NOT_ PUT IN YOUR DAMN PASSWORD HERE, FFS!

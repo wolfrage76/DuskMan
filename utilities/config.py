@@ -47,6 +47,8 @@ def initialize_config():
     status_bar_config = load_config('STATUSBAR')
     web_dashboard_config = load_config('WEB_DASHBOARD')
     logs_config = load_config('LOG_FILES')
+    watchdog_config = load_config('PROCESS_WATCHDOG')
+    sudo_config = load_config('SUDO_CONFIG')
     
     # Initialize parser for command line arguments
     parser = argparse.ArgumentParser(description="Process command line arguments")
@@ -100,6 +102,8 @@ def initialize_config():
     config['status_bar_config'] = status_bar_config
     config['web_dashboard_config'] = web_dashboard_config
     config['logs_config'] = logs_config
+    config['watchdog_config'] = watchdog_config
+    config['sudo_config'] = sudo_config
     
     # Get wallet password from environment
     config['password'] = get_env_variable(
@@ -107,18 +111,38 @@ def initialize_config():
         dotenv_key="WALLET_PASSWORD"
     )
     
+    # Get sudo password from environment if needed
+    sudo_password = None
+    if sudo_config.get('use_stdin_password', False) or sudo_config.get('sudo_password'):
+        sudo_password = get_env_variable(
+            'SUDO_PASSWORD', 
+            dotenv_key="SUDO_PASSWORD",
+            required=False
+        ) or sudo_config.get('sudo_password', '')
+    
+    # Add sudo password to sudo_config for easy access
+    if sudo_password:
+        sudo_config['sudo_password'] = sudo_password
+    
+    config['sudo_password'] = sudo_password
+    
     return config
 
-def get_env_variable(var_name='WALLET_PASSWORD', dotenv_key='WALLET_PASSWORD'):
+def get_env_variable(var_name='WALLET_PASSWORD', dotenv_key='WALLET_PASSWORD', required=True):
     """
     Retrieve an environment variable or a fallback value from .env file.
+    
+    Args:
+        var_name: Primary environment variable name to check
+        dotenv_key: Fallback key to check in .env file
+        required: Whether the variable is required (if False, returns None if not found)
     """
     value = os.getenv(var_name)
     if not value:
         value = os.getenv(dotenv_key)
-        if not value:
-            log_action("Wallet Password Variable Error", 
-                        f"Neither environment variable '{var_name}' nor .env key '{dotenv_key}' found for wallet password.", 
+        if not value and required:
+            log_action("Environment Variable Error", 
+                        f"Neither environment variable '{var_name}' nor .env key '{dotenv_key}' found.", 
                         "error")
             sys.exit(1)
             
