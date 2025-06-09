@@ -132,6 +132,15 @@ class BlockchainClient:
                         )
                     return result
                     
+            except asyncio.CancelledError:
+                # Don't retry on cancellation, just re-raise
+                self.log_action(
+                    "Command Cancelled", 
+                    f"Command was cancelled during retry: {command.replace(self.password, '#####')[:100]}...",
+                    "debug"
+                )
+                raise
+                
             except Exception as e:
                 last_error = e
                 self.log_action(
@@ -215,6 +224,25 @@ class BlockchainClient:
                     self.watchdog.unregister_process(process.pid)
                     
                 return None
+                
+            except asyncio.CancelledError:
+                # Handle cancellation gracefully
+                self.log_action(
+                    "Command Cancelled", 
+                    f"Command was cancelled: {command.replace(self.password, '#####')[:100]}...",
+                    "debug"
+                )
+                
+                # Kill the process and its children
+                if process:
+                    await self._kill_process_group(process)
+                
+                # Unregister from watchdog
+                if process and process.pid:
+                    self.watchdog.unregister_process(process.pid)
+                    
+                # Re-raise the CancelledError so the cancellation propagates properly
+                raise
 
             stdout_str = stdout.decode().strip()
             stderr_str = stderr.decode().strip()

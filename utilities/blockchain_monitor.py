@@ -113,6 +113,9 @@ class BlockchainMonitor:
                     )
                 except asyncio.TimeoutError:
                     self.log_action("Frequent Update Loop", f"Block height fetch timed out after {current_timeout}s", "warning")
+                except asyncio.CancelledError:
+                    self.log_action("Frequent Update Loop", "Block height fetch was cancelled", "debug")
+                    raise
                 except Exception as e:
                     self.log_action("Frequent Update Loop", f"Block height fetch failed: {str(e)}", "warning")
                 

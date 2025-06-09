@@ -230,6 +230,13 @@ async def main():
         # Stop the blockchain monitor
         await blockchain_monitor.shutdown()
         console.print("Shutdown complete.")
+    except asyncio.CancelledError:
+        console.print("\n\nOperation was cancelled. Shutting down gracefully...")
+        # Stop the watchdog
+        await blockchain_client.stop_watchdog()
+        # Stop the blockchain monitor
+        await blockchain_monitor.shutdown()
+        console.print("Shutdown complete.")
     except Exception as e:
         console.print(f"\n\nUnexpected error: {e}")
         # Stop the watchdog
