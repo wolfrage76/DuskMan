@@ -34,9 +34,9 @@ def get_env_variable(var_name='WALLET_PASSWORD', dotenv_key='WALLET_PASSWORD', l
             
     return value
 
-def format_number(number: int) -> str:
-    """Format an integer with thousands separators."""
-    return f"{number:,}"
+def format_number(number: Union[int, float]) -> str:
+    """Format a number with thousands separators."""
+    return f"{int(number):,}"
 
 def convert_timestamp(timestamp: str) -> str:
     """Convert ISO timestamp to MM/DD/YY format."""
@@ -180,6 +180,10 @@ def calculate_rewards_per_epoch(rewards_amount: float, last_claim_block: int, cu
     Returns:
         Estimated rewards per epoch
     """
+    # Ensure we have valid inputs to prevent division by zero
+    if last_claim_block <= 0 or current_block <= last_claim_block or rewards_amount <= 0:
+        return 0.0
+        
     blocks_elapsed = current_block - last_claim_block
     epochs_elapsed = blocks_elapsed / 2160
     if epochs_elapsed > 0:

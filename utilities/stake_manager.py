@@ -101,6 +101,11 @@ class StakeManager:
             while self.shared_state["remain_time"] > 0:
                 await asyncio.sleep(1)
                 self.shared_state["remain_time"] -= 1
+        except asyncio.CancelledError:
+            self.log_action("Sleep Countdown", "Sleep was cancelled", "debug")
+            # Reset remain_time on cancellation
+            self.shared_state["remain_time"] = 0
+            raise
         except Exception as e:
             self.log_action("Sleep Countdown", f"Error during sleep: {str(e)}", "error")
         finally:
@@ -438,6 +443,10 @@ class StakeManager:
                         await self.sleep_until_next_epoch(block_height, buffer_blocks=self.buffer_blocks)
                         continue
                 
+            except asyncio.CancelledError:
+                stake_checking = False
+                self.log_action("Stake Loop", "Stake management loop was cancelled", "debug")
+                raise
             except Exception as e:
                 stake_checking = False
                 self.log_action("Error in stake management loop", str(e), "error")

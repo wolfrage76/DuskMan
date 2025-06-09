@@ -1,3 +1,4 @@
+import asyncio
 import aiohttp
 from typing import Dict, Any, Optional
 
@@ -39,7 +40,8 @@ class MarketDataClient:
         }
 
         try:
-            async with aiohttp.ClientSession() as session:
+            timeout = aiohttp.ClientTimeout(total=30)  # 30 second timeout
+            async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.get(url, params=params) as response:
                     if response.status == 200:
                         data = await response.json()
@@ -53,6 +55,9 @@ class MarketDataClient:
                     else:
                         self.log_action("Failed to fetch DUSK data", f"HTTP Status: {response.status}", 'debug')
                         return False
+        except asyncio.CancelledError:
+            self.log_action("Market data fetch was cancelled", "Request cancelled", 'debug')
+            raise
         except Exception as e:
             self.log_action("Error while fetching DUSK data", str(e), 'debug')
             return False

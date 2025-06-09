@@ -165,6 +165,9 @@ class BlockchainMonitor:
                         self.log_action("Frequent Update Loop", f"Wallet balances updated. Public: {self.shared_state['balances']['public']}, Shielded: {self.shared_state['balances']['shielded']}", "debug")
                     except asyncio.TimeoutError:
                         self.log_action("Frequent Update Loop", f"Wallet balance fetch timed out after {current_timeout}s", "warning")
+                    except asyncio.CancelledError:
+                        self.log_action("Frequent Update Loop", "Wallet balance fetch was cancelled", "debug")
+                        raise
                     except Exception as e:
                         self.log_action("Frequent Update Loop", f"Wallet balance fetch failed: {str(e)}", "warning")
                     
@@ -185,6 +188,9 @@ class BlockchainMonitor:
                             self.log_action("Frequent Update Loop", "Failed to get complete stake info for shared state update.", "debug")
                     except asyncio.TimeoutError:
                         self.log_action("Frequent Update Loop", f"Stake info fetch timed out after {current_timeout}s", "warning")
+                    except asyncio.CancelledError:
+                        self.log_action("Frequent Update Loop", "Stake info fetch was cancelled", "debug")
+                        raise
                     except Exception as e:
                         self.log_action("Frequent Update Loop", f"Stake info fetch failed: {str(e)}", "warning")
                     
@@ -198,6 +204,9 @@ class BlockchainMonitor:
                         self.log_action("Frequent Update Loop", f"Market data updated. Price: {self.shared_state['price']}", "debug")
                     except asyncio.TimeoutError:
                         self.log_action("Frequent Update Loop", f"Market data fetch timed out after {current_timeout}s", "warning")
+                    except asyncio.CancelledError:
+                        self.log_action("Frequent Update Loop", "Market data fetch was cancelled", "debug")
+                        raise
                     except Exception as e:
                         self.log_action("Frequent Update Loop", f"Market data fetch failed: {str(e)}", "warning")
                     
@@ -215,6 +224,9 @@ class BlockchainMonitor:
                     )
                 except asyncio.TimeoutError:
                     self.log_action("Frequent Update Loop", f"Peer count fetch timed out after {current_timeout}s", "warning")
+                except asyncio.CancelledError:
+                    self.log_action("Frequent Update Loop", "Peer count fetch was cancelled", "debug")
+                    raise
                 except Exception as e:
                     self.log_action("Frequent Update Loop", f"Peer count fetch failed: {str(e)}", "warning")
                 
