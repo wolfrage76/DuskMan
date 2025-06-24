@@ -78,13 +78,18 @@ async def main():
     """Main entry point for the application."""
     
     # Clear the screen on startup
-    # The combined sequence to clear screen, scrollback, and move cursor to top-left
-    clear_sequence = "\033[H\033[2J\033[3J"
+    # Use a simpler clear sequence that's more compatible
+    clear_sequence = "\033[2J\033[H"
 
     # Print the sequence to standard output
     # Use sys.stdout.write and flush for better control than print() in some terminals
     sys.stdout.write(clear_sequence)
     sys.stdout.flush()
+    
+    # Check terminal environment
+    if not sys.stdout.isatty():
+        console.print("[yellow]Warning: Not running in a terminal. Display may not work correctly.[/yellow]")
+    
     console.print("Starting up... Initiating Super Saiyan transformation...")
     
 
@@ -198,24 +203,21 @@ async def main():
         f'\n\t{LIGHT_WHITE}{notification_status}'
     )
     
-    byline = f"DuskMan Stake Management System: by Wolfrage"
-    if not config_data['display_options']:
-        byline = f"{UNDERLINE}{byline}{END_UNDERLINE}\n"
-        
-    separator = f"       {LIGHT_WHITE}{('=' * len(byline))}{DEFAULT}"
+    byline_text = f"{LIGHT_CYAN}DuskMan Stake Management System: by Wolfrage\n{DEFAULT}"
 
     # Update shared state with options display
     if config_data['display_options']:
-        shared_state["options"] = byline + '\n' + separator + options_status
+        shared_state["options"] = byline_text + '\n' + options_status
     else:
-        shared_state["options"] = byline 
+        shared_state["options"] = f"{UNDERLINE}{byline_text}{END_UNDERLINE}\n"
 
     # Start web dashboard if enabled
     if enable_webdash:
         from utilities.web_dashboard import start_dashboard
         await start_dashboard(shared_state, shared_state["log_entries"], host=config_data['dash_ip'], port=config_data['dash_port'])
-    
-    console.clear()
+    sys.stdout.write(clear_sequence)
+    sys.stdout.flush()
+
     # Start all the main loops
     try:
         await asyncio.gather(

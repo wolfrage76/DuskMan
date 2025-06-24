@@ -43,8 +43,13 @@ class DisplayManager:
         self.display_gui = display_gui
         self.enable_tmux = enable_tmux
         self.log_action = log_action_func or (lambda *args, **kwargs: None)
-        self.console = Console()
-        self.byline = self.shared_state.get("options", "DuskMan Stake Management System: by Wolfrage")
+        self.console = Console(
+            force_terminal=True, 
+            force_interactive=True,
+            width=None,  # Let the terminal determine width
+            height=None,  # Let the terminal determine height
+            legacy_windows=False  # Use modern Windows terminal features
+        )
         
     async def realtime_display_loop(self) -> None:
         """
@@ -53,7 +58,7 @@ class DisplayManager:
         """
         first_run = True
 
-        with Live(console=self.console, refresh_per_second=10, auto_refresh=False) as live:
+        with Live(console=self.console, refresh_per_second=2, auto_refresh=True) as live:
             while True:
                 try:
                     # Get current state
@@ -98,10 +103,6 @@ class DisplayManager:
                     # Remove trailing newline from top_bar definition
                     top_bar = f" {LIGHT_WHITE}======={DEFAULT} {currenttime} Block: {LIGHT_BLUE}#{blk} {DEFAULT}(E: {LIGHT_BLUE}{epoch_num}{DEFAULT}) Peers: {peercolor}{self.shared_state['peer_count']}{DEFAULT} {LIGHT_WHITE}======={DEFAULT}"
 
-                    title_spaces = int((len(remove_ansi(top_bar)) - len(remove_ansi(self.byline))) / 7) # Quick fix meh
-                    # Remove leading newline from opts definition
-                    opts = (' ' * title_spaces) + BLUE + self.shared_state["options"]
-                    
                     allocation_bar = display_wallet_distribution_bar(b['public'], b['shielded'], 8)
                     
                     # Calculate rewards per epoch
@@ -193,11 +194,35 @@ class DisplayManager:
                     else:
                         last_act_color = CYAN
                     
+                    # Process byline text to center it based on top bar width
+                    top_bar_plain_width = len(remove_ansi(top_bar))
+                    options_text = self.shared_state.get("options", "")
+                    
+                    # Split options into lines and process the byline (first line)
+                    options_lines = options_text.split('\n')
+                    if options_lines:
+                        byline_text = options_lines[0]
+                        byline_plain_width = len(remove_ansi(byline_text))
+                        
+                        # Center the byline based on top bar width
+                        if top_bar_plain_width > byline_plain_width:
+                            padding_width = (top_bar_plain_width - byline_plain_width) // 2
+                            padding = ' ' * padding_width
+                        else:
+                            padding = ""
+                        
+                        # Replace the first line with centered byline
+                        options_lines[0] = f"{padding}{byline_text}"
+                        
+                        # Reconstruct the options text
+                        processed_options = '\n'.join(options_lines)
+                    else:
+                        processed_options = options_text
+                    
                     # Build the complete content string with correct newline placement
                     realtime_content = (
-                        f"{opts}{DEFAULT}\n"  # Line 1: Options, add newline after
+                        f"{processed_options}"  # Display processed options with centered byline
                         f"{top_bar}\n"       # Line 2: Top bar, add newline after
-                        f"{self.byline}\n"    # Line 3: Byline, add newline after
                         f"    {CYAN}Last Action{DEFAULT}   | {last_act_color}{last_act}{DEFAULT}\n"
                         f"    {LIGHT_GREEN}Next Check    {DEFAULT}| {charclr}{disp_time}{DEFAULT} ({donetime}){DEFAULT}\n"
                         f"                  |\n"
@@ -246,13 +271,13 @@ class DisplayManager:
                     # Update the Live display
                     if self.display_gui:
                         #self.console.clear()
-                        live.update(text_content, refresh=True)
+                        live.update(text_content)
 
                     # Update TMUX status bar
                     if self.enable_tmux:
                         self._update_tmux_status_bar()
 
-                    await asyncio.sleep(1)
+                    await asyncio.sleep(0.5)  # Sleep for 0.5 seconds to match 2 FPS refresh rate
 
                 except Exception as e:
                     self.log_action(f"Error in real-time display", str(e), "error")
