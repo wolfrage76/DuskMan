@@ -55,7 +55,7 @@ LIGHT_BLUE = "\033[1;34m"
 LIGHT_PURPLE = "\033[1;35m"
 LIGHT_CYAN = "\033[1;36m"
 LIGHT_WHITE = "\033[1;37m"
-DEFAULT = "\033[1;39m"
+DEFAULT = "\033[0m"
 
 
 def load_config(section="GENERAL", file_path="config.yaml"):

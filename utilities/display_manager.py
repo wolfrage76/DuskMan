@@ -67,6 +67,14 @@ class DisplayManager:
                     b = self.shared_state["balances"]
                     last_act = self.shared_state["last_action_taken"]
                     remain_seconds = self.shared_state["remain_time"]
+                    
+                    # Debug logging - track action changes that might correlate with corruption
+                    if hasattr(self, '_last_action') and self._last_action != last_act:
+                        self.log_action("Display Debug", f"Action changed: '{self._last_action}' → '{last_act}'", "debug")
+                        # Log extra detail if it's a claim/stake operation
+                        if any(keyword in last_act.lower() for keyword in ['claim', 'stake', 'unstake', 'withdraw']):
+                            self.log_action("Display Debug", f"CLAIM/STAKE operation detected: {last_act}", "debug")
+                    self._last_action = last_act
                     disp_time = format_hms(remain_seconds) if remain_seconds > 0 else "Processing..."
                     donetime = self.shared_state["completion_time"] if remain_seconds > 0 else " "
                     
@@ -198,11 +206,24 @@ class DisplayManager:
                     top_bar_plain_width = len(remove_ansi(top_bar))
                     options_text = self.shared_state.get("options", "")
                     
+                    # Debug logging - track display data for corruption analysis
+                    options_len = len(options_text)
+                    if options_len > 1000 or (hasattr(self, '_last_options_len') and options_len > self._last_options_len * 2):
+                        self.log_action("Display Debug", f"Options size change: {getattr(self, '_last_options_len', 0)} → {options_len} chars", "debug")
+                        self.log_action("Display Debug", f"Options preview: {repr(options_text[:150])}", "debug")
+                        self.log_action("Display Debug", f"Last action: {last_act}", "debug")
+                    self._last_options_len = options_len
+                    
                     # Split options into lines and process the byline (first line)
                     options_lines = options_text.split('\n')
                     if options_lines:
                         byline_text = options_lines[0]
                         byline_plain_width = len(remove_ansi(byline_text))
+                        
+                        # Debug logging - track byline length for corruption detection
+                        if byline_plain_width > 150:
+                            self.log_action("Display Debug", f"Long byline detected: {byline_plain_width} chars", "debug")
+                            self.log_action("Display Debug", f"Byline preview: {repr(byline_text[:100])}", "debug")
                         
                         # Center the byline based on top bar width
                         if top_bar_plain_width > byline_plain_width:
@@ -242,24 +263,21 @@ class DisplayManager:
                         f"{final_banner_string}"
                     )
 
-                    # Convert the ANSI string to a Rich Text object
+                    # Debug logging - track total content size for corruption detection
+                    content_len = len(realtime_content)
+                    if content_len > 10000 or (hasattr(self, '_last_content_len') and content_len > self._last_content_len * 2):
+                        self.log_action("Display Debug", f"Content size change: {getattr(self, '_last_content_len', 0)} → {content_len} chars", "debug")
+                        self.log_action("Display Debug", f"Content preview: {repr(realtime_content[:200])}", "debug")
+                        # Log component sizes
+                        self.log_action("Display Debug", f"Components - options: {len(processed_options)}, banner: {len(final_banner_string)}", "debug")
+                    self._last_content_len = content_len
+
+                    # Convert the ANSI string to a Rich Text object with proper settings
                     text_content = Text.from_ansi(realtime_content)
-
-                    # Find the index of the character *after* the second newline to apply no_wrap
-                    plain_text = text_content.plain
-                    first_newline = plain_text.find('\n')
-                    second_newline_end_index = -1
-                    if first_newline != -1:
-                        # Find the start of the second newline
-                        second_newline_start = plain_text.find('\n', first_newline + 1)
-                        if second_newline_start != -1:
-                            # The end index for stylize is exclusive, so add 1 to include the newline itself
-                            second_newline_end_index = second_newline_start + 1
-
-                    # Apply no_wrap=True to the first two lines using stylize
-                    if second_newline_end_index != -1:
-                        # Apply the style from the beginning up to the character AFTER the second newline
-                        text_content.stylize("no_wrap", 0, second_newline_end_index)
+                    
+                    # Set global text properties to prevent wrapping issues
+                    text_content.no_wrap = True
+                    text_content.overflow = "ignore"
                     
                     # Update rendered content in shared state if needed
                     include_rendered = self.shared_state.get("include_rendered", False)

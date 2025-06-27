@@ -203,11 +203,13 @@ async def main():
         f'\n\t{LIGHT_WHITE}{notification_status}'
     )
     
-    byline_text = f"{LIGHT_CYAN}DuskMan Stake Management System: by Wolfrage\n{DEFAULT}"
+    byline_text = f"{LIGHT_CYAN}DuskMan Stake Management System: by Wolfrage{DEFAULT}"
+
+    separator = f"{LIGHT_WHITE}{'=' * 60}{DEFAULT}"
 
     # Update shared state with options display
     if config_data['display_options']:
-        shared_state["options"] = byline_text + '\n' + options_status
+        shared_state["options"] = byline_text + '\n' + separator + options_status
     else:
         shared_state["options"] = f"{UNDERLINE}{byline_text}{END_UNDERLINE}\n"
 
