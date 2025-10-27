@@ -179,13 +179,16 @@ class BlockchainClient:
                     cmd_display = cmd_display.replace(self.sudo_password, '#####')
                 self.log_action("Executing Command", cmd_display, "debug")
                 
-            # Create the subprocess
+            # Create the subprocess with full terminal detachment
+            # Close stdin to prevent any interactive prompts, and detach from controlling terminal
             process = await asyncio.create_subprocess_shell(
                 command,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                stdin=asyncio.subprocess.PIPE if self.sudo_password else None,
-                preexec_fn=os.setsid if hasattr(os, 'setsid') else None  # Create new process group
+                stdin=asyncio.subprocess.PIPE if self.sudo_password else asyncio.subprocess.DEVNULL,
+                preexec_fn=os.setsid if hasattr(os, 'setsid') else None,  # Create new process group
+                # Prevent subprocess from accessing the controlling terminal
+                start_new_session=True if hasattr(asyncio.subprocess, 'start_new_session') else False
             )
             
             # Register with watchdog
@@ -246,6 +249,11 @@ class BlockchainClient:
 
             stdout_str = stdout.decode().strip()
             stderr_str = stderr.decode().strip()
+            
+            # Strip ANSI escape sequences from output (cursor control, colors, etc.)
+            ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+            stdout_str = ansi_escape.sub('', stdout_str)
+            stderr_str = ansi_escape.sub('', stderr_str)
 
             if process.returncode != 0:
                 # Mask passwords in error output
@@ -525,7 +533,12 @@ class BlockchainClient:
             Tuple of (eligible_stake, reclaimable_slashed_stake, accumulated_rewards)
         """
         try:
-            lines = output.splitlines()
+            # Strip ANSI escape sequences from output (like cursor control codes)
+            # Pattern matches ESC [ ... (any characters) ... (letter)
+            ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+            clean_output = ansi_escape.sub('', output)
+            
+            lines = clean_output.splitlines()
             eligible_stake = None  # Changed to None to detect if we found any stake info
             reclaimable_slashed_stake = None  # Changed to None to detect if we found any stake info
             accumulated_rewards = 0.0  # Accumulated rewards from staking

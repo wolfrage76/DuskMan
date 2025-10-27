@@ -76,8 +76,6 @@ class ProcessWatchdog:
             'killed': False
         }
         
-        self.log_action("Process Watchdog", f"Registered PID {pid}: {command[:50]}...", "debug")
-        
     def unregister_process(self, pid: int):
         """
         Unregister a process from monitoring.
@@ -86,9 +84,7 @@ class ProcessWatchdog:
             pid: Process ID to unregister
         """
         if pid in self.monitored_processes:
-            command = self.monitored_processes[pid]['command']
             del self.monitored_processes[pid]
-            self.log_action("Process Watchdog", f"Unregistered PID {pid}: {command[:50]}...", "debug")
             
     async def _monitor_loop(self):
         """Main monitoring loop that checks for stuck processes."""
@@ -145,7 +141,6 @@ class ProcessWatchdog:
                 # Kill children first
                 for child in children:
                     try:
-                        self.log_action("Process Watchdog", f"Killing child process PID {child.pid}", "debug")
                         child.kill()
                     except (psutil.NoSuchProcess, psutil.AccessDenied):
                         pass

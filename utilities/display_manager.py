@@ -55,11 +55,9 @@ class DisplayManager:
         """
         Continuously display real-time info in the console.
         Initially shows configuration and byline, then switches to real-time stats.
+        Uses raw ANSI escape sequences for reliable terminal control.
         """
-        first_run = True
-
-        with Live(console=self.console, refresh_per_second=2, auto_refresh=True) as live:
-            while True:
+        while True:
                 try:
                     # Get current state
                     blk = self.shared_state["block_height"]
@@ -68,13 +66,6 @@ class DisplayManager:
                     last_act = self.shared_state["last_action_taken"]
                     remain_seconds = self.shared_state["remain_time"]
                     
-                    # Debug logging - track action changes that might correlate with corruption
-                    if hasattr(self, '_last_action') and self._last_action != last_act:
-                        self.log_action("Display Debug", f"Action changed: '{self._last_action}' → '{last_act}'", "debug")
-                        # Log extra detail if it's a claim/stake operation
-                        if any(keyword in last_act.lower() for keyword in ['claim', 'stake', 'unstake', 'withdraw']):
-                            self.log_action("Display Debug", f"CLAIM/STAKE operation detected: {last_act}", "debug")
-                    self._last_action = last_act
                     disp_time = format_hms(remain_seconds) if remain_seconds > 0 else "Processing..."
                     donetime = self.shared_state["completion_time"] if remain_seconds > 0 else " "
                     
@@ -206,24 +197,12 @@ class DisplayManager:
                     top_bar_plain_width = len(remove_ansi(top_bar))
                     options_text = self.shared_state.get("options", "")
                     
-                    # Debug logging - track display data for corruption analysis
-                    options_len = len(options_text)
-                    if options_len > 1000 or (hasattr(self, '_last_options_len') and options_len > self._last_options_len * 2):
-                        self.log_action("Display Debug", f"Options size change: {getattr(self, '_last_options_len', 0)} → {options_len} chars", "debug")
-                        self.log_action("Display Debug", f"Options preview: {repr(options_text[:150])}", "debug")
-                        self.log_action("Display Debug", f"Last action: {last_act}", "debug")
-                    self._last_options_len = options_len
                     
                     # Split options into lines and process the byline (first line)
                     options_lines = options_text.split('\n')
                     if options_lines:
                         byline_text = options_lines[0]
                         byline_plain_width = len(remove_ansi(byline_text))
-                        
-                        # Debug logging - track byline length for corruption detection
-                        if byline_plain_width > 150:
-                            self.log_action("Display Debug", f"Long byline detected: {byline_plain_width} chars", "debug")
-                            self.log_action("Display Debug", f"Byline preview: {repr(byline_text[:100])}", "debug")
                         
                         # Center the byline based on top bar width
                         if top_bar_plain_width > byline_plain_width:
@@ -263,22 +242,7 @@ class DisplayManager:
                         f"{final_banner_string}"
                     )
 
-                    # Debug logging - track total content size for corruption detection
-                    content_len = len(realtime_content)
-                    if content_len > 10000 or (hasattr(self, '_last_content_len') and content_len > self._last_content_len * 2):
-                        self.log_action("Display Debug", f"Content size change: {getattr(self, '_last_content_len', 0)} → {content_len} chars", "debug")
-                        self.log_action("Display Debug", f"Content preview: {repr(realtime_content[:200])}", "debug")
-                        # Log component sizes
-                        self.log_action("Display Debug", f"Components - options: {len(processed_options)}, banner: {len(final_banner_string)}", "debug")
-                    self._last_content_len = content_len
 
-                    # Convert the ANSI string to a Rich Text object with proper settings
-                    text_content = Text.from_ansi(realtime_content)
-                    
-                    # Set global text properties to prevent wrapping issues
-                    text_content.no_wrap = True
-                    text_content.overflow = "ignore"
-                    
                     # Update rendered content in shared state if needed
                     include_rendered = self.shared_state.get("include_rendered", False)
                     if include_rendered:
@@ -286,10 +250,16 @@ class DisplayManager:
                     else:
                         self.shared_state["rendered"] = None
                     
-                    # Update the Live display
+                    # Update the display using manual clearing for reliability
                     if self.display_gui:
-                        #self.console.clear()
-                        live.update(text_content)
+                        # Use ANSI escape codes for more reliable clearing across all terminals
+                        import sys
+                        # Clear screen and move cursor to home position
+                        sys.stdout.write("\033[2J\033[H")
+                        sys.stdout.flush()
+                        # Print the content directly without Rich processing
+                        sys.stdout.write(realtime_content)
+                        sys.stdout.flush()
 
                     # Update TMUX status bar
                     if self.enable_tmux:
