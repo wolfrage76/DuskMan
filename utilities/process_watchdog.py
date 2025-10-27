@@ -32,16 +32,16 @@ class ProcessWatchdog:
             
         self.running = True
         self._shutdown_event.clear()
-        self.log_action("Process Watchdog", "Starting process monitoring", "info")
+        # self.log_action("Process Watchdog", "Starting process monitoring", "info")
         
         # Start the monitoring loop as a background task
-        self._monitor_task = asyncio.create_task(self._monitor_loop())
+        # self._monitor_task = asyncio.create_task(self._monitor_loop())
         
     async def stop(self):
         """Stop the watchdog monitoring."""
         self.running = False
         self._shutdown_event.set()
-        self.log_action("Process Watchdog", "Stopping process monitoring", "info")
+        # self.log_action("Process Watchdog", "Stopping process monitoring", "info")
         
         # Wait for the monitor task to complete
         if hasattr(self, '_monitor_task') and not self._monitor_task.done():
