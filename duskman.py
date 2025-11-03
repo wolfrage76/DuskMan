@@ -23,6 +23,7 @@ from utilities.blockchain_monitor import BlockchainMonitor
 from utilities.market_data import MarketDataClient
 from utilities.stake_manager import StakeManager
 from utilities.display_manager import DisplayManager
+from utilities.banner import BannerManager
 from utilities.colors import *
 
 # Initialize rich traceback handler
@@ -66,6 +67,7 @@ def create_shared_state():
         "options": "",
     "rewards_per_epoch": 0.0,
         "log_entries": [],
+    "banner_message": "",  # Add banner message to shared state
     }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -76,13 +78,18 @@ async def main():
     """Main entry point for the application."""
     
     # Clear the screen on startup
-    # The combined sequence to clear screen, scrollback, and move cursor to top-left
-    clear_sequence = "\033[H\033[2J\033[3J"
+    # Use a simpler clear sequence that's more compatible
+    clear_sequence = "\033[2J\033[H"
 
     # Print the sequence to standard output
     # Use sys.stdout.write and flush for better control than print() in some terminals
     sys.stdout.write(clear_sequence)
     sys.stdout.flush()
+    
+    # Check terminal environment
+    if not sys.stdout.isatty():
+        console.print("[yellow]Warning: Not running in a terminal. Display may not work correctly.[/yellow]")
+    
     console.print("Starting up... Initiating Super Saiyan transformation...")
     
 
@@ -116,16 +123,25 @@ async def main():
     blockchain_client = BlockchainClient(
         config_data['use_sudo'],
         config_data['password'],
-        log_action
+        log_action,
+        config_data.get('watchdog_config', {}),
+        config_data.get('sudo_config', {})
     )
+    
+    # Start the process watchdog
+    await blockchain_client.start_watchdog()
     
     # Initialize market data client
     market_data_client = MarketDataClient(log_action)
+    
+    # Initialize banner manager
+    banner_manager = BannerManager(log_action)
     
     # Initialize blockchain monitor
     blockchain_monitor = BlockchainMonitor(
         blockchain_client,
         market_data_client,
+        banner_manager,
         shared_state,
         config_data,
         log_action
@@ -187,30 +203,52 @@ async def main():
         f'\n\t{LIGHT_WHITE}{notification_status}'
     )
     
-    byline = f"DuskMan Stake Management System: by Wolfrage"
-    if not config_data['display_options']:
-        byline = f"{UNDERLINE}{byline}{END_UNDERLINE}\n"
-        
-    separator = f"       {LIGHT_WHITE}{('=' * len(byline))}{DEFAULT}"
+    byline_text = f"{LIGHT_CYAN}DuskMan Stake Management System: by Wolfrage{DEFAULT}"
+
+    separator = f"{LIGHT_WHITE}{'=' * 60}{DEFAULT}"
 
     # Update shared state with options display
     if config_data['display_options']:
-        shared_state["options"] = byline + '\n' + separator + options_status
+        shared_state["options"] = byline_text + '\n' + separator + options_status
     else:
-        shared_state["options"] = byline 
+        shared_state["options"] = f"{UNDERLINE}{byline_text}{END_UNDERLINE}\n"
 
     # Start web dashboard if enabled
     if enable_webdash:
         from utilities.web_dashboard import start_dashboard
         await start_dashboard(shared_state, shared_state["log_entries"], host=config_data['dash_ip'], port=config_data['dash_port'])
-    
-    console.clear()
+    sys.stdout.write(clear_sequence)
+    sys.stdout.flush()
+
     # Start all the main loops
-    await asyncio.gather(
-        blockchain_monitor.frequent_update_loop(),
-        display_manager.realtime_display_loop(),
-        stake_manager.stake_management_loop(),
+    try:
+        await asyncio.gather(
+            blockchain_monitor.frequent_update_loop(),
+            display_manager.realtime_display_loop(),
+            stake_manager.stake_management_loop(),
         )
+    except KeyboardInterrupt:
+        console.print("\n\nCTRL-C detected. Shutting down gracefully...")
+        # Stop the watchdog
+        await blockchain_client.stop_watchdog()
+        # Stop the blockchain monitor
+        await blockchain_monitor.shutdown()
+        console.print("Shutdown complete.")
+    except asyncio.CancelledError:
+        console.print("\n\nOperation was cancelled. Shutting down gracefully...")
+        # Stop the watchdog
+        await blockchain_client.stop_watchdog()
+        # Stop the blockchain monitor
+        await blockchain_monitor.shutdown()
+        console.print("Shutdown complete.")
+    except Exception as e:
+        console.print(f"\n\nUnexpected error: {e}")
+        # Stop the watchdog
+        await blockchain_client.stop_watchdog()
+        # Stop the blockchain monitor
+        await blockchain_monitor.shutdown()
+        console.print("Emergency shutdown complete.")
+        raise
 
 if __name__ == "__main__":
     try:

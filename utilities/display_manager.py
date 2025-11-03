@@ -1,7 +1,7 @@
 import asyncio
 import subprocess
+import textwrap
 from rich.console import Console
-
 
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List, Callable
@@ -43,18 +43,21 @@ class DisplayManager:
         self.display_gui = display_gui
         self.enable_tmux = enable_tmux
         self.log_action = log_action_func or (lambda *args, **kwargs: None)
-        self.console = Console()
-        self.byline = self.shared_state.get("options", "DuskMan Stake Management System: by Wolfrage")
+        self.console = Console(
+            force_terminal=True, 
+            force_interactive=True,
+            width=None,  # Let the terminal determine width
+            height=None,  # Let the terminal determine height
+            legacy_windows=False  # Use modern Windows terminal features
+        )
         
     async def realtime_display_loop(self) -> None:
         """
         Continuously display real-time info in the console.
         Initially shows configuration and byline, then switches to real-time stats.
+        Uses raw ANSI escape sequences for reliable terminal control.
         """
-        first_run = True
-
-        with Live(console=self.console, refresh_per_second=10, auto_refresh=False) as live:
-            while True:
+        while True:
                 try:
                     # Get current state
                     blk = self.shared_state["block_height"]
@@ -62,6 +65,7 @@ class DisplayManager:
                     b = self.shared_state["balances"]
                     last_act = self.shared_state["last_action_taken"]
                     remain_seconds = self.shared_state["remain_time"]
+                    
                     disp_time = format_hms(remain_seconds) if remain_seconds > 0 else "Processing..."
                     donetime = self.shared_state["completion_time"] if remain_seconds > 0 else " "
                     
@@ -98,10 +102,6 @@ class DisplayManager:
                     # Remove trailing newline from top_bar definition
                     top_bar = f" {LIGHT_WHITE}======={DEFAULT} {currenttime} Block: {LIGHT_BLUE}#{blk} {DEFAULT}(E: {LIGHT_BLUE}{epoch_num}{DEFAULT}) Peers: {peercolor}{self.shared_state['peer_count']}{DEFAULT} {LIGHT_WHITE}======={DEFAULT}"
 
-                    title_spaces = int((len(remove_ansi(top_bar)) - len(remove_ansi(self.byline))) / 7) # Quick fix meh
-                    # Remove leading newline from opts definition
-                    opts = (' ' * title_spaces) + BLUE + self.shared_state["options"]
-                    
                     allocation_bar = display_wallet_distribution_bar(b['public'], b['shielded'], 8)
                     
                     # Calculate rewards per epoch
@@ -149,17 +149,80 @@ class DisplayManager:
                     mcap = f'{LIGHT_WHITE}24hr Volume: ${format_number(volume)}  Market Cap: ${format_number(mkt_cap)} ({mcap_color}{mkt_cap_change:.2f}%{LIGHT_WHITE})\n'
                     athl = f' {LIGHT_WHITE}ATH: ${format_float(ath)} ({ath_change:.2f}%) {convert_timestamp(ath_date)} | ATL: ${format_float(atl)} {convert_timestamp(atl_date)}\n'
                     
+                    # Banner processing
+                    banner_message_raw = self.shared_state.get("banner_message", "")
+                    final_banner_string = "" # This will hold the fully formatted multi-line banner
+
+                    if banner_message_raw:
+                        top_bar_plain_width = len(remove_ansi(top_bar))
+                        wrap_width = max(1, top_bar_plain_width - 4)
+                        raw_lines = banner_message_raw.split('\n')
+                        all_processed_segments = []
+
+                        for raw_line in raw_lines:
+                            wrapped_segments = textwrap.wrap(
+                                raw_line,
+                                width=wrap_width,
+                                break_long_words=True,
+                                replace_whitespace=False, # Do not replace existing whitespace in raw_line more than necessary
+                                expand_tabs=False
+                            )
+                            if wrapped_segments:  # Only add non-empty segments
+                                all_processed_segments.extend(wrapped_segments)
+                            else:
+                                # If textwrap.wrap returns empty (e.g., for empty lines), preserve the empty line
+                                all_processed_segments.append("")
+
+                        # Now center each segment and build the final banner string
+                        for segment in all_processed_segments:
+                            segment_plain_width = len(remove_ansi(segment))
+                            if top_bar_plain_width > segment_plain_width:
+                                padding_width = (top_bar_plain_width - segment_plain_width) // 2
+                                padding = ' ' * padding_width
+                            else:
+                                padding = ""
+                            final_banner_string += f" {LIGHT_CYAN}{padding}{segment}{DEFAULT}\n"
+
+                        # Add separator line
+                        separator_line = f" {LIGHT_WHITE}{'-' * (top_bar_plain_width - 2)}{DEFAULT}\n"
+                        final_banner_string = separator_line + final_banner_string
+
                     # Determine color for last action text
                     if "Insufficient balance" in last_act or "Operation skipped" in last_act:
                         last_act_color = LIGHT_RED
                     else:
                         last_act_color = CYAN
                     
+                    # Process byline text to center it based on top bar width
+                    top_bar_plain_width = len(remove_ansi(top_bar))
+                    options_text = self.shared_state.get("options", "")
+                    
+                    
+                    # Split options into lines and process the byline (first line)
+                    options_lines = options_text.split('\n')
+                    if options_lines:
+                        byline_text = options_lines[0]
+                        byline_plain_width = len(remove_ansi(byline_text))
+                        
+                        # Center the byline based on top bar width
+                        if top_bar_plain_width > byline_plain_width:
+                            padding_width = (top_bar_plain_width - byline_plain_width) // 2
+                            padding = ' ' * padding_width
+                        else:
+                            padding = ""
+                        
+                        # Replace the first line with centered byline
+                        options_lines[0] = f"{padding}{byline_text}"
+                        
+                        # Reconstruct the options text
+                        processed_options = '\n'.join(options_lines)
+                    else:
+                        processed_options = options_text
+                    
                     # Build the complete content string with correct newline placement
                     realtime_content = (
-                        f"{opts}{DEFAULT}\n"  # Line 1: Options, add newline after
+                        f"{processed_options}"  # Display processed options with centered byline
                         f"{top_bar}\n"       # Line 2: Top bar, add newline after
-                        f"{self.byline}\n"    # Line 3: Byline, add newline after
                         f"    {CYAN}Last Action{DEFAULT}   | {last_act_color}{last_act}{DEFAULT}\n"
                         f"    {LIGHT_GREEN}Next Check    {DEFAULT}| {charclr}{disp_time}{DEFAULT} ({donetime}){DEFAULT}\n"
                         f"                  |\n"
@@ -175,28 +238,11 @@ class DisplayManager:
                         f"    {YELLOW}Rewards{DEFAULT}       | {YELLOW}{format_float(st_info['rewards_amount'])} ({LIGHT_BLUE}{reward_percent:.4f}%{DEFAULT}) (${format_float(st_info['rewards_amount'] * price, 2)}) {LIGHT_WHITE}{per_epoch}{DEFAULT}\n"
                         f"    {LIGHT_RED}Reclaimable{DEFAULT}   | {LIGHT_RED}{format_float(st_info['reclaimable_slashed_stake'])} (${format_float(st_info['reclaimable_slashed_stake'] * price, 2)}){DEFAULT}\n"
                         f" {LIGHT_WHITE}{('=' * (len(remove_ansi(top_bar)) - 2))}{DEFAULT}\n"
-                        f"  {mcap} {athl}\n"
+                        f"  {mcap} {athl}"
+                        f"{final_banner_string}"
                     )
 
-                    # Convert the ANSI string to a Rich Text object
-                    text_content = Text.from_ansi(realtime_content)
 
-                    # Find the index of the character *after* the second newline to apply no_wrap
-                    plain_text = text_content.plain
-                    first_newline = plain_text.find('\n')
-                    second_newline_end_index = -1
-                    if first_newline != -1:
-                        # Find the start of the second newline
-                        second_newline_start = plain_text.find('\n', first_newline + 1)
-                        if second_newline_start != -1:
-                            # The end index for stylize is exclusive, so add 1 to include the newline itself
-                            second_newline_end_index = second_newline_start + 1
-
-                    # Apply no_wrap=True to the first two lines using stylize
-                    if second_newline_end_index != -1:
-                        # Apply the style from the beginning up to the character AFTER the second newline
-                        text_content.stylize("no_wrap", 0, second_newline_end_index)
-                    
                     # Update rendered content in shared state if needed
                     include_rendered = self.shared_state.get("include_rendered", False)
                     if include_rendered:
@@ -204,16 +250,22 @@ class DisplayManager:
                     else:
                         self.shared_state["rendered"] = None
                     
-                    # Update the Live display
+                    # Update the display using manual clearing for reliability
                     if self.display_gui:
-                        #self.console.clear()
-                        live.update(text_content, refresh=True)
+                        # Use ANSI escape codes for more reliable clearing across all terminals
+                        import sys
+                        # Clear screen and move cursor to home position
+                        sys.stdout.write("\033[2J\033[H")
+                        sys.stdout.flush()
+                        # Print the content directly without Rich processing
+                        sys.stdout.write(realtime_content)
+                        sys.stdout.flush()
 
                     # Update TMUX status bar
                     if self.enable_tmux:
                         self._update_tmux_status_bar()
 
-                    await asyncio.sleep(1)
+                    await asyncio.sleep(0.5)  # Sleep for 0.5 seconds to match 2 FPS refresh rate
 
                 except Exception as e:
                     self.log_action(f"Error in real-time display", str(e), "error")
@@ -287,3 +339,12 @@ class DisplayManager:
         except Exception as e:
             self.log_action("tmux Error", f"Error updating tmux status bar: {str(e)}", "debug")
             self.enable_tmux = False
+
+    async def _cleanup_old_state(self):
+        """Periodically clean up old state to prevent memory leaks."""
+        # Clean up old log entries if they exceed limits
+        log_entries = self.shared_state.get("log_entries", [])
+        max_entries = self.config.get('max_log_entries', 50)
+        
+        if len(log_entries) > max_entries:
+            self.shared_state["log_entries"] = log_entries[-max_entries:]

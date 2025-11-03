@@ -101,6 +101,11 @@ class StakeManager:
             while self.shared_state["remain_time"] > 0:
                 await asyncio.sleep(1)
                 self.shared_state["remain_time"] -= 1
+        except asyncio.CancelledError:
+            self.log_action("Sleep Countdown", "Sleep was cancelled", "debug")
+            # Reset remain_time on cancellation
+            self.shared_state["remain_time"] = 0
+            raise
         except Exception as e:
             self.log_action("Sleep Countdown", f"Error during sleep: {str(e)}", "error")
         finally:
@@ -403,9 +408,9 @@ class StakeManager:
                     
                     if success:
                         stake_checking = False
-                        self.log_action("Stake Loop", "Finished staking, now sleeping.", "debug")
-                        await self.sleep_with_feedback(2160 * 10, "1 epoch wait after claiming")
-                        self.log_action("Stake Loop", "Woke up from sleep (after claim/stake).", "debug")
+                        self.log_action("Stake Loop", "Finished staking, now sleeping.", "debug") # Existing log
+                        await self.sleep_with_feedback(2160 * 10, "1 epoch wait after claiming") # This logs "Sleep Countdown" and "Sleep Finished"
+                        self.log_action("Stake Loop", "Woke up from sleep (after claim/stake).", "debug") # Modified existing log for clarity
                         rewards_per_epoch = 0
                         self.shared_state["rewards_per_epoch"] = rewards_per_epoch
                         continue
@@ -420,7 +425,7 @@ class StakeManager:
                     self.log_action("Stake Loop", "No specific staking action met conditions.", "debug")
                     self.shared_state["last_no_action_block"] = block_height
                     self.shared_state["last_action_taken"] = f"No Action @ Block {block_height}"
-                    stake_checking = False
+                    
                     if first_run:
                         self.log_action("Stake Loop", "First run, logging status and setting first_run to False.", "debug")
                         self.shared_state["last_action_taken"] = f"Startup @ Block #{block_height}"
@@ -438,6 +443,10 @@ class StakeManager:
                         await self.sleep_until_next_epoch(block_height, buffer_blocks=self.buffer_blocks)
                         continue
                 
+            except asyncio.CancelledError:
+                stake_checking = False
+                self.log_action("Stake Loop", "Stake management loop was cancelled", "debug")
+                raise
             except Exception as e:
                 stake_checking = False
                 self.log_action("Error in stake management loop", str(e), "error")

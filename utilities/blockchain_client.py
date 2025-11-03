@@ -1,8 +1,12 @@
 import asyncio
 import re
+import os
+import signal
 from typing import Optional, Tuple, Dict, Any, List, Union
+from datetime import datetime
 
 from utilities.utils import convert_to_float, format_float
+from utilities.process_watchdog import ProcessWatchdog
 
 # Command Constants
 CMD_BLOCK_HEIGHT = "ruskquery block-height"
@@ -18,9 +22,10 @@ class BlockchainClient:
     """
     Client for interacting with the Dusk blockchain.
     Handles command execution, balance fetching, and stake information parsing.
+    Enhanced with process monitoring and robust timeout handling.
     """
     
-    def __init__(self, use_sudo: bool, password: str, log_action_func=None):
+    def __init__(self, use_sudo: bool, password: str, log_action_func=None, watchdog_config: Dict[str, Any] = None, sudo_config: Dict[str, Any] = None):
         """
         Initialize the blockchain client.
         
@@ -28,71 +33,312 @@ class BlockchainClient:
             use_sudo: Whether to use sudo for commands
             password: Wallet password
             log_action_func: Function to call for logging
+            watchdog_config: Configuration for process watchdog timeouts and retries
+            sudo_config: Configuration for sudo handling
         """
         self.use_sudo = "sudo" if use_sudo else ""
         self.password = password
         self.log_action = log_action_func or (lambda *args, **kwargs: None)
         
-    async def execute_command(self, command: str, log_output: bool = True) -> Optional[str]:
+        # Configure sudo handling
+        self.sudo_config = sudo_config or {}
+        self.sudo_password = None
+        
+        if self.use_sudo and sudo_config:
+            # Check if we should use passwordless sudo
+            if sudo_config.get('passwordless_sudo', False):
+                self.use_sudo = "sudo"
+            # Check if we should use stdin for password
+            elif sudo_config.get('use_stdin_password', False):
+                self.use_sudo = "sudo -S"
+                self.sudo_password = sudo_config.get('sudo_password', '')
+            # Check if sudo password is provided directly
+            elif sudo_config.get('sudo_password'):
+                self.use_sudo = "sudo -S"
+                self.sudo_password = sudo_config.get('sudo_password', '')
+        
+        # Initialize process watchdog
+        self.watchdog = ProcessWatchdog(log_action_func)
+        
+        # Load timeout configurations from config or use defaults
+        if watchdog_config:
+            self.default_timeout = 60.0  # Default timeout for most commands
+            self.wallet_timeout = watchdog_config.get('wallet_command_timeout', 120)
+            self.critical_timeout = watchdog_config.get('wallet_command_timeout', 120) + 30  # Extra time for critical ops
+            self.max_retries = watchdog_config.get('max_retries', 3)
+            self.retry_delay = watchdog_config.get('retry_delay', 5.0)
+        else:
+            # Fallback defaults
+            self.default_timeout = 60.0
+            self.wallet_timeout = 120.0
+            self.critical_timeout = 150.0
+            self.max_retries = 3
+            self.retry_delay = 5.0
+        
+    async def start_watchdog(self):
+        """Start the process watchdog."""
+        await self.watchdog.start()
+        
+    async def stop_watchdog(self):
+        """Stop the process watchdog."""
+        await self.watchdog.stop()
+        
+    async def execute_command_with_retry(self, command: str, log_output: bool = True, 
+                                       timeout: Optional[float] = None, max_retries: Optional[int] = None) -> Optional[str]:
         """
-        Execute a shell command asynchronously and return its output (stdout).
+        Execute a command with retry logic and enhanced error handling.
         
         Args:
             command: Command to execute
             log_output: Whether to log the command and its output
+            timeout: Custom timeout for this command
+            max_retries: Custom max retries for this command
+            
+        Returns:
+            Command output as string, or None if all retries failed
+        """
+        if timeout is None:
+            # Determine timeout based on command type
+            if 'rusk-wallet' in command:
+                if 'stake-info' in command or 'stake' in command or 'unstake' in command:
+                    timeout = self.critical_timeout
+                else:
+                    timeout = self.wallet_timeout
+            else:
+                timeout = self.default_timeout
+                
+        if max_retries is None:
+            max_retries = self.max_retries
+            
+        last_error = None
+        
+        for attempt in range(max_retries + 1):
+            try:
+                if attempt > 0:
+                    self.log_action(
+                        "Command Retry", 
+                        f"Attempt {attempt + 1}/{max_retries + 1} for: {command.replace(self.password, '#####')[:100]}...",
+                        "warning"
+                    )
+                    await asyncio.sleep(self.retry_delay * attempt)  # Exponential backoff
+                    
+                result = await self.execute_command(command, log_output, timeout)
+                if result is not None:
+                    if attempt > 0:
+                        self.log_action(
+                            "Command Retry Success", 
+                            f"Command succeeded on attempt {attempt + 1}",
+                            "info"
+                        )
+                    return result
+                    
+            except asyncio.CancelledError:
+                # Don't retry on cancellation, just re-raise
+                self.log_action(
+                    "Command Cancelled", 
+                    f"Command was cancelled during retry: {command.replace(self.password, '#####')[:100]}...",
+                    "debug"
+                )
+                raise
+                
+            except Exception as e:
+                last_error = e
+                self.log_action(
+                    "Command Execution Error", 
+                    f"Attempt {attempt + 1} failed: {str(e)}",
+                    "error"
+                )
+                
+        # All retries failed
+        self.log_action(
+            "Command Failed", 
+            f"All {max_retries + 1} attempts failed for: {command.replace(self.password, '#####')[:100]}...",
+            "error"
+        )
+        return None
+        
+    async def execute_command(self, command: str, log_output: bool = True, timeout: float = 60.0) -> Optional[str]:
+        """
+        Execute a shell command asynchronously with enhanced monitoring and timeout handling.
+        
+        Args:
+            command: Command to execute
+            log_output: Whether to log the command and its output
+            timeout: Timeout in seconds
             
         Returns:
             Command output as string, or None if the command failed
         """
+        process = None
+        start_time = datetime.now()
+        
         try:
-            #if log_output: # ToDo: Add config to enable/disable showing actual command, not just result
-            #    cmd2 = command
-            #    self.log_action("Executing Command", cmd2.replace(self.password, '#####'), "debug")
+            if log_output:
+                cmd_display = command.replace(self.password, '#####')
+                if self.sudo_password:
+                    cmd_display = cmd_display.replace(self.sudo_password, '#####')
+                self.log_action("Executing Command", cmd_display, "debug")
                 
+            # Create the subprocess with full terminal detachment
+            # Close stdin to prevent any interactive prompts, and detach from controlling terminal
             process = await asyncio.create_subprocess_shell(
                 command,
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                stderr=asyncio.subprocess.PIPE,
+                stdin=asyncio.subprocess.PIPE if self.sudo_password else asyncio.subprocess.DEVNULL,
+                preexec_fn=os.setsid if hasattr(os, 'setsid') else None,  # Create new process group
+                # Prevent subprocess from accessing the controlling terminal
+                start_new_session=True if hasattr(asyncio.subprocess, 'start_new_session') else False
             )
             
+            # Register with watchdog
+            if process.pid:
+                self.watchdog.register_process(process.pid, command, start_time)
+            
             try:
-                # Add a timeout to the communicate() call
-                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=60.0)
+                # Handle sudo password input if needed
+                stdin_input = None
+                if self.sudo_password and "-S" in self.use_sudo:
+                    stdin_input = f"{self.sudo_password}\n".encode()
+                
+                # Wait for the process with timeout
+                stdout, stderr = await asyncio.wait_for(
+                    process.communicate(input=stdin_input), 
+                    timeout=timeout
+                )
+                
+                # Unregister from watchdog
+                if process.pid:
+                    self.watchdog.unregister_process(process.pid)
+                    
             except asyncio.TimeoutError:
+                elapsed = (datetime.now() - start_time).total_seconds()
                 self.log_action(
-                    f"Command timed out after 60s: {command.replace(self.password, '#####')}",
-                    "Killing process.",
+                    "Command Timeout", 
+                    f"Command timed out after {elapsed:.1f}s (limit: {timeout}s): {command.replace(self.password, '#####')[:100]}...",
                     "error"
                 )
-                process.kill()
-                await process.wait()  # Ensure the process is cleaned up
+                
+                # Kill the process and its children
+                await self._kill_process_group(process)
+                
+                # Unregister from watchdog
+                if process.pid:
+                    self.watchdog.unregister_process(process.pid)
+                    
                 return None
+                
+            except asyncio.CancelledError:
+                # Handle cancellation gracefully
+                self.log_action(
+                    "Command Cancelled", 
+                    f"Command was cancelled: {command.replace(self.password, '#####')[:100]}...",
+                    "debug"
+                )
+                
+                # Kill the process and its children
+                if process:
+                    await self._kill_process_group(process)
+                
+                # Unregister from watchdog
+                if process and process.pid:
+                    self.watchdog.unregister_process(process.pid)
+                    
+                # Re-raise the CancelledError so the cancellation propagates properly
+                raise
 
             stdout_str = stdout.decode().strip()
             stderr_str = stderr.decode().strip()
+            
+            # Strip ANSI escape sequences from output (cursor control, colors, etc.)
+            ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+            stdout_str = ansi_escape.sub('', stdout_str)
+            stderr_str = ansi_escape.sub('', stderr_str)
 
             if process.returncode != 0:
+                # Mask passwords in error output
+                error_display = stderr_str.replace(self.password, '#####')
+                if self.sudo_password:
+                    error_display = error_display.replace(self.sudo_password, '#####')
+                    
                 self.log_action(
-                    f"Command failed with return code {process.returncode}:\n {command.replace(self.password, '#####')}",
-                    stderr_str.replace(self.password, '#####'),
+                    "Command Failed", 
+                    f"Return code {process.returncode}: {command.replace(self.password, '#####')[:100]}...\nError: {error_display}",
                     "error"
                 )
                 return None
             else:
                 if log_output and stdout_str:
+                    output_display = stdout_str.replace(self.password, '#####')
+                    if self.sudo_password:
+                        output_display = output_display.replace(self.sudo_password, '#####')
                     self.log_action(
-                        f"Command output",
-                        stdout_str.replace(self.password, '#####'),
+                        "Command Output",
+                        output_display,
                         'debug'
                     )
-                return stdout_str.replace(self.password, '#####')
+                
+                # Mask passwords in return value
+                result = stdout_str.replace(self.password, '#####')
+                if self.sudo_password:
+                    result = result.replace(self.sudo_password, '#####')
+                return result
+                
         except Exception as e:
+            # Unregister from watchdog
+            if process and process.pid:
+                self.watchdog.unregister_process(process.pid)
+                
+            error_msg = str(e)
+            if self.password:
+                error_msg = error_msg.replace(self.password, '#####')
+            if self.sudo_password:
+                error_msg = error_msg.replace(self.sudo_password, '#####')
+                
             self.log_action(
-                f"Error executing command: {command.replace(self.password, '#####')}",
-                str(e),
+                "Command Execution Error", 
+                f"Error executing: {command.replace(self.password, '#####')[:100]}...\nError: {error_msg}",
                 "error"
             )
             return None
+            
+    async def _kill_process_group(self, process):
+        """
+        Kill a process and its entire process group.
+        
+        Args:
+            process: The subprocess to kill
+        """
+        try:
+            if process.pid:
+                # Try to kill the entire process group
+                try:
+                    os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+                    await asyncio.sleep(2)  # Give it time to terminate gracefully
+                    
+                    # Check if still running
+                    if process.returncode is None:
+                        os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+                        
+                except (OSError, ProcessLookupError):
+                    # Fallback to killing just the main process
+                    try:
+                        process.kill()
+                    except ProcessLookupError:
+                        pass
+                        
+                # Wait for cleanup
+                try:
+                    await asyncio.wait_for(process.wait(), timeout=5)
+                except asyncio.TimeoutError:
+                    pass
+                    
+        except Exception as e:
+            self.log_action(
+                "Process Kill Error", 
+                f"Error killing process {process.pid}: {str(e)}",
+                "error"
+            )
             
     async def get_block_height(self) -> Optional[int]:
         """
@@ -101,7 +347,12 @@ class BlockchainClient:
         Returns:
             Current block height as integer, or None if the command failed
         """
-        block_height_str = await self.execute_command(f"{self.use_sudo} {CMD_BLOCK_HEIGHT}", False)
+        block_height_str = await self.execute_command_with_retry(
+            f"{self.use_sudo} {CMD_BLOCK_HEIGHT}", 
+            False, 
+            timeout=30.0,  # Shorter timeout for simple queries
+            max_retries=2
+        )
         if not block_height_str:
             self.log_action("Failed to fetch block height", "Could not retrieve block height", "error")
             return None
@@ -119,7 +370,12 @@ class BlockchainClient:
         Returns:
             Current peer count as integer, or None if the command failed
         """
-        peer_count_str = await self.execute_command(f"{self.use_sudo} {CMD_PEERS}", False)
+        peer_count_str = await self.execute_command_with_retry(
+            f"{self.use_sudo} {CMD_PEERS}", 
+            False,
+            timeout=30.0,  # Shorter timeout for simple queries
+            max_retries=2
+        )
         if not peer_count_str:
             self.log_action("Failed to fetch peers", "Could not retrieve peer count", "error")
             return None
@@ -150,7 +406,7 @@ class BlockchainClient:
             }
 
             cmd_profiles = f"{self.use_sudo} {CMD_WALLET_PROFILES.format(password=self.password)}"
-            output_profiles = await self.execute_command(cmd_profiles)
+            output_profiles = await self.execute_command_with_retry(cmd_profiles, timeout=self.wallet_timeout)
             if not output_profiles:
                 return 0.0, 0.0
 
@@ -179,92 +435,65 @@ class BlockchainClient:
         
         async def get_spendable_for_address(addr):
             """
-            Fetches the spendable balance for the given address
+            Fetches the spendable balance for the given address with enhanced retry logic
             """
             nonlocal error_logged, error_fixed
             
             cmd_balance = f"{self.use_sudo} {CMD_WALLET_BALANCE.format(password=self.password, address=addr)}"
-            max_retries = 5  # Maximum number of retries
-            retry_count = 0
-            encountered_error = False
             
-            while retry_count < max_retries:
+            # Use the retry mechanism for balance fetching
+            result = await self.execute_command_with_retry(
+                cmd_balance, 
+                timeout=self.wallet_timeout,
+                max_retries=3
+            )
+            
+            if result:
                 try:
-                    out = await self.execute_command(cmd_balance)
-                    if out:
-                        total_str = out.replace("Total: ", "")
-                        result = float(total_str)
-                        
-                        # If we previously encountered the error and now it's fixed, log it
-                        if encountered_error and not error_fixed:
-                            self.log_action(
-                                "Balance parsing fixed",
-                                f"Successfully parsed balance after previous failures",
-                                "info"
-                            )
-                            error_fixed = True
-                            
-                        return result
-                        
-                except Exception as e:
-                    # Only log connection errors immediately
-                    if 'Connection to Rusk Failed' in str(e):
-                        self.log_action(
-                            f"Error in get_spendable_for_address() reaching Node",
-                            f"{cmd_balance.replace(self.password, '#####')}\n {str(e).replace(self.password, '#####')}",
-                            "error"
-                        )
-                    # For parsing errors (like '\x1b[?25h'), log once and retry
-                    elif '\x1b[?25h' in str(e):
-                        encountered_error = True
-                        # Only log the error once per session until fixed
+                    total_str = result.replace("Total: ", "")
+                    return float(total_str)
+                except ValueError as e:
+                    # Handle the specific '\x1b[?25h' error
+                    if '\\x1b[?25h' in str(e) or '\x1b[?25h' in total_str:
                         if not error_logged:
                             self.log_action(
-                                f"Error in get_spendable_for_address()",
-                                f"Could not convert string to float: {cmd_balance.replace(self.password, '#####')}\n {str(e).replace(self.password, '#####')} - will retry after 15 seconds",
-                                "error"
+                                "Balance Parsing Error",
+                                f"Encountered terminal escape sequence in balance output: {total_str}",
+                                "warning"
                             )
                             error_logged = True
-                            error_fixed = False
-                            
-                        # Wait 15 seconds before retrying
-                        await asyncio.sleep(15)
-                        retry_count += 1
-                        continue
+                        return 0.0
                     else:
-                        # For other errors, log and retry
                         self.log_action(
-                            f"Error in get_spendable_for_address()",
-                            f"{cmd_balance.replace(self.password, '#####')}\n {str(e).replace(self.password, '#####')}",
+                            "Balance Conversion Error",
+                            f"Could not convert balance to float: {total_str}\nError: {str(e)}",
                             "error"
                         )
-                
-                # If we reach here, either there was no output or an error that's not the specific '\x1b[?25h' error
-                # Wait 5 seconds before retrying
-                await asyncio.sleep(5)
-                retry_count += 1
-            
-            # If we've exhausted all retries and encountered the specific error
-            if encountered_error and not error_logged:
-                self.log_action(
-                    f"Error in get_spendable_for_address() after {max_retries} retries",
-                    f"Could not convert string to float: '\\x1b[?25h'",
-                    "error"
-                )
-                error_logged = True
-                error_fixed = False
-                
-            return 0.0
-        error_logged = False
-        error_fixed = True
+                        return 0.0
+            else:
+                return 0.0
+
+        # Execute balance fetching for all addresses
         tasks_public = [get_spendable_for_address(addr) for addr in addresses["public"]]
         tasks_shielded = [get_spendable_for_address(addr) for addr in addresses["shielded"]]
 
-        results_public = await asyncio.gather(*tasks_public)
-        results_shielded = await asyncio.gather(*tasks_shielded)
+        results_public = await asyncio.gather(*tasks_public, return_exceptions=True)
+        results_shielded = await asyncio.gather(*tasks_shielded, return_exceptions=True)
 
-        new_public_total = sum(results_public)
-        new_shielded_total = sum(results_shielded)
+        # Handle exceptions in results
+        new_public_total = 0.0
+        for result in results_public:
+            if isinstance(result, Exception):
+                self.log_action("Public Balance Error", f"Error fetching public balance: {str(result)}", "error")
+            else:
+                new_public_total += result
+
+        new_shielded_total = 0.0
+        for result in results_shielded:
+            if isinstance(result, Exception):
+                self.log_action("Shielded Balance Error", f"Error fetching shielded balance: {str(result)}", "error")
+            else:
+                new_shielded_total += result
 
         # Check for balance changes
         old_public_total = shared_state.get("balances", {}).get("public", 0.0)
@@ -304,10 +533,23 @@ class BlockchainClient:
             Tuple of (eligible_stake, reclaimable_slashed_stake, accumulated_rewards)
         """
         try:
-            lines = output.splitlines()
-            eligible_stake = None  # Eligible stake for staking
-            reclaimable_slashed_stake = None  # Reclaimable slashed stake (from penalties)
+            # Strip ANSI escape sequences from output (like cursor control codes)
+            # Pattern matches ESC [ ... (any characters) ... (letter)
+            ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+            clean_output = ansi_escape.sub('', output)
+            
+            lines = clean_output.splitlines()
+            eligible_stake = None  # Changed to None to detect if we found any stake info
+            reclaimable_slashed_stake = None  # Changed to None to detect if we found any stake info
             accumulated_rewards = 0.0  # Accumulated rewards from staking
+            found_stake_data = False  # Track if we found any actual stake data
+
+            # Check if there's no stake first
+            for line in lines:
+                line = line.strip()
+                if "A stake does not exist for this key" in line:
+                    # This is a normal condition, not an error
+                    return 0.0, 0.0, 0.0
 
             for line in lines:
                 line = line.strip()
@@ -316,38 +558,50 @@ class BlockchainClient:
                     match = re.search(r"Eligible stake:\s*([\d]+(?:\.\d+)?)\s*DUSK", line)
                     if match:
                         eligible_stake = convert_to_float(match.group(1))
+                        found_stake_data = True
                 elif "Reclaimable slashed stake:" in line:
                     # Example: "Reclaimable slashed stake: 50.0 DUSK"
                     match = re.search(r"Reclaimable slashed stake:\s*([\d]+(?:\.\d+)?)\s*DUSK", line)
                     if match:
                         reclaimable_slashed_stake = convert_to_float(match.group(1))
+                        found_stake_data = True
                 elif "Accumulated rewards is:" in line:
                     # Example: "Accumulated rewards is: 10.0 DUSK"
                     match = re.search(r"Accumulated rewards is:\s*([\d]+(?:\.\d+)?)\s*DUSK", line)
                     if match:
                         accumulated_rewards = convert_to_float(match.group(1))
+                        found_stake_data = True
                 elif "Stake active from block #" in line:
                     # Example: "Stake active from block #123456"
                     match = re.search(r"#(\d+)", line)
                     if match:
                         stake_active_blk = int(match.group(1))
                         shared_state["active_blk"] = stake_active_blk
+                        found_stake_data = True
 
-            if (eligible_stake is None or
-                reclaimable_slashed_stake is None):
-                # If we couldn't parse the stake-info output fully, log an error
-                self.log_action("Incomplete stake-info values.", f"Could not parse fully.\n{lines}", "error")
-                return None, None, 0.0
+            # If we found some stake data but couldn't parse all expected values
+            if found_stake_data and (eligible_stake is None or reclaimable_slashed_stake is None):
+                # Format the lines properly for logging
+                full_output = "\n".join(lines)
+                self.log_action("Incomplete stake-info values.", f"Could not parse fully.\n{full_output}", "error")
+                return 0.0, 0.0, 0.0
 
-            # Return the parsed values
-            return eligible_stake, reclaimable_slashed_stake, accumulated_rewards
+            # If no stake data was found at all, this might be unexpected
+            if not found_stake_data:
+                # Format the lines properly for logging
+                full_output = "\n".join(lines)
+                self.log_action("No stake data found", f"Unexpected stake-info output:\n{full_output}", "warning")
+                return 0.0, 0.0, 0.0
+
+            # Return the parsed values (convert None to 0.0 for safety)
+            return (eligible_stake or 0.0), (reclaimable_slashed_stake or 0.0), accumulated_rewards
         except Exception as e:
             self.log_action(f"Error parsing stake-info output: ", str(e), "error")
             return None, None, 0.0
             
     async def get_stake_info(self, shared_state: Dict[str, Any]) -> Tuple[Optional[float], Optional[float], float]:
         """
-        Get stake information from the blockchain.
+        Get stake information from the blockchain with enhanced retry and timeout handling.
         
         Args:
             shared_state: Shared state dictionary to update
@@ -355,47 +609,74 @@ class BlockchainClient:
         Returns:
             Tuple of (eligible_stake, reclaimable_slashed_stake, accumulated_rewards)
         """
-        stake_output = await self.execute_command(f"{self.use_sudo} {CMD_STAKE_INFO.format(password=self.password)}")
+        # Use critical timeout and more retries for stake-info as it's crucial
+        stake_output = await self.execute_command_with_retry(
+            f"{self.use_sudo} {CMD_STAKE_INFO.format(password=self.password)}",
+            timeout=self.critical_timeout,
+            max_retries=5  # More retries for critical operations
+        )
+        
         if not stake_output:
-            self.log_action("Error", "Failed to fetch stake-info.", "error")
+            self.log_action("Error", "Failed to fetch stake-info after all retries.", "error")
             return None, None, 0.0
             
         return self.parse_stake_info(stake_output, shared_state)
         
     async def withdraw_rewards(self) -> bool:
         """
-        Withdraw staking rewards.
+        Withdraw staking rewards with enhanced error handling.
         
         Returns:
             True if successful, False otherwise
         """
         cmd = f"{self.use_sudo} {CMD_WITHDRAW.format(password=self.password)}"
-        cmd_success = await self.execute_command(cmd)
+        cmd_success = await self.execute_command_with_retry(
+            cmd,
+            timeout=self.critical_timeout,
+            max_retries=3
+        )
+        
         if not cmd_success:
-            self.log_action("Withdraw Failed", "Command execution failed", 'error')
+            self.log_action("Withdraw Failed", "Command execution failed after all retries", 'error')
             return False
+            
         if 'Withdrawing 0 reward is not allowed' in cmd_success:
             self.log_action("Withdraw Notice", "No rewards to withdraw", 'info')
             return True
+            
+        if 'error' in cmd_success.lower() or 'failed' in cmd_success.lower():
+            self.log_action("Withdraw Failed", f"Command returned error: {cmd_success}", 'error')
+            return False
+            
         return True
         
     async def unstake(self) -> bool:
         """
-        Unstake funds.
+        Unstake funds with enhanced error handling.
         
         Returns:
             True if successful, False otherwise
         """
         cmd = f"{self.use_sudo} {CMD_UNSTAKE.format(password=self.password)}"
-        cmd_success = await self.execute_command(cmd)
-        if not cmd_success or 'rror' in cmd_success:
-            self.log_action("Unstake Failed", "Command execution failed", 'error')
+        cmd_success = await self.execute_command_with_retry(
+            cmd,
+            timeout=self.critical_timeout,
+            max_retries=3
+        )
+        
+        if not cmd_success:
+            self.log_action("Unstake Failed", "Command execution failed after all retries", 'error')
             return False
+            
+        if 'error' in cmd_success.lower() or 'failed' in cmd_success.lower():
+            self.log_action("Unstake Failed", f"Command returned error: {cmd_success}", 'error')
+            return False
+            
         return True
         
     async def stake(self, amount: float) -> bool:
         """
-        Stake funds.
+        Stake funds with enhanced error handling.
         
         Args:
             amount: Amount to stake
@@ -404,8 +685,18 @@ class BlockchainClient:
             True if successful, False otherwise
         """
         cmd = f"{self.use_sudo} {CMD_STAKE.format(password=self.password, amount=amount)}"
-        cmd_success = await self.execute_command(cmd)
-        if not cmd_success or 'rror' in cmd_success:
-            self.log_action("Stake Failed", f"Command execution failed", 'error')
+        cmd_success = await self.execute_command_with_retry(
+            cmd,
+            timeout=self.critical_timeout,
+            max_retries=3
+        )
+        
+        if not cmd_success:
+            self.log_action("Stake Failed", f"Command execution failed after all retries", 'error')
             return False
+            
+        if 'error' in cmd_success.lower() or 'failed' in cmd_success.lower():
+            self.log_action("Stake Failed", f"Command returned error: {cmd_success}", 'error')
+            return False
+            
         return True

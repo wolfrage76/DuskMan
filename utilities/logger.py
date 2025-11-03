@@ -30,9 +30,9 @@ class Logger:
         # Extract configuration values
         self.enable_logging = config.get('enable_logging', False)
         self.is_debug = config.get('isDebug', False)
-        self.info_log_file = config.get('INFO_LOG_FILE', 'duskman_actions.log')
-        self.error_log_file = config.get('ERROR_LOG_FILE', 'duskman_errors.log')
-        self.debug_log_file = config.get('DEBUG_LOG_FILE', 'duskman_tmp_debug.log')
+        self.info_log_file = config.get('info_log_file', 'duskman_actions.log')
+        self.error_log_file = config.get('error_log_file', 'duskman_errors.log')
+        self.debug_log_file = config.get('debug_log_file', 'duskman_tmp_debug.log')
         self.password = config.get('password', '')
         
         # Log format
